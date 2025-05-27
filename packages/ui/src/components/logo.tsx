@@ -1,5 +1,3 @@
-'use client';
-
 import { type HTMLChakraProps, chakra } from '@chakra-ui/react';
 
 export const Logo = (props: HTMLChakraProps<'svg'>) => {

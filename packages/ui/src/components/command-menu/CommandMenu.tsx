@@ -73,24 +73,23 @@ export const CommandMenu = ({
                 onValueChange(e.value);
               }}
               onInputValueChange={e => onInputValueChange(e.inputValue)}
-              h='50vh'
+              h='44vh'
             >
               <Combobox.Control>
                 <Combobox.Input asChild>
                   <Input />
                 </Combobox.Input>
               </Combobox.Control>
-              <Combobox.Positioner>
-                <Combobox.Content
-                  boxShadow='none'
-                  px='0'
-                  py='0'
-                  overflow='auto'
-                  overscrollBehavior='contain'
-                >
-                  {children}
-                </Combobox.Content>
-              </Combobox.Positioner>
+              <Combobox.Content
+                boxShadow='none'
+                px='0'
+                py='0'
+                overflow='auto'
+                overscrollBehavior='contain'
+              >
+                <Combobox.Empty />
+                {children}
+              </Combobox.Content>
             </Combobox.Root>
           </Dialog.Content>
         </Dialog.Positioner>

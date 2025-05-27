@@ -7,7 +7,8 @@
     "skipLibCheck": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@ui/*": ["../../packages/ui/src/*"]
+      "@ui/*": ["../../packages/ui/src/*"],
+      "@supabase/*": ["../../packages/supabase/src/*"]
     },
     "plugins": [{ "name": "next" }]
   },

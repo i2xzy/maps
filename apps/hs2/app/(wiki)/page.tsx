@@ -10,8 +10,14 @@ import {
   Card,
 } from '@chakra-ui/react';
 import Link from 'next/link';
+import { createClient } from '@supabase/server';
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient();
+  const { data } = await supabase.from('features').select();
+
+  console.log(data);
+
   return (
     <Container maxW='7xl' py={8}>
       <VStack gap={8} align='stretch'>

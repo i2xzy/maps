@@ -8,6 +8,8 @@ import {
   Container,
   HStack,
   Spacer,
+  Span,
+  Spinner,
   Text,
   useListCollection,
 } from '@chakra-ui/react';
@@ -15,9 +17,13 @@ import { useState } from 'react';
 import { useAsync } from 'react-use';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+
+import { createClient } from '@supabase/client';
+import { FeatureSearchResult } from '@supabase/types';
 import { ColorModeButton } from '@ui/components/color-mode';
 import { Logo } from '@ui/components/logo';
 import CommandMenu from '@ui/components/command-menu';
+import { FeatureIcon } from '@ui/components/feature-icon';
 
 const HeaderRoot = chakra('header', {
   base: {
@@ -66,29 +72,25 @@ const items = [
   { title: 'About', url: '/about' },
 ];
 
-type Person = {
-  name: string;
-};
-
 export const Header = () => {
   const currentUrl = usePathname();
   const router = useRouter();
   const [inputValue, setInputValue] = useState('');
 
-  const { collection, set } = useListCollection<Person>({
+  const { collection, set } = useListCollection<FeatureSearchResult>({
     initialItems: [],
     itemToString: item => item.name,
-    itemToValue: item => item.name,
+    itemToValue: item => item.id,
   });
-  console.log('collection', collection);
 
   const state = useAsync(async () => {
-    const response = await fetch(
-      `https://swapi.py4e.com/api/people/?search=${inputValue}`
-    );
-    console.log('response', response);
-    const data = await response.json();
-    set(data.results);
+    const supabase = createClient();
+    const { data } = await supabase
+      .from('features')
+      .select('id, name, type')
+      .ilike('name', `%${inputValue}%`)
+      .order('name', { ascending: true });
+    set(data || []);
   }, [inputValue, set]);
 
   return (
@@ -127,9 +129,10 @@ export const Header = () => {
               >
                 {state.loading && collection.items?.length === 0 && (
                   <Center p='3' h='100%'>
-                    <Text color='fg.muted' textStyle='sm'>
-                      Loading...
-                    </Text>
+                    <HStack p='2'>
+                      <Spinner size='xs' borderWidth='1px' />
+                      <Span>Loading...</Span>
+                    </HStack>
                   </Center>
                 )}
                 {!state.loading &&
@@ -152,7 +155,10 @@ export const Header = () => {
                     px='4'
                     py='3'
                   >
-                    <Text fontWeight='medium'>{item.name}</Text>
+                    <HStack>
+                      <FeatureIcon feature={item} />
+                      <Text fontWeight='medium'>{item.name}</Text>
+                    </HStack>
                   </Combobox.Item>
                 ))}
               </CommandMenu>
