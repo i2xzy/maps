@@ -10,22 +10,10 @@ import Link from 'next/link';
 
 import { createClient } from '@supabase/server';
 import { FeatureStatus } from '@supabase/types';
+import { countFeaturesByStatus } from '@/utils/progress-data';
 import ProgressChart from '@/components/progress-chart';
 import StatCard from '@/components/stat-card';
-
-// Helper function to count features by status
-function countFeaturesByStatus(
-  features: Array<{ status: FeatureStatus | null }> | null | undefined
-) {
-  return features?.reduce<Record<NonNullable<FeatureStatus>, number>>(
-    (acc, feature) => {
-      const status = feature.status || 'NOT_STARTED';
-      acc[status] = (acc[status] || 0) + 1;
-      return acc;
-    },
-    {} as Record<NonNullable<FeatureStatus>, number>
-  );
-}
+import { featureStatuses } from '@/components/feature/config';
 
 // Helper function to generate overall progress chart data
 function generateOverallProgressData(
@@ -37,12 +25,12 @@ function generateOverallProgressData(
     {
       name: 'Not Started',
       value: statusCounts['NOT_STARTED'] ?? 0,
-      color: 'red.600',
+      color: featureStatuses['NOT_STARTED'].color,
     },
     {
       name: 'Prep Work',
       value: statusCounts['PREP_WORK'] ?? 0,
-      color: 'red.500',
+      color: featureStatuses['PREP_WORK'].color,
     },
     {
       name: 'Foundations',
@@ -51,7 +39,7 @@ function generateOverallProgressData(
         (statusCounts['SEGMENT_INSTALLATION'] ?? 0) +
         (statusCounts['FOUNDATIONS'] ?? 0) +
         (statusCounts['PIERS'] ?? 0),
-      color: 'yellow.500',
+      color: featureStatuses['PIERS'].color,
     },
     {
       name: 'Superstructure',
@@ -60,17 +48,17 @@ function generateOverallProgressData(
         (statusCounts['PARAPET'] ?? 0) +
         (statusCounts['SIDE_TUNNELS'] ?? 0) +
         (statusCounts['SURFACE_BUILDINGS'] ?? 0),
-      color: 'blue.500',
+      color: featureStatuses['DECK'].color,
     },
     {
       name: 'Civils',
-      value: statusCounts['CIVILS'] ?? 0,
-      color: 'green.500',
+      value: (statusCounts['CIVILS'] ?? 0) + (statusCounts['LANDSCAPING'] ?? 0),
+      color: featureStatuses['CIVILS'].color,
     },
     {
       name: 'Completed',
       value: statusCounts['COMPLETED'] ?? 0,
-      color: 'green.600',
+      color: featureStatuses['COMPLETED'].color,
     },
   ];
 }

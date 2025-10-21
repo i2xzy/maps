@@ -5,10 +5,8 @@ import {
   HStack,
   Text,
   Avatar,
-  SimpleGrid,
   Badge,
 } from '@chakra-ui/react';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { createClient } from '@supabase/server';

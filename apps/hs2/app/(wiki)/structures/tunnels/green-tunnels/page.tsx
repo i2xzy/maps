@@ -7,12 +7,12 @@ import ProgressChart from '@/components/progress-chart';
 import { FeatureStatusBadge } from '@/components/feature/feature-status-badge';
 import { generateProgressData } from '@/utils/progress-data';
 
-export default async function TwinBoreTunnelsPage() {
+export default async function GreenTunnelsPage() {
   const supabase = await createClient();
   const { data: features } = await supabase
     .from('features')
     .select('id, type, status, name, chainage')
-    .in('type', ['tunnel'])
+    .in('type', ['cut_and_cover'])
     .not('chainage', 'is', null)
     .order('chainage', { ascending: true });
 
@@ -24,26 +24,26 @@ export default async function TwinBoreTunnelsPage() {
             { title: 'Home', url: '/' },
             { title: 'Structures', url: '/structures' },
             { title: 'Tunnels', url: '/structures/tunnels' },
-            { title: 'Twin Bore Tunnels' },
+            { title: 'Green Tunnels' },
           ]}
         />
         {/* Header */}
         <Stack gap={2} align='start'>
           <Heading as='h1' size='2xl'>
-            HS2 Twin Bore Tunnels
+            HS2 Green Tunnels
           </Heading>
           <Heading as='h2' size='lg' color='gray.600' fontWeight='normal'>
-            Progress of the twin bore tunnels being built for HS2
+            Progress of the green tunnels being built for HS2
           </Heading>
         </Stack>
 
         <ProgressChart data={generateProgressData(features)} />
 
         <Stack gap={6}>
-          <Heading as='h2'>All twin bore tunnels</Heading>
+          <Heading as='h2'>All green tunnels</Heading>
           {features?.map(feature => (
             <Link
-              href={`/structures/tunnels/twin-bore-tunnels/${feature.id}`}
+              href={`/structures/tunnels/green-tunnels/${feature.id}`}
               key={feature.id}
             >
               <Card.Root overflow='hidden' variant='subtle'>

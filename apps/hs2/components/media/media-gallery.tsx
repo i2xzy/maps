@@ -27,7 +27,7 @@ interface MediaItem {
   type: string;
   shot_type: string;
   youtube_id: string | null;
-  published_at: string;
+  published_at: string | null;
   recorded_date: string | null;
   creators: Creator | null;
 }
@@ -87,7 +87,7 @@ export function MediaGallery({
                           )}
                           <Text fontSize='xs' color='fg.muted'>
                             {formatDate(
-                              item.recorded_date || item.published_at
+                              item.recorded_date || item.published_at || ''
                             )}
                           </Text>
                         </VStack>

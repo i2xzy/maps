@@ -11,15 +11,15 @@ export default async function OverbridgesPage() {
   const { data: features } = await supabase
     .from('features')
     .select('id, type, status, name, chainage, route_element_id')
+    .in('type', ['underbridge', 'underpass'])
     .not('chainage', 'is', null)
-    .in('type', ['overbridge'])
     .order('chainage', { ascending: true });
 
   // split features into 2 arrays based on route_element_id; if it begins with B it's Birmingham Spur and otherwise it's the main line
-  const birminghamSpurOverbridges = features?.filter(feature =>
+  const birminghamSpurUnderbridges = features?.filter(feature =>
     feature.route_element_id?.startsWith('B')
   );
-  const mainLineOverbridges = features?.filter(
+  const mainLineUnderbridges = features?.filter(
     feature => !feature.route_element_id?.startsWith('B')
   );
 
@@ -31,36 +31,46 @@ export default async function OverbridgesPage() {
             { title: 'Home', url: '/' },
             { title: 'Structures', url: '/structures' },
             { title: 'Bridges', url: '/structures/bridges' },
-            { title: 'Overbridges' },
+            { title: 'Underbridges' },
           ]}
         />
         {/* Header */}
         <Stack gap={2} align='start'>
           <Heading as='h1' size='2xl'>
-            HS2 Overbridges
+            HS2 Underbridges
           </Heading>
           <Heading as='h2' size='lg' color='gray.600' fontWeight='normal'>
-            Progress of the overbridges being built for HS2
+            Progress of the underbridges and underpasses being built for HS2
           </Heading>
         </Stack>
 
         <ProgressChart data={generateProgressData(features)} />
 
         <Stack gap={6}>
-          <Heading as='h2'>Main Line Overbridges</Heading>
-          {mainLineOverbridges?.map(overbridge => (
+          {/* <Heading as='h2'>All underbridges and underpasses</Heading>
+          {features?.map(feature => (
             <BridgeCard
-              key={overbridge.id}
-              {...overbridge}
-              type='overbridges'
+              id={feature.id}
+              name={feature.name}
+              status={feature.status}
+              type='underbridges'
+              key={feature.id}
+            />
+          ))} */}
+          <Heading as='h2'>Main Line Underbridges and Underpasses</Heading>
+          {mainLineUnderbridges?.map(underbridge => (
+            <BridgeCard
+              key={underbridge.id}
+              {...underbridge}
+              type='underbridges'
             />
           ))}
-          <Heading as='h2'>Birmingham Spur Overbridges</Heading>
-          {birminghamSpurOverbridges?.map(overbridge => (
+          <Heading as='h2'>Birmingham Spur Underbridges</Heading>
+          {birminghamSpurUnderbridges?.map(underbridge => (
             <BridgeCard
-              key={overbridge.id}
-              {...overbridge}
-              type='overbridges'
+              key={underbridge.id}
+              {...underbridge}
+              type='underbridges'
             />
           ))}
         </Stack>

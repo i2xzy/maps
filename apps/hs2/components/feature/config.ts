@@ -10,7 +10,7 @@ import {
 } from 'react-icons/fa6';
 import { SiNationalrail } from 'react-icons/si';
 import type { IconType } from 'react-icons';
-import { FeatureType } from '@supabase/types';
+import { FeatureType, FeatureStatus } from '@supabase/types';
 import { RailTunnel } from '../icons/rail-tunnel';
 
 type FeatureTypeConfig = {
@@ -82,4 +82,44 @@ export const featureTypes: Record<FeatureType, FeatureTypeConfig> = {
     color: 'blue.500',
     icon: FaBridgeWater,
   },
+};
+
+// Map feature statuses to display names and colors
+export const featureStatuses: Record<
+  NonNullable<FeatureStatus>,
+  { label: string; colorPalette: string; color: string }
+> = {
+  NOT_STARTED: { label: 'Not Started', colorPalette: 'red', color: 'red.600' },
+  PREP_WORK: { label: 'Prep Work', colorPalette: 'red', color: 'red.500' },
+  FOUNDATIONS: {
+    label: 'Foundations',
+    colorPalette: 'yellow',
+    color: 'yellow.600',
+  },
+  DIGGING: { label: 'Digging', colorPalette: 'yellow', color: 'yellow.500' },
+  SEGMENT_INSTALLATION: {
+    label: 'Segment Installation',
+    colorPalette: 'blue',
+    color: 'blue.500',
+  },
+  PIERS: { label: 'Piers', colorPalette: 'blue', color: 'yellow.500' },
+  SIDE_TUNNELS: {
+    label: 'Side Tunnels',
+    colorPalette: 'blue',
+    color: 'blue.500',
+  },
+  DECK: { label: 'Deck', colorPalette: 'blue', color: 'blue.500' },
+  PARAPET: { label: 'Parapet', colorPalette: 'blue', color: 'blue.600' },
+  SURFACE_BUILDINGS: {
+    label: 'Surface Buildings',
+    colorPalette: 'blue',
+    color: 'blue.600',
+  },
+  LANDSCAPING: {
+    label: 'Landscaping',
+    colorPalette: 'green',
+    color: 'green.500',
+  },
+  CIVILS: { label: 'Civils', colorPalette: 'green', color: 'green.500' },
+  COMPLETED: { label: 'Completed', colorPalette: 'green', color: 'green.600' },
 };

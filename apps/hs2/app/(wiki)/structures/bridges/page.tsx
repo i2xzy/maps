@@ -9,110 +9,29 @@ import {
 import Link from 'next/link';
 
 import { createClient } from '@supabase/server';
-import { FeatureStatus } from '@supabase/types';
 import { Breadcrumb } from '@ui/components/breadcrumb';
 import ProgressChart from '@/components/progress-chart';
-import FeatureSection from '@/components/feature-section';
-
-// Helper function to count features by status
-function countFeaturesByStatus(
-  features: Array<{ status: FeatureStatus | null }> | null | undefined
-) {
-  return features?.reduce<Record<NonNullable<FeatureStatus>, number>>(
-    (acc, feature) => {
-      const status = feature.status || 'NOT_STARTED';
-      acc[status] = (acc[status] || 0) + 1;
-      return acc;
-    },
-    {} as Record<NonNullable<FeatureStatus>, number>
-  );
-}
-
-// Helper function to generate progress chart data for different feature types
-function generateProgressData(
-  statusCounts: Record<NonNullable<FeatureStatus>, number> | undefined
-) {
-  if (!statusCounts) return [];
-
-  return [
-    {
-      name: 'Not Started',
-      value: statusCounts['NOT_STARTED'] ?? 0,
-      color: 'red.600',
-    },
-    {
-      name: 'Prep Work',
-      value: statusCounts['PREP_WORK'] ?? 0,
-      color: 'red.500',
-    },
-    {
-      name: 'Digging',
-      value: statusCounts['DIGGING'] ?? 0,
-      color: 'yellow.600',
-    },
-    {
-      name: 'Foundations',
-      value: statusCounts['FOUNDATIONS'] ?? 0,
-      color: 'yellow.600',
-    },
-    {
-      name: 'Segment Installation',
-      value: statusCounts['SEGMENT_INSTALLATION'] ?? 0,
-      color: 'yellow.500',
-    },
-    {
-      name: 'Piers',
-      value: statusCounts['PIERS'] ?? 0,
-      color: 'yellow.500',
-    },
-    {
-      name: 'Side Tunnels',
-      value: statusCounts['SIDE_TUNNELS'] ?? 0,
-      color: 'blue.500',
-    },
-    {
-      name: 'Deck',
-      value: statusCounts['DECK'] ?? 0,
-      color: 'blue.500',
-    },
-    {
-      name: 'Parapet',
-      value: statusCounts['PARAPET'] ?? 0,
-      color: 'blue.600',
-    },
-    {
-      name: 'Civils',
-      value: statusCounts['CIVILS'] ?? 0,
-      color: 'green.500',
-    },
-    {
-      name: 'Completed',
-      value: statusCounts['COMPLETED'] ?? 0,
-      color: 'green.600',
-    },
-  ].filter(item => item.value > 0);
-}
+import FeatureSection from '@/components/feature/feature-section';
+import { generateProgressData } from '@/utils/progress-data';
 
 export default async function BridgesPage() {
   const supabase = await createClient();
   const { data: features } = await supabase
     .from('features')
-    .select('type, status')
+    .select('type, status, chainage')
     .in('type', ['overbridge', 'underbridge', 'underpass']);
 
-  const overbridges = features?.filter(f => f.type === 'overbridge');
-  const underbridges = features?.filter(f => f.type === 'underbridge');
-  const underpasses = features?.filter(f => f.type === 'underpass');
-
-  const allBridges = features?.filter(
-    f =>
-      f.type === 'overbridge' ||
-      f.type === 'underbridge' ||
-      f.type === 'underpass'
+  const overbridges = features?.filter(
+    f => f.type === 'overbridge' && f.chainage !== null
+  );
+  const underbridges = features?.filter(
+    f => f.type === 'underbridge' && f.chainage !== null
+  );
+  const underpasses = features?.filter(
+    f => f.type === 'underpass' && f.chainage !== null
   );
 
-  // Count Bridges by status
-  const bridgeStatusCounts = countFeaturesByStatus(allBridges);
+  const otherBridges = features?.filter(f => f.chainage === null);
 
   return (
     <Container maxW='5xl' py={8}>
@@ -149,15 +68,18 @@ export default async function BridgesPage() {
               label: 'Underpasses',
               value: underpasses?.length,
             },
+            {
+              label: 'Other Bridges',
+              value: otherBridges?.length,
+              helpText: 'Not on the HS2 route',
+            },
           ]}
         />
-        {bridgeStatusCounts && (
-          <ProgressChart data={generateProgressData(bridgeStatusCounts)} />
-        )}
+        <ProgressChart data={generateProgressData(features)} />
 
         <SimpleGrid columns={2} gap={6}>
           <Link href='/structures/bridges/overbridges'>
-            <Card.Root overflow='hidden' variant='subtle'>
+            <Card.Root overflow='hidden' variant='subtle' h='100%'>
               <Image
                 src='https://cdn.prgloo.com/media/780e3c496aad490085872af101cd85c4.jpeg?width=1120&height=1680'
                 alt='Overbridges'
@@ -176,7 +98,7 @@ export default async function BridgesPage() {
           <Link href='/structures/bridges/underbridges'>
             <Card.Root overflow='hidden' variant='subtle'>
               <Image
-                src='https://cdn.prgloo.com/media/780e3c496aad490085872af101cd85c4.jpeg?width=1120&height=1680'
+                src='https://cdn.prgloo.com/media/fbe4318f01fe4d638dceadbfa3322426.jpg?width=1120&height=1680'
                 alt='Underbridges'
                 height={300}
                 objectFit='cover'

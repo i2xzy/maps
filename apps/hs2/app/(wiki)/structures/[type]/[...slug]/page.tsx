@@ -16,33 +16,13 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { LuExternalLink } from 'react-icons/lu';
 
-import { FeatureStatus } from '@supabase/types';
 import { createClient } from '@supabase/server';
 import { snakeCaseToTitleCase } from '@ui/helpers/text-formatting';
 import { Breadcrumb } from '@ui/components/breadcrumb';
 import { featureTypes } from '@/components/feature/config';
 import { FeatureIcon } from '@/components/feature/feature-icon';
 import { MediaGallery } from '@/components/media/media-gallery';
-
-// Map feature statuses to display names and colors
-const STATUS_CONFIG: Record<
-  NonNullable<FeatureStatus>,
-  { label: string; color: string }
-> = {
-  NOT_STARTED: { label: 'Not Started', color: 'red' },
-  PREP_WORK: { label: 'Prep Work', color: 'red' },
-  FOUNDATIONS: { label: 'Foundations', color: 'yellow' },
-  DIGGING: { label: 'Digging', color: 'yellow' },
-  SEGMENT_INSTALLATION: { label: 'Segment Installation', color: 'blue' },
-  PIERS: { label: 'Piers', color: 'blue' },
-  SIDE_TUNNELS: { label: 'Side Tunnels', color: 'blue' },
-  DECK: { label: 'Deck', color: 'blue' },
-  PARAPET: { label: 'Parapet', color: 'blue' },
-  SURFACE_BUILDINGS: { label: 'Surface Buildings', color: 'blue' },
-  LANDSCAPING: { label: 'Landscaping', color: 'green' },
-  CIVILS: { label: 'Civils', color: 'green' },
-  COMPLETED: { label: 'Completed', color: 'green' },
-};
+import { FeatureStatusBadge } from '@/components/feature/feature-status-badge';
 
 // Helper function to format phase for display
 function formatPhase(phase: string): string {
@@ -147,8 +127,6 @@ export default async function StructureDetailPage({ params }: PageProps) {
   const featureType = featureTypes[feature.type];
 
   const displayName = feature.name.replace('East Viaduct', 'Viaducts');
-  const status = STATUS_CONFIG[feature.status || 'NOT_STARTED'];
-  const pairedStatus = STATUS_CONFIG[pairedFeature?.status || 'NOT_STARTED'];
 
   return (
     <Container maxW='6xl' py={8}>
@@ -172,32 +150,30 @@ export default async function StructureDetailPage({ params }: PageProps) {
 
         {/* Header */}
         <VStack gap={4} align='start'>
-          <Image
-            src={coverMedia?.url}
-            alt={feature.name}
-            width='100%'
-            height={500}
-            objectFit='cover'
-          />
+          {coverMedia && (
+            <Image
+              src={coverMedia.url}
+              alt={feature.name}
+              width='100%'
+              height={500}
+              objectFit='cover'
+            />
+          )}
           <Heading as='h1' size='2xl'>
             {displayName}
           </Heading>
 
           <HStack gap={4} wrap='wrap'>
             <Badge size='lg'>
-              <FeatureIcon
-                feature={{
-                  id: feature.id,
-                  name: feature.name,
-                  type: feature.type,
-                }}
-              />
+              <FeatureIcon feature={feature} />
               {featureType.label}
             </Badge>
             {!pairedFeature && (
-              <Badge colorPalette={status.color}>{status.label}</Badge>
+              <FeatureStatusBadge status={feature.status} size='md' />
             )}
-            <Badge colorPalette='teal'>{formatPhase(feature.phase)}</Badge>
+            <Badge colorPalette='teal' size='md'>
+              {formatPhase(feature.phase)}
+            </Badge>
           </HStack>
         </VStack>
 
@@ -225,9 +201,7 @@ export default async function StructureDetailPage({ params }: PageProps) {
                       <Separator />
                       <HStack justify='space-between'>
                         <Text fontWeight='medium'>Status:</Text>
-                        <Badge colorPalette={status.color}>
-                          {status.label}
-                        </Badge>
+                        <FeatureStatusBadge status={feature.status} />
                       </HStack>
                     </>
                   )}
@@ -245,13 +219,11 @@ export default async function StructureDetailPage({ params }: PageProps) {
                   <SimpleGrid columns={{ base: 1, md: 2 }} gap={4}>
                     <VStack align='start'>
                       <Text fontWeight='semibold'>{feature.name}</Text>
-                      <Badge colorPalette={status.color}>{status.label}</Badge>
+                      <FeatureStatusBadge status={feature.status} />
                     </VStack>
                     <VStack align='start'>
                       <Text fontWeight='semibold'>{pairedFeature.name}</Text>
-                      <Badge colorPalette={pairedStatus.color}>
-                        {pairedStatus.label}
-                      </Badge>
+                      <FeatureStatusBadge status={pairedFeature.status} />
                     </VStack>
                   </SimpleGrid>
                 </Card.Body>
