@@ -1,0 +1,56 @@
+import {
+  Box,
+  Container,
+  Heading,
+  Button,
+  VStack,
+  HStack,
+} from '@chakra-ui/react';
+import Link from 'next/link';
+
+export default async function Home() {
+  return (
+    <Container maxW='7xl' py={8}>
+      <VStack gap={8} align='stretch'>
+        {/* Header */}
+        <Box textAlign='center'>
+          <Heading as='h1' size='2xl' mb={4}>
+            HS2 Construction Dashboard
+          </Heading>
+          <Heading as='h2' size='lg' color='gray.600' fontWeight='normal'>
+            High Speed 2 Railway Project Overview
+          </Heading>
+        </Box>
+
+        {/* Navigation to Features */}
+        <Box>
+          <Heading as='h3' size='lg' mb={6} textAlign='center'>
+            Explore Features
+          </Heading>
+          <HStack gap={4} justify='center' wrap='wrap'>
+            <Link href='/map'>
+              <Button colorPalette='blue' size='lg'>
+                Interactive Map
+              </Button>
+            </Link>
+            <Link href='/news'>
+              <Button colorPalette='green' size='lg'>
+                Latest News
+              </Button>
+            </Link>
+            <Link href='/progress'>
+              <Button colorPalette='purple' size='lg'>
+                Construction Progress
+              </Button>
+            </Link>
+            <Link href='/stations'>
+              <Button colorPalette='orange' size='lg'>
+                Stations & Routes
+              </Button>
+            </Link>
+          </HStack>
+        </Box>
+      </VStack>
+    </Container>
+  );
+}

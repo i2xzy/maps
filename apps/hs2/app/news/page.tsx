@@ -12,6 +12,8 @@ import {
 } from '@chakra-ui/react';
 import Link from 'next/link';
 
+import { formatDate } from '@ui/helpers/date-formatting';
+
 // Mock news data - in a real app this would come from an API
 const newsItems = [
   {
@@ -132,11 +134,7 @@ export default function NewsPage() {
 
                 <HStack justify='space-between' align='center'>
                   <Text fontSize='sm' color='gray.500'>
-                    {new Date(item.date).toLocaleDateString('en-GB', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                    })}
+                    {formatDate(item.date)}
                   </Text>
                   <Button size='sm' variant='ghost' colorPalette='blue'>
                     Read More →

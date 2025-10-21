@@ -1,7 +1,11 @@
 import { Container, SkipNavContent, SkipNavLink } from '@chakra-ui/react';
-import Header from './header';
+import Header from '@/components/header';
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <>
       <SkipNavLink>Skip to Content</SkipNavLink>
