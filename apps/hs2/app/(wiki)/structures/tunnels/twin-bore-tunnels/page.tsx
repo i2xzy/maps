@@ -1,4 +1,4 @@
-import { Card, Container, Heading, Stack } from '@chakra-ui/react';
+import { Card, Container, Heading, HStack, Stack } from '@chakra-ui/react';
 import Link from 'next/link';
 
 import { createClient } from '@supabase/server';
@@ -21,11 +21,11 @@ export default async function TwinBoreTunnelsPage() {
       <Stack gap={8}>
         <Breadcrumb
           items={[
-            { title: 'Home', url: '/' },
             { title: 'Structures', url: '/structures' },
             { title: 'Tunnels', url: '/structures/tunnels' },
             { title: 'Twin Bore Tunnels' },
           ]}
+          size={{ base: 'sm', md: 'md' }}
         />
         {/* Header */}
         <Stack gap={2} align='start'>
@@ -46,12 +46,16 @@ export default async function TwinBoreTunnelsPage() {
               href={`/structures/tunnels/twin-bore-tunnels/${feature.id}`}
               key={feature.id}
             >
-              <Card.Root overflow='hidden' variant='subtle'>
+              <Card.Root
+                overflow='hidden'
+                variant='subtle'
+                size={{ base: 'sm', md: 'md' }}
+              >
                 <Card.Body gap='2'>
-                  <Stack direction='row' justify='space-between'>
+                  <HStack justify='space-between'>
                     <Card.Title color='blue.400'>{feature.name}</Card.Title>
                     <FeatureStatusBadge status={feature.status} />
-                  </Stack>
+                  </HStack>
                 </Card.Body>
               </Card.Root>
             </Link>

@@ -42,7 +42,6 @@ export default async function ViaductsPage() {
       <VStack gap={8} align='stretch'>
         <Breadcrumb
           items={[
-            { title: 'Home', url: '/' },
             { title: 'Structures', url: '/structures' },
             { title: 'Viaducts' },
           ]}

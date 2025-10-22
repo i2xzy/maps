@@ -1,4 +1,4 @@
-import { Badge } from '@chakra-ui/react';
+import { Badge, Box } from '@chakra-ui/react';
 import { FeatureStatus } from '@supabase/types';
 import { featureStatuses } from './config';
 
@@ -22,7 +22,8 @@ export function FeatureStatusBadge({
       variant='solid'
       bg={statusConfig.color}
     >
-      {statusConfig.label}
+      <Box hideBelow='md'>{statusConfig.label}</Box>
+      <Box hideFrom='md'>{statusConfig.labelShort || statusConfig.label}</Box>
     </Badge>
   );
 }

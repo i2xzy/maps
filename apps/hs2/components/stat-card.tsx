@@ -8,12 +8,12 @@ interface StatCardProps {
 
 export default function StatCard({ label, value, helpText }: StatCardProps) {
   return (
-    <Card.Root>
+    <Card.Root h='full' size={{ base: 'sm', md: 'md' }}>
       <Card.Body>
         <Stat.Root>
           <Stat.ValueText>{value}</Stat.ValueText>
           <Stat.Label>{label}</Stat.Label>
-          {helpText && <Stat.HelpText>{helpText}</Stat.HelpText>}
+          {helpText && <Stat.HelpText hideBelow='md'>{helpText}</Stat.HelpText>}
         </Stat.Root>
       </Card.Body>
     </Card.Root>

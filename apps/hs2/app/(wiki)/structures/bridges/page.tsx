@@ -38,7 +38,6 @@ export default async function BridgesPage() {
       <VStack gap={8} align='stretch'>
         <Breadcrumb
           items={[
-            { title: 'Home', url: '/' },
             { title: 'Structures', url: '/structures' },
             { title: 'Bridges' },
           ]}
@@ -77,7 +76,7 @@ export default async function BridgesPage() {
         />
         <ProgressChart data={generateProgressData(features)} />
 
-        <SimpleGrid columns={2} gap={6}>
+        <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
           <Link href='/structures/bridges/overbridges'>
             <Card.Root overflow='hidden' variant='subtle' h='100%'>
               <Image

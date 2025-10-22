@@ -1,6 +1,7 @@
 import {
   Card,
   Container,
+  GridItem,
   Heading,
   Image,
   SimpleGrid,
@@ -94,7 +95,7 @@ export default async function Home() {
   const statusCounts = countFeaturesByStatus(features);
 
   return (
-    <Container maxW='7xl' py={8}>
+    <Container maxW='5xl' py={8}>
       <VStack gap={8} align='stretch'>
         {/* Header */}
         <VStack gap={2} align='start'>
@@ -107,9 +108,14 @@ export default async function Home() {
         </VStack>
 
         {/* Top Level Stats */}
-        <SimpleGrid columns={{ base: 1, md: 3, lg: 5 }} gap={6}>
-          {topLevelStats.map(stat => (
-            <StatCard key={stat.label} label={stat.label} value={stat.value} />
+        <SimpleGrid columns={{ base: 2, md: 3, lg: 5 }} gap={6}>
+          {topLevelStats.map((stat, i) => (
+            <GridItem
+              key={stat.label}
+              colSpan={{ base: i === 0 ? 2 : 1, md: 1 }}
+            >
+              <StatCard label={stat.label} value={stat.value} />
+            </GridItem>
           ))}
         </SimpleGrid>
 

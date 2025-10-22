@@ -32,7 +32,6 @@ export default async function TunnelsPage() {
       <VStack gap={8} align='stretch'>
         <Breadcrumb
           items={[
-            { title: 'Home', url: '/' },
             { title: 'Structures', url: '/structures' },
             { title: 'Tunnels' },
           ]}
@@ -66,7 +65,7 @@ export default async function TunnelsPage() {
         />
         <ProgressChart data={generateProgressData(allTunnels)} />
 
-        <SimpleGrid columns={2} gap={6}>
+        <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
           <Link href='/structures/tunnels/twin-bore-tunnels'>
             <Card.Root overflow='hidden' variant='subtle'>
               <Image

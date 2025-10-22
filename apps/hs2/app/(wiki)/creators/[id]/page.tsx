@@ -73,7 +73,6 @@ export default async function CreatorPage({ params }: PageProps) {
         {/* Breadcrumbs */}
         <Breadcrumb
           items={[
-            { title: 'Home', url: '/' },
             { title: 'Creators', url: '/creators' },
             { title: creator.display_name },
           ]}

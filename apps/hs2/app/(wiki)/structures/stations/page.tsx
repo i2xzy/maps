@@ -5,6 +5,7 @@ import {
   Image,
   SimpleGrid,
   Stack,
+  HStack,
 } from '@chakra-ui/react';
 import Link from 'next/link';
 
@@ -63,10 +64,14 @@ export default async function StationsPage() {
 
         <ProgressChart data={generateProgressData(features)} />
 
-        <SimpleGrid columns={2} gap={6}>
+        <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
           {features?.map(feature => (
             <Link href={`/structures/stations/${feature.id}`} key={feature.id}>
-              <Card.Root overflow='hidden' variant='subtle'>
+              <Card.Root
+                overflow='hidden'
+                variant='subtle'
+                size={{ base: 'sm', md: 'md' }}
+              >
                 <Image
                   src={feature.media_features[0]?.media.url}
                   alt={feature.name}
@@ -74,10 +79,10 @@ export default async function StationsPage() {
                   objectFit='cover'
                 />
                 <Card.Body gap='2'>
-                  <Stack direction='row' justifyContent='space-between'>
+                  <HStack direction='row' justifyContent='space-between'>
                     <Card.Title color='blue.400'>{feature.name}</Card.Title>
                     <FeatureStatusBadge status={feature.status} />
-                  </Stack>
+                  </HStack>
                   <Card.Description>{feature.description}</Card.Description>
                 </Card.Body>
               </Card.Root>

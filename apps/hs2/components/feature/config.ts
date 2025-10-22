@@ -87,7 +87,7 @@ export const featureTypes: Record<FeatureType, FeatureTypeConfig> = {
 // Map feature statuses to display names and colors
 export const featureStatuses: Record<
   NonNullable<FeatureStatus>,
-  { label: string; colorPalette: string; color: string }
+  { label: string; colorPalette: string; color: string; labelShort?: string }
 > = {
   NOT_STARTED: { label: 'Not Started', colorPalette: 'red', color: 'red.600' },
   PREP_WORK: { label: 'Prep Work', colorPalette: 'red', color: 'red.500' },
@@ -99,6 +99,7 @@ export const featureStatuses: Record<
   DIGGING: { label: 'Digging', colorPalette: 'yellow', color: 'yellow.500' },
   SEGMENT_INSTALLATION: {
     label: 'Segment Installation',
+    labelShort: 'Segments',
     colorPalette: 'blue',
     color: 'blue.500',
   },
@@ -112,6 +113,7 @@ export const featureStatuses: Record<
   PARAPET: { label: 'Parapet', colorPalette: 'blue', color: 'blue.600' },
   SURFACE_BUILDINGS: {
     label: 'Surface Buildings',
+    // labelShort: 'Buildings',
     colorPalette: 'blue',
     color: 'blue.600',
   },

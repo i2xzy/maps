@@ -68,11 +68,7 @@ export default async function MediaPage({ params }: PageProps) {
       <VStack gap={8} align='stretch'>
         {/* Breadcrumbs */}
         <Breadcrumb
-          items={[
-            { title: 'Home', url: '/' },
-            { title: 'Media', url: '/media' },
-            { title: media.title },
-          ]}
+          items={[{ title: 'Media', url: '/media' }, { title: media.title }]}
         />
 
         <SimpleGrid columns={{ base: 1, lg: 3 }} gap={8}>

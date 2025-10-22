@@ -134,7 +134,6 @@ export default async function StructureDetailPage({ params }: PageProps) {
         {/* Breadcrumbs */}
         <Breadcrumb
           items={[
-            { title: 'Home', url: '/' },
             { title: 'Structures', url: '/structures' },
             {
               title: snakeCaseToTitleCase(type),

@@ -28,7 +28,6 @@ export default async function OverbridgesPage() {
       <Stack gap={8}>
         <Breadcrumb
           items={[
-            { title: 'Home', url: '/' },
             { title: 'Structures', url: '/structures' },
             { title: 'Bridges', url: '/structures/bridges' },
             { title: 'Overbridges' },

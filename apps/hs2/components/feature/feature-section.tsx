@@ -1,4 +1,4 @@
-import { Box, Heading, SimpleGrid } from '@chakra-ui/react';
+import { Box, GridItem, Heading, SimpleGrid } from '@chakra-ui/react';
 import StatCard from '../stat-card';
 
 interface FeatureSectionProps {
@@ -15,13 +15,13 @@ export default function FeatureSection({ title, stats }: FeatureSectionProps) {
         </Heading>
       )}
       <SimpleGrid columns={{ base: 2, md: 3, lg: 4 }} gap={4}>
-        {stats.map(({ label, value, helpText }) => (
-          <StatCard
+        {stats.map(({ label, value, helpText }, i) => (
+          <GridItem
             key={label}
-            label={label}
-            value={value || 0}
-            helpText={helpText}
-          />
+            colSpan={{ base: stats.length === 3 && i === 0 ? 2 : 1, md: 1 }}
+          >
+            <StatCard label={label} value={value || 0} helpText={helpText} />
+          </GridItem>
         ))}
       </SimpleGrid>
     </Box>
