@@ -33,19 +33,19 @@ export default async function Home() {
                 Interactive Map
               </Button>
             </Link>
-            <Link href='/news'>
+            <Link href='/media'>
               <Button colorPalette='green' size='lg'>
-                Latest News
+                Media Updates
               </Button>
             </Link>
-            <Link href='/progress'>
+            <Link href='/structures'>
               <Button colorPalette='purple' size='lg'>
-                Construction Progress
+                Structures Overview
               </Button>
             </Link>
-            <Link href='/stations'>
+            <Link href='/route'>
               <Button colorPalette='orange' size='lg'>
-                Stations & Routes
+                Route Overview
               </Button>
             </Link>
           </HStack>

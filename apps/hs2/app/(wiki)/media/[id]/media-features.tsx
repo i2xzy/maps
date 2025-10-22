@@ -12,6 +12,7 @@ import {
 import Link from 'next/link';
 import { LuArrowDown01, LuArrowDown10 } from 'react-icons/lu';
 
+import { Feature } from '@supabase/types';
 import { getFeatureHref } from '@/utils/feature-routing';
 import { Tooltip } from '@ui/components/tooltip';
 import { FeatureIcon } from '@/components/feature/feature-icon';
@@ -24,7 +25,9 @@ export default function MediaFeatures({
   const [sort, setSort] = useState<'asc' | 'desc'>('asc');
 
   const sorted = relatedFeatures.sort((a, b) =>
-    sort === 'asc' ? a.chainage - b.chainage : b.chainage - a.chainage
+    sort === 'asc'
+      ? (a.chainage ?? 0) - (b.chainage ?? 0)
+      : (b.chainage ?? 0) - (a.chainage ?? 0)
   );
 
   return (
@@ -55,7 +58,7 @@ export default function MediaFeatures({
             <Card.Root variant='subtle'>
               <Card.Body p={4}>
                 <HStack gap={4}>
-                  <FeatureIcon feature={feature} />
+                  <FeatureIcon {...feature} />
                   <Text fontWeight='semibold' fontSize='sm' color='blue.400'>
                     {feature.name}
                   </Text>

@@ -81,7 +81,7 @@ const WikiHeader = () => {
             py='3'
           >
             <HStack>
-              <FeatureIcon feature={item} />
+              <FeatureIcon {...item} />
               <Text fontWeight='medium'>{item.name}</Text>
             </HStack>
           </Combobox.Item>

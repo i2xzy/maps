@@ -58,7 +58,6 @@ export function MediaGallery({
                   <Image
                     src={`https://img.youtube.com/vi/${item.youtube_id}/0.jpg`}
                     alt={item.title}
-                    fill
                     borderRadius='lg'
                   />
                 </AspectRatio>
@@ -76,7 +75,7 @@ export function MediaGallery({
                     {item.title}
                   </Text>
 
-                  <VStack gap={0} align='stretch'>
+                  <VStack gap={0} align='stretch' as='object'>
                     {item.creators && (
                       <Link href={`/creators/${item.creators.id}`}>
                         <Text

@@ -65,10 +65,10 @@ const TopNavMobileLink = chakra(Link, {
 });
 
 const items = [
+  { title: 'News Feed', url: '/media' },
   { title: 'Map', url: '/map' },
   { title: 'Structures', url: '/structures' },
-  { title: 'News', url: '/news' },
-  { title: 'About', url: '/about' },
+  { title: 'Route', url: '/route' },
 ];
 
 const HeaderMobileMenuDropdown = () => {

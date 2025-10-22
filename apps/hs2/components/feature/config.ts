@@ -1,6 +1,5 @@
 import { IconProps } from '@chakra-ui/react';
 import {
-  FaBorderTopLeft,
   FaBridge,
   FaBridgeWater,
   FaCarTunnel,
@@ -64,8 +63,8 @@ export const featureTypes: Record<FeatureType, FeatureTypeConfig> = {
   cutting: {
     label: 'Cutting',
     color: 'orange.500',
-    icon: FaBorderTopLeft,
-    iconProps: { rotate: '45deg' },
+    icon: FaMound,
+    iconProps: { rotate: '180deg' },
   },
   shaft: {
     label: 'Shaft',

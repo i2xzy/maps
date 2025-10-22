@@ -3,85 +3,91 @@ import {
   Container,
   Heading,
   Text,
-  Button,
-  VStack,
+  Stack,
   HStack,
   Badge,
+  Card,
 } from '@chakra-ui/react';
-import Link from 'next/link';
+
+import { featureTypes } from '@/components/feature/config';
+import { FeatureIcon } from '@/components/feature/feature-icon';
+import { FeatureType } from '@supabase/types';
 
 export default function MapPage() {
   return (
-    <Container maxW='7xl' py={8}>
-      <VStack gap={6} align='stretch'>
+    <Container maxW='8xl' py={8}>
+      <Stack gap={8}>
         {/* Header */}
-        <HStack justify='space-between' align='center'>
-          <Box>
-            <Heading as='h1' size='xl' mb={2}>
-              HS2 Interactive Map
-            </Heading>
-            <Text color='gray.600'>
-              Explore the High Speed 2 railway route and construction sites
-            </Text>
-          </Box>
-          <Link href='/'>
-            <Button variant='outline'>← Back to Dashboard</Button>
-          </Link>
-        </HStack>
+        <Stack gap={2}>
+          <Heading as='h1' size='2xl'>
+            Interactive Map
+          </Heading>
+          <Heading size='lg' color='gray.600' fontWeight='normal'>
+            Explore the High Speed 2 railway route and construction sites
+          </Heading>
+        </Stack>
 
         {/* Map Container */}
-        <Box borderWidth='1px' borderRadius='lg' p={6}>
-          <Box
-            height='600px'
-            bg='gray.100'
-            borderRadius='md'
-            display='flex'
-            alignItems='center'
-            justifyContent='center'
-            position='relative'
-          >
-            <VStack gap={4} textAlign='center'>
-              <Heading size='lg' color='gray.500'>
-                Interactive Map Coming Soon
-              </Heading>
-              <Text color='gray.600' maxW='md'>
-                This will display the full HS2 route from London to Birmingham
-                and beyond, with real-time construction progress, active sites,
-                and key milestones.
-              </Text>
-              <HStack gap={2}>
-                <Badge colorPalette='blue'>Phase 1</Badge>
-                <Badge colorPalette='green'>Phase 2a</Badge>
-                <Badge colorPalette='purple'>Phase 2b</Badge>
-              </HStack>
-            </VStack>
-          </Box>
-        </Box>
+        <Card.Root variant='subtle'>
+          <Card.Body p={0}>
+            <Box
+              height={{ base: '400px', md: '600px' }}
+              bg='gray.100'
+              display='flex'
+              alignItems='center'
+              justifyContent='center'
+              position='relative'
+              borderRadius='lg'
+            >
+              <Stack gap={4} textAlign='center' p={6}>
+                <Heading size='lg' color='gray.500'>
+                  Interactive Map Coming Soon
+                </Heading>
+                <Text color='gray.600' maxW='md'>
+                  This will display the full HS2 route from London to Birmingham
+                  and beyond, with real-time construction progress, active
+                  sites, and key milestones.
+                </Text>
+                <HStack gap={2} justify='center' wrap='wrap'>
+                  <Badge colorPalette='blue' size='lg'>
+                    Phase 1
+                  </Badge>
+                  <Badge colorPalette='green' size='lg'>
+                    Phase 2a
+                  </Badge>
+                  <Badge colorPalette='purple' size='lg'>
+                    Phase 2b
+                  </Badge>
+                </HStack>
+              </Stack>
+            </Box>
+          </Card.Body>
+        </Card.Root>
 
         {/* Map Features */}
-        <Box>
-          <Heading as='h3' size='md' mb={4}>
-            Map Features
-          </Heading>
+        <Stack gap={4}>
+          <Heading size='lg'>Planned Features</Heading>
           <HStack gap={4} wrap='wrap'>
-            <Badge colorPalette='blue' p={2}>
-              🚧 Construction Sites
-            </Badge>
-            <Badge colorPalette='green' p={2}>
-              🚉 Stations
-            </Badge>
-            <Badge colorPalette='purple' p={2}>
-              🛤️ Track Progress
-            </Badge>
-            <Badge colorPalette='orange' p={2}>
-              🏗️ Major Works
-            </Badge>
-            <Badge colorPalette='red' p={2}>
-              ⚠️ Disruptions
-            </Badge>
+            {(
+              [
+                'station',
+                'overbridge',
+                'underbridge',
+                'tunnel',
+                'viaduct',
+                'embankment',
+                'cutting',
+                'culvert',
+              ] as FeatureType[]
+            ).map(type => (
+              <Badge key={type} size='lg'>
+                <FeatureIcon type={type} />
+                {featureTypes[type].label}s
+              </Badge>
+            ))}
           </HStack>
-        </Box>
-      </VStack>
+        </Stack>
+      </Stack>
     </Container>
   );
 }

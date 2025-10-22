@@ -165,7 +165,7 @@ export default async function StructureDetailPage({ params }: PageProps) {
 
           <HStack gap={4} wrap='wrap'>
             <Badge size='lg'>
-              <FeatureIcon feature={feature} />
+              <FeatureIcon {...feature} />
               {featureType.label}
             </Badge>
             {!pairedFeature && (
