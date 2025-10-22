@@ -83,6 +83,7 @@ export default async function StructureDetailPage({ params }: PageProps) {
         recorded_date,
         creator_id,
         creators (
+          id,
           display_name,
           profile_image_url
         )

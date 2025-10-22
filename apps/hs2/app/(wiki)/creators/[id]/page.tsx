@@ -1,13 +1,15 @@
 import {
+  Button,
   Container,
   Heading,
   VStack,
   HStack,
   Text,
   Avatar,
-  Badge,
+  Link as ChakraLink,
 } from '@chakra-ui/react';
 import { notFound } from 'next/navigation';
+import { FaYoutube } from 'react-icons/fa6';
 
 import { createClient } from '@supabase/server';
 import { Breadcrumb } from '@ui/components/breadcrumb';
@@ -51,20 +53,12 @@ export default async function CreatorPage({ params }: PageProps) {
     .eq('creator_id', id)
     .order('published_at', { ascending: false });
 
-  // Transform media data to include creator info for MediaGallery component
-  const mediaWithCreator =
-    mediaData?.map(item => ({
-      ...item,
-      creators: creator,
-    })) || [];
-
-  // Get unique feature types for stats
+  // Get the total number of features covered by the creator
   const allFeatures =
     mediaData?.flatMap(
       m => m.media_features?.map(mf => mf.features).filter(Boolean) || []
     ) || [];
 
-  const featureTypes = [...new Set(allFeatures.map(f => f.type))];
   const totalFeatures = allFeatures.length;
 
   return (
@@ -79,70 +73,58 @@ export default async function CreatorPage({ params }: PageProps) {
         />
 
         {/* Creator Header */}
-        <VStack gap={6} align='center'>
-          <Avatar.Root size='2xl'>
+        <HStack gap={6}>
+          <Avatar.Root size='3xl'>
             <Avatar.Fallback name={creator.display_name} />
             {creator.profile_image_url && (
               <Avatar.Image src={creator.profile_image_url} />
             )}
           </Avatar.Root>
-
-          <VStack gap={2} align='center'>
-            <Heading as='h1' size='2xl'>
-              {creator.display_name}
-            </Heading>
-            {creator.bio && (
-              <Text textAlign='center' color='gray.600' maxW='2xl'>
-                {creator.bio}
+          <VStack gap={4} align='start'>
+            <VStack gap={2} align='start'>
+              <Heading as='h1' size='3xl'>
+                {creator.display_name}
+              </Heading>
+              <Text fontSize='sm'>
+                <ChakraLink href={creator.url} target='_blank'>
+                  <Text as='span' fontWeight='bold'>
+                    @{creator.external_id}
+                  </Text>
+                </ChakraLink>
+                <Text as='span' color='fg.muted'>
+                  {' • '} {mediaData?.length || 0} videos
+                </Text>
+                {totalFeatures > 0 && (
+                  <Text as='span' color='fg.muted'>
+                    {' • '} {totalFeatures} features covered
+                  </Text>
+                )}
               </Text>
+              {creator.bio && (
+                <Text textAlign='center' color='gray.600' maxW='2xl'>
+                  {creator.bio}
+                </Text>
+              )}
+            </VStack>
+            {creator.platform === 'youtube' && (
+              <Button
+                as={ChakraLink}
+                href={creator.url}
+                target='_blank'
+                colorPalette='red'
+                size='xs'
+              >
+                <FaYoutube />
+                <Text as='span' fontWeight='bold'>
+                  Open in YouTube
+                </Text>
+              </Button>
             )}
           </VStack>
-
-          {/* Creator Stats */}
-          <HStack gap={8} wrap='wrap'>
-            <VStack gap={0}>
-              <Text fontSize='2xl' fontWeight='bold' color='blue.500'>
-                {mediaData?.length || 0}
-              </Text>
-              <Text fontSize='sm' color='gray.600'>
-                Media Items
-              </Text>
-            </VStack>
-            <VStack gap={0}>
-              <Text fontSize='2xl' fontWeight='bold' color='green.500'>
-                {totalFeatures}
-              </Text>
-              <Text fontSize='sm' color='gray.600'>
-                Features Covered
-              </Text>
-            </VStack>
-            <VStack gap={0}>
-              <Text fontSize='2xl' fontWeight='bold' color='purple.500'>
-                {featureTypes.length}
-              </Text>
-              <Text fontSize='sm' color='gray.600'>
-                Structure Types
-              </Text>
-            </VStack>
-          </HStack>
-
-          {/* Feature Types */}
-          {featureTypes.length > 0 && (
-            <HStack gap={2} wrap='wrap'>
-              {featureTypes.map(type => (
-                <Badge key={type} colorPalette='gray'>
-                  {type}
-                </Badge>
-              ))}
-            </HStack>
-          )}
-        </VStack>
+        </HStack>
 
         {/* Creator's Media */}
-        <MediaGallery
-          media={mediaWithCreator}
-          title={`Media by ${creator.display_name}`}
-        />
+        <MediaGallery media={mediaData} title='Videos' isPage />
       </VStack>
     </Container>
   );

@@ -1,6 +1,5 @@
 import {
   Container,
-  Heading,
   VStack,
   HStack,
   Text,
@@ -17,8 +16,7 @@ import { createClient } from '@supabase/server';
 import { snakeCaseToTitleCase } from '@ui/helpers/text-formatting';
 import { formatDate } from '@ui/helpers/date-formatting';
 import { Breadcrumb } from '@ui/components/breadcrumb';
-import { getFeatureHref } from '@/utils/feature-routing';
-import { FeatureIcon } from '@/components/feature/feature-icon';
+import MediaFeatures from './media-features';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -46,7 +44,7 @@ export default async function MediaPage({ params }: PageProps) {
           name,
           type,
           status,
-          phase
+          chainage
         )
       )
     `
@@ -61,8 +59,6 @@ export default async function MediaPage({ params }: PageProps) {
   const relatedFeatures =
     media.media_features?.map(mf => mf.features).filter(Boolean) || [];
 
-  console.log('date', media.published_at);
-
   return (
     <Container maxW='8xl' py={8}>
       <VStack gap={8} align='stretch'>
@@ -71,9 +67,9 @@ export default async function MediaPage({ params }: PageProps) {
           items={[{ title: 'Media', url: '/media' }, { title: media.title }]}
         />
 
-        <SimpleGrid columns={{ base: 1, lg: 3 }} gap={8}>
+        <SimpleGrid gap={8} templateColumns={{ base: '1fr', lg: '1fr 300px' }}>
           {/* Media Content */}
-          <VStack gap={2} align='start' gridColumn={{ base: 1, lg: '1 / 3' }}>
+          <VStack gap={2} align='start'>
             {media.youtube_id && (
               <AspectRatio ratio={16 / 9} w='full'>
                 <iframe
@@ -107,7 +103,7 @@ export default async function MediaPage({ params }: PageProps) {
               </Link>
             )}
             {/* Media Info */}
-            <Card.Root variant='subtle' bg='gray.950' w='full'>
+            <Card.Root variant='subtle' bg='bg.subtle' w='full'>
               <Card.Body>
                 <VStack gap={3} align='start'>
                   <HStack justify='space-between'>
@@ -137,37 +133,7 @@ export default async function MediaPage({ params }: PageProps) {
 
           {/* Related Features */}
           {relatedFeatures.length > 0 && (
-            <VStack gap={4} align='stretch'>
-              <Heading size='lg'>
-                Featured Structures ({relatedFeatures.length})
-              </Heading>
-
-              <VStack gap={4} align='stretch'>
-                {relatedFeatures.map(feature => (
-                  <Link
-                    key={feature.id}
-                    href={getFeatureHref(feature.type, feature.id)}
-                  >
-                    <Card.Root variant='subtle'>
-                      <Card.Body p={4}>
-                        <HStack gap={4}>
-                          <FeatureIcon
-                            feature={{
-                              id: feature.id,
-                              name: feature.name,
-                              type: feature.type,
-                            }}
-                          />
-                          <Text fontWeight='semibold' fontSize='sm'>
-                            {feature.name}
-                          </Text>
-                        </HStack>
-                      </Card.Body>
-                    </Card.Root>
-                  </Link>
-                ))}
-              </VStack>
-            </VStack>
+            <MediaFeatures relatedFeatures={relatedFeatures} />
           )}
         </SimpleGrid>
       </VStack>

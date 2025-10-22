@@ -6,8 +6,8 @@ import { Provider } from '@ui/components/provider';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'HS2',
-  description: 'HS2 Construction',
+  title: 'High Speed Progress',
+  description: 'UK High Speed Railway Projects Progress',
 };
 
 export default function RootLayout({
