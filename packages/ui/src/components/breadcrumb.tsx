@@ -21,7 +21,7 @@ export const Breadcrumb = React.forwardRef<HTMLDivElement, BreadcrumbProps>(
             const last = index === items.length - 1;
             return (
               <React.Fragment key={index}>
-                <ChakraBreadcrumb.Item>
+                <ChakraBreadcrumb.Item wordBreak='auto-phrase'>
                   {last ? (
                     <ChakraBreadcrumb.CurrentLink>
                       {item.title}
