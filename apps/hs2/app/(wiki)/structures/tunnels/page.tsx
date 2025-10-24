@@ -67,7 +67,7 @@ export default async function TunnelsPage() {
 
         <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
           <Link href='/structures/tunnels/twin-bore-tunnels'>
-            <Card.Root overflow='hidden' variant='subtle'>
+            <Card.Root overflow='hidden'>
               <Image
                 src='https://assets.hs2.org.uk/wp-content/uploads/2025/02/HS2-Long-Itchington-tunnel-walk-25_cropped-1400x631.png'
                 alt='Twin Bore Tunnel'
@@ -85,7 +85,7 @@ export default async function TunnelsPage() {
             </Card.Root>
           </Link>
           <Link href='/structures/tunnels/green-tunnels'>
-            <Card.Root overflow='hidden' variant='subtle'>
+            <Card.Root overflow='hidden'>
               <Image
                 src='https://assets.hs2.org.uk/wp-content/uploads/2023/09/230215_HS2_EKFB_Progress_G2S_Chipping_Warden_JR_000019-1400x631.png'
                 alt='Cut-and-cover Tunnel'

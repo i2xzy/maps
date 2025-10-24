@@ -28,39 +28,29 @@ export default function MapPage() {
         </Stack>
 
         {/* Map Container */}
-        <Card.Root variant='subtle'>
-          <Card.Body p={0}>
-            <Box
-              height={{ base: '400px', md: '600px' }}
-              bg='gray.100'
-              display='flex'
-              alignItems='center'
-              justifyContent='center'
-              position='relative'
-              borderRadius='lg'
-            >
-              <Stack gap={4} textAlign='center' p={6}>
-                <Heading size='lg' color='gray.500'>
-                  Interactive Map Coming Soon
-                </Heading>
-                <Text color='gray.600' maxW='md'>
-                  This will display the full HS2 route from London to Birmingham
-                  and beyond, with real-time construction progress, active
-                  sites, and key milestones.
-                </Text>
-                <HStack gap={2} justify='center' wrap='wrap'>
-                  <Badge colorPalette='blue' size='lg'>
-                    Phase 1
-                  </Badge>
-                  <Badge colorPalette='green' size='lg'>
-                    Phase 2a
-                  </Badge>
-                  <Badge colorPalette='purple' size='lg'>
-                    Phase 2b
-                  </Badge>
-                </HStack>
-              </Stack>
-            </Box>
+        <Card.Root height={{ base: '400px', md: '600px' }} bg='gray.100'>
+          <Card.Body p={0} alignItems='center' justifyContent='center'>
+            <Stack gap={4} textAlign='center' p={6}>
+              <Heading size='lg' color='gray.500'>
+                Interactive Map Coming Soon
+              </Heading>
+              <Text color='gray.600' maxW='md'>
+                This will display the full HS2 route from London to Birmingham
+                and beyond, with real-time construction progress, active sites,
+                and key milestones.
+              </Text>
+              <HStack gap={2} justify='center' wrap='wrap'>
+                <Badge colorPalette='blue' size='lg'>
+                  Phase 1
+                </Badge>
+                <Badge colorPalette='green' size='lg'>
+                  Phase 2a
+                </Badge>
+                <Badge colorPalette='purple' size='lg'>
+                  Phase 2b
+                </Badge>
+              </HStack>
+            </Stack>
           </Card.Body>
         </Card.Root>
 

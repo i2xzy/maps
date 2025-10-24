@@ -5,3 +5,9 @@ export function snakeCaseToTitleCase(status: string): string {
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(' ');
 }
+
+export function formatChainage(chainage: number): string {
+  const kilometers = Math.floor(chainage / 1000);
+  const meters = chainage % 1000;
+  return `${kilometers}+${String(meters).padStart(3, '0')}`;
+}

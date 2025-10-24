@@ -8,6 +8,7 @@ import {
   AspectRatio,
   SimpleGrid,
   Link as ChakraLink,
+  DataList,
 } from '@chakra-ui/react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -103,30 +104,28 @@ export default async function MediaPage({ params }: PageProps) {
               </Link>
             )}
             {/* Media Info */}
-            <Card.Root variant='subtle' bg='bg.subtle' w='full'>
+            <Card.Root bg='bg.subtle' w='full'>
               <Card.Body>
-                <VStack gap={3} align='start'>
-                  <HStack justify='space-between'>
-                    <Text fontWeight='medium'>Published:</Text>
-                    {media.published_at && (
-                      <Text fontSize='sm'>
-                        {formatDate(media.published_at)}
-                      </Text>
-                    )}
-                  </HStack>
-                  {media.recorded_date && (
-                    <HStack justify='space-between'>
-                      <Text fontWeight='medium'>Recorded:</Text>
-                      <Text fontSize='sm'>
-                        {formatDate(media.recorded_date)}
-                      </Text>
-                    </HStack>
-                  )}
-                  <HStack justify='space-between'>
-                    <Text fontWeight='medium'>Shot Type:</Text>
-                    <Text>{snakeCaseToTitleCase(media.shot_type)}</Text>
-                  </HStack>
-                </VStack>
+                <DataList.Root orientation='horizontal'>
+                  <DataList.Item>
+                    <DataList.ItemLabel>Published:</DataList.ItemLabel>
+                    <DataList.ItemValue>
+                      {media.published_at && formatDate(media.published_at)}
+                    </DataList.ItemValue>
+                  </DataList.Item>
+                  <DataList.Item>
+                    <DataList.ItemLabel>Recorded:</DataList.ItemLabel>
+                    <DataList.ItemValue>
+                      {media.recorded_date && formatDate(media.recorded_date)}
+                    </DataList.ItemValue>
+                  </DataList.Item>
+                  <DataList.Item>
+                    <DataList.ItemLabel>Shot Type:</DataList.ItemLabel>
+                    <DataList.ItemValue>
+                      {snakeCaseToTitleCase(media.shot_type)}
+                    </DataList.ItemValue>
+                  </DataList.Item>
+                </DataList.Root>
               </Card.Body>
             </Card.Root>
           </VStack>

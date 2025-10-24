@@ -10,59 +10,9 @@ import {
 import Link from 'next/link';
 
 import { createClient } from '@supabase/server';
-import { FeatureStatus } from '@supabase/types';
-import { countFeaturesByStatus } from '@/utils/progress-data';
+import { generateOverallProgressData } from '@/utils/progress-data';
 import ProgressChart from '@/components/progress-chart';
 import StatCard from '@/components/stat-card';
-import { featureStatuses } from '@/components/feature/config';
-
-// Helper function to generate overall progress chart data
-function generateOverallProgressData(
-  statusCounts: Record<NonNullable<FeatureStatus>, number> | undefined
-) {
-  if (!statusCounts) return [];
-
-  return [
-    {
-      name: 'Not Started',
-      value: statusCounts['NOT_STARTED'] ?? 0,
-      color: featureStatuses['NOT_STARTED'].color,
-    },
-    {
-      name: 'Prep Work',
-      value: statusCounts['PREP_WORK'] ?? 0,
-      color: featureStatuses['PREP_WORK'].color,
-    },
-    {
-      name: 'Foundations',
-      value:
-        (statusCounts['DIGGING'] ?? 0) +
-        (statusCounts['SEGMENT_INSTALLATION'] ?? 0) +
-        (statusCounts['FOUNDATIONS'] ?? 0) +
-        (statusCounts['PIERS'] ?? 0),
-      color: featureStatuses['PIERS'].color,
-    },
-    {
-      name: 'Superstructure',
-      value:
-        (statusCounts['DECK'] ?? 0) +
-        (statusCounts['PARAPET'] ?? 0) +
-        (statusCounts['SIDE_TUNNELS'] ?? 0) +
-        (statusCounts['SURFACE_BUILDINGS'] ?? 0),
-      color: featureStatuses['DECK'].color,
-    },
-    {
-      name: 'Civils',
-      value: (statusCounts['CIVILS'] ?? 0) + (statusCounts['LANDSCAPING'] ?? 0),
-      color: featureStatuses['CIVILS'].color,
-    },
-    {
-      name: 'Completed',
-      value: statusCounts['COMPLETED'] ?? 0,
-      color: featureStatuses['COMPLETED'].color,
-    },
-  ];
-}
 
 export default async function Home() {
   const supabase = await createClient();
@@ -91,9 +41,6 @@ export default async function Home() {
     { label: 'Viaducts', value: allViaducts?.length || 0 },
   ];
 
-  // Count features by all statuses
-  const statusCounts = countFeaturesByStatus(features);
-
   return (
     <Container maxW='5xl' py={8}>
       <VStack gap={8} align='stretch'>
@@ -119,13 +66,11 @@ export default async function Home() {
           ))}
         </SimpleGrid>
 
-        {statusCounts && (
-          <ProgressChart data={generateOverallProgressData(statusCounts)} />
-        )}
+        <ProgressChart data={generateOverallProgressData(features)} />
 
         <SimpleGrid columns={{ base: 1, md: 2 }} gap={6}>
           <Link href='/structures/stations'>
-            <Card.Root overflow='hidden' variant='subtle'>
+            <Card.Root overflow='hidden'>
               <Image
                 src='https://cdn.prgloo.com/media/91d77d87f3ae4120bc553a7a70fb9886.jpg?width=1120&height=1680'
                 alt='Stations'
@@ -142,7 +87,7 @@ export default async function Home() {
             </Card.Root>
           </Link>
           <Link href='/structures/tunnels'>
-            <Card.Root overflow='hidden' variant='subtle'>
+            <Card.Root overflow='hidden'>
               <Image
                 src='https://assets.hs2.org.uk/wp-content/uploads/2025/02/HS2-Long-Itchington-tunnel-walk-25_cropped-1400x631.png'
                 alt='Twin Bore Tunnel'
@@ -160,7 +105,7 @@ export default async function Home() {
             </Card.Root>
           </Link>
           <Link href='/structures/bridges'>
-            <Card.Root overflow='hidden' variant='subtle'>
+            <Card.Root overflow='hidden'>
               <Image
                 src='https://cdn.prgloo.com/media/780e3c496aad490085872af101cd85c4.jpeg?width=1120&height=1680'
                 alt='Bridges'
@@ -177,7 +122,7 @@ export default async function Home() {
             </Card.Root>
           </Link>
           <Link href='/structures/viaducts'>
-            <Card.Root overflow='hidden' variant='subtle'>
+            <Card.Root overflow='hidden'>
               <Image
                 src='https://assets.hs2.org.uk/wp-content/uploads/2025/04/Colne-Valley-Viaduct_16-by-9-1400x631.png'
                 alt='Viaducts'

@@ -28,11 +28,11 @@ interface MediaItem {
   youtube_id: string | null;
   published_at: string | null;
   recorded_date: string | null;
-  creators: Creator | null;
+  creators?: Creator | null;
 }
 
 interface MediaGalleryProps {
-  media: MediaItem[];
+  media: MediaItem[] | null;
   title?: string;
   isPage?: boolean;
 }
@@ -42,7 +42,7 @@ export function MediaGallery({
   title = 'Related Media',
   isPage = false,
 }: MediaGalleryProps) {
-  if (media.length === 0) return null;
+  if (!media || media.length === 0) return null;
 
   return (
     <VStack gap={4} align='stretch'>

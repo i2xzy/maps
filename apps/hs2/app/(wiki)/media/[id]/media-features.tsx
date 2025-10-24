@@ -12,7 +12,16 @@ import {
 import Link from 'next/link';
 import { LuArrowDown01, LuArrowDown10 } from 'react-icons/lu';
 
-import { Feature } from '@supabase/types';
+import { FeatureStatus, FeatureType } from '@supabase/types';
+
+type Feature = {
+  id: string;
+  name: string;
+  type: FeatureType;
+  status: FeatureStatus | null;
+  chainage: number | null;
+};
+
 import { getFeatureHref } from '@/utils/feature-routing';
 import { Tooltip } from '@ui/components/tooltip';
 import { FeatureIcon } from '@/components/feature/feature-icon';
@@ -55,7 +64,7 @@ export default function MediaFeatures({
             key={feature.id}
             href={getFeatureHref(feature.type, feature.id)}
           >
-            <Card.Root variant='subtle'>
+            <Card.Root>
               <Card.Body p={4}>
                 <HStack gap={4}>
                   <FeatureIcon {...feature} />

@@ -66,11 +66,7 @@ export default async function StationsPage() {
         <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
           {features?.map(feature => (
             <Link href={`/structures/stations/${feature.id}`} key={feature.id}>
-              <Card.Root
-                overflow='hidden'
-                variant='subtle'
-                size={{ base: 'sm', md: 'md' }}
-              >
+              <Card.Root overflow='hidden' size={{ base: 'sm', md: 'md' }}>
                 <Image
                   src={feature.media_features[0]?.media.url}
                   alt={feature.name}

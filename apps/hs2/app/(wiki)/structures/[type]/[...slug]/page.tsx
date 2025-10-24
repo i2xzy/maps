@@ -7,22 +7,22 @@ import {
   Card,
   SimpleGrid,
   Badge,
-  Link as ChakraLink,
   Separator,
   Box,
   Image,
 } from '@chakra-ui/react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { LuExternalLink } from 'react-icons/lu';
 
 import { createClient } from '@supabase/server';
+import { GroupingSearchResult } from '@supabase/types';
 import { snakeCaseToTitleCase } from '@ui/helpers/text-formatting';
 import { Breadcrumb } from '@ui/components/breadcrumb';
 import { featureTypes } from '@/components/feature/config';
 import { FeatureIcon } from '@/components/feature/feature-icon';
 import { MediaGallery } from '@/components/media/media-gallery';
 import { FeatureStatusBadge } from '@/components/feature/feature-status-badge';
+import { REGIONS } from '../../../route/config';
 
 // Helper function to format phase for display
 function formatPhase(phase: string): string {
@@ -36,6 +36,16 @@ function formatPhase(phase: string): string {
     default:
       return phase;
   }
+}
+
+function getRegionFromPlan(plan: GroupingSearchResult): string {
+  const [london, south, north] = REGIONS;
+  if (plan.name.includes('North Chord')) return 'north';
+  if (plan.name.includes('Birmingham Spur')) return 'birmingham';
+  if (plan.chainage_from === london?.chainageFrom) return 'london';
+  if (plan.chainage_from === south?.chainageFrom) return 'south';
+  if (plan.chainage_from === north?.chainageFrom) return 'north';
+  return 'unknown';
 }
 
 interface PageProps {
@@ -105,7 +115,7 @@ export default async function StructureDetailPage({ params }: PageProps) {
   // Fetch related groupings
   const { data: groupingsData } = await supabase
     .from('grouping_features')
-    .select('groupings (id, name, type, url)')
+    .select('groupings (id, name, type, url, description, chainage_from)')
     .eq('feature_id', id);
 
   const groupings =
@@ -237,59 +247,53 @@ export default async function StructureDetailPage({ params }: PageProps) {
 
           <VStack gap={6} align='stretch'>
             {/* Mini Map */}
-            <Card.Root>
-              <Card.Header>
-                <Heading size='md'>Location</Heading>
-              </Card.Header>
-              <Card.Body>
-                <Box height='200px' width='100%' borderRadius='md'>
-                  <Box
-                    height='100%'
-                    width='100%'
-                    bg='gray.100'
-                    borderRadius='md'
-                    display='flex'
-                    alignItems='center'
-                    justifyContent='center'
-                  >
-                    <VStack gap={2} p={2}>
-                      <Heading size='md' color='gray.500'>
-                        Interactive Map Coming Soon
-                      </Heading>
-                    </VStack>
-                  </Box>
-                </Box>
-              </Card.Body>
-            </Card.Root>
+
+            <Heading size='md'>Location</Heading>
+
+            <Box height='200px' width='100%' borderRadius='md'>
+              <Box
+                height='100%'
+                width='100%'
+                bg='gray.100'
+                borderRadius='md'
+                display='flex'
+                alignItems='center'
+                justifyContent='center'
+              >
+                <VStack gap={2} p={2}>
+                  <Heading size='md' color='gray.500'>
+                    Interactive Map Coming Soon
+                  </Heading>
+                </VStack>
+              </Box>
+            </Box>
 
             {/* Related Plans */}
             {plans.length > 0 && (
-              <Card.Root>
-                <Card.Header>
-                  <Heading size='md'>Plan Sheets</Heading>
-                </Card.Header>
-                <Card.Body>
-                  <VStack gap={3} align='stretch'>
-                    {plans.map(plan => (
-                      <VStack key={plan.id} gap={1} align='stretch'>
-                        <Text fontWeight='medium' fontSize='sm'>
-                          {plan.name}
-                        </Text>
-                        {plan.url && (
-                          <ChakraLink
-                            href={plan.url}
-                            target='_blank'
-                            fontSize='xs'
-                            color='teal.500'
-                          >
-                            Open PDF <LuExternalLink />
-                          </ChakraLink>
-                        )}
-                      </VStack>
-                    ))}
-                  </VStack>
-                </Card.Body>
-              </Card.Root>
+              <>
+                <Heading size='md'>Plan Sheets</Heading>
+                <VStack gap={3} align='stretch'>
+                  {plans.map(plan => (
+                    <Link
+                      key={plan.id}
+                      href={`/route/${getRegionFromPlan(plan)}/${plan.id}`}
+                    >
+                      <Card.Root size='sm'>
+                        <Card.Body>
+                          <VStack gap={1} align='stretch'>
+                            <Card.Title color='blue.400'>
+                              {plan.name}
+                            </Card.Title>
+                            <Text fontSize='sm' color='fg.muted'>
+                              {plan.description}
+                            </Text>
+                          </VStack>
+                        </Card.Body>
+                      </Card.Root>
+                    </Link>
+                  ))}
+                </VStack>
+              </>
             )}
 
             {/* Related Segments */}

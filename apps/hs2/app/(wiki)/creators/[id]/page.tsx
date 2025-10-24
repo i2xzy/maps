@@ -74,7 +74,7 @@ export default async function CreatorPage({ params }: PageProps) {
 
         {/* Creator Header */}
         <HStack gap={6}>
-          <Avatar.Root size='3xl'>
+          <Avatar.Root size='2xl'>
             <Avatar.Fallback name={creator.display_name} />
             {creator.profile_image_url && (
               <Avatar.Image src={creator.profile_image_url} />
@@ -107,17 +107,13 @@ export default async function CreatorPage({ params }: PageProps) {
               )}
             </VStack>
             {creator.platform === 'youtube' && (
-              <Button
-                as={ChakraLink}
-                href={creator.url}
-                target='_blank'
-                colorPalette='red'
-                size='xs'
-              >
-                <FaYoutube />
-                <Text as='span' fontWeight='bold'>
-                  Open in YouTube
-                </Text>
+              <Button colorPalette='red' size='xs' asChild>
+                <a href={creator.url} target='_blank' rel='noopener noreferrer'>
+                  <FaYoutube />
+                  <Text as='span' fontWeight='bold'>
+                    Open in YouTube
+                  </Text>
+                </a>
               </Button>
             )}
           </VStack>

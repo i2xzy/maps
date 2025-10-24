@@ -78,7 +78,7 @@ export default async function BridgesPage() {
 
         <SimpleGrid columns={{ base: 1, lg: 2 }} gap={6}>
           <Link href='/structures/bridges/overbridges'>
-            <Card.Root overflow='hidden' variant='subtle' h='100%'>
+            <Card.Root overflow='hidden' h='100%'>
               <Image
                 src='https://cdn.prgloo.com/media/780e3c496aad490085872af101cd85c4.jpeg?width=1120&height=1680'
                 alt='Overbridges'
@@ -95,7 +95,7 @@ export default async function BridgesPage() {
             </Card.Root>
           </Link>
           <Link href='/structures/bridges/underbridges'>
-            <Card.Root overflow='hidden' variant='subtle'>
+            <Card.Root overflow='hidden'>
               <Image
                 src='https://cdn.prgloo.com/media/fbe4318f01fe4d638dceadbfa3322426.jpg?width=1120&height=1680'
                 alt='Underbridges'

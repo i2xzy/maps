@@ -46,11 +46,7 @@ export default async function TwinBoreTunnelsPage() {
               href={`/structures/tunnels/twin-bore-tunnels/${feature.id}`}
               key={feature.id}
             >
-              <Card.Root
-                overflow='hidden'
-                variant='subtle'
-                size={{ base: 'sm', md: 'md' }}
-              >
+              <Card.Root size={{ base: 'sm', md: 'md' }}>
                 <Card.Body gap='2'>
                   <HStack justify='space-between'>
                     <Card.Title color='blue.400'>{feature.name}</Card.Title>
