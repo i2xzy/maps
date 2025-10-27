@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import {
   Button,
   Container,
@@ -18,6 +19,30 @@ import { MediaGallery } from '@/components/media/media-gallery';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: creator } = await supabase
+    .from('creators')
+    .select('display_name')
+    .eq('id', id)
+    .single();
+
+  if (!creator) {
+    return {
+      title: 'Creator Not Found',
+    };
+  }
+
+  return {
+    title: creator.display_name,
+    description: `View all HS2 construction videos and images from ${creator.display_name}. Follow their documentation of the High Speed 2 railway project.`,
+  };
 }
 
 export default async function CreatorPage({ params }: PageProps) {

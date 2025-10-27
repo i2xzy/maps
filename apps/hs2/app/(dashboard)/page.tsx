@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import {
   Box,
   Container,
@@ -7,6 +8,12 @@ import {
   HStack,
 } from '@chakra-ui/react';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'Dashboard',
+  description:
+    'HS2 Construction Dashboard - Overview of the High Speed 2 railway project with access to interactive map, media updates, structures database, and route information.',
+};
 
 export default async function Home() {
   return (

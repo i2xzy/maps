@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import {
   Container,
   VStack,
@@ -22,6 +23,42 @@ import MediaFeatures from './media-features';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: media } = await supabase
+    .from('media')
+    .select(
+      `
+      title,
+      description,
+      type,
+      creators (display_name)
+    `
+    )
+    .eq('id', id)
+    .single();
+
+  if (!media) {
+    return {
+      title: 'Media Not Found',
+    };
+  }
+
+  const creatorName = media.creators?.display_name || 'Unknown Creator';
+  const mediaType = media.type === 'video' ? 'Video' : 'Image';
+
+  return {
+    title: media.title,
+    description:
+      media.description ||
+      `${mediaType} of HS2 construction by ${creatorName}. Watch and explore High Speed 2 railway project updates.`,
+  };
 }
 
 export default async function MediaPage({ params }: PageProps) {

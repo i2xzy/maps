@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import {
   Card,
   Container,
@@ -13,6 +14,12 @@ import { createClient } from '@supabase/server';
 import { generateOverallProgressData } from '@/utils/progress-data';
 import ProgressChart from '@/components/progress-chart';
 import StatCard from '@/components/stat-card';
+
+export const metadata: Metadata = {
+  title: 'Structures Overview',
+  description:
+    'Comprehensive database of HS2 railway structures including stations, bridges, tunnels, and viaducts. View construction status, photos, videos, and detailed information for each structure.',
+};
 
 export default async function Home() {
   const supabase = await createClient();

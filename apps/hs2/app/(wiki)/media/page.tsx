@@ -1,7 +1,14 @@
+import type { Metadata } from 'next';
 import { Container, Stack, Heading } from '@chakra-ui/react';
 
 import { createClient } from '@supabase/server';
 import { MediaGallery } from '@/components/media/media-gallery';
+
+export const metadata: Metadata = {
+  title: 'News Feed',
+  description:
+    'Latest HS2 construction updates with videos and photos from YouTube creators and official sources. Stay updated with drone footage, time-lapses, and ground-level documentation of the project.',
+};
 
 export default async function MediaHomePage() {
   const supabase = await createClient();

@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import {
   Container,
   Heading,
@@ -11,6 +12,12 @@ import {
 import { featureTypes } from '@/components/feature/config';
 import { FeatureIcon } from '@/components/feature/feature-icon';
 import { FeatureType } from '@supabase/types';
+
+export const metadata: Metadata = {
+  title: 'Interactive Map',
+  description:
+    'Explore the HS2 route on an interactive map showing stations, bridges, tunnels, viaducts, and other structures with real-time construction progress from London to Birmingham.',
+};
 
 export default function MapPage() {
   return (

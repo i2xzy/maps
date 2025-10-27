@@ -1,84 +1,147 @@
-# Turborepo starter
+# My Mapping Projects
 
-This Turborepo starter is maintained by the Turborepo core team.
+A monorepo for my mapping projects, currently featuring the High Speed Progress project and coming soon, the London Cycling Routes.
 
-## Using this example
+## Projects
 
-Run the following command:
+### High Speed Progress
+A comprehensive web application for tracking the construction progress of the UK High Speed railway project, including:
+- Real-time construction status updates
+- Interactive structure database (stations, bridges, tunnels, viaducts)
+- News feed with videos and images from YouTube creators
+- Regional route breakdowns with plan sheets
+- Content creator directory
 
-```sh
-npx create-turbo@latest
-```
+**Live Site:** https://hsp-bice.vercel.app/
 
-## What's inside?
+### London Cycle Routes (Planned)
+Future project for mapping safe cycling routes around London.
 
-This Turborepo includes the following packages/apps:
+## 🏗️ Architecture
 
-### Apps and Packages
+This is a [Turborepo](https://turborepo.com) monorepo with the following structure:
 
-- `london-cycle-routes`: a [Next.js](https://nextjs.org/) app
-- `hs2`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `hs2` and `london-cycle-routes` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+### Apps
+- `apps/hs2` - High Speed Progress Next.js application
+- `apps/london-cycle-routes` - London Cycle Routes Next.js application (in development)
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+### Packages
+- `@repo/ui` - Shared React UI components and helpers
+  - Chakra UI v3 components (Breadcrumb, ColorMode, CommandMenu, Logo, Provider, Tooltip)
+  - Helper functions for date and text formatting
+- `@repo/supabase` - Supabase client configuration and TypeScript types
+  - Database types (auto-generated from Supabase)
+  - Server and client Supabase client configurations
+  - Feature and grouping types
+- `@repo/eslint-config` - Shared ESLint configurations
+- `@repo/typescript-config` - Shared TypeScript configurations
 
-### Utilities
+## 🛠️ Tech Stack
 
-This Turborepo has some additional tools already setup for you:
+- **Frontend:** Next.js 15 (App Router), React 19, TypeScript
+- **UI Library:** Chakra UI v3
+- **Backend:** Supabase (PostgreSQL with PostGIS)
+- **Monorepo:** Turborepo
+- **Package Manager:** pnpm
+- **Deployment:** Vercel
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+## 🚀 Getting Started
 
-### Build
+### Prerequisites
+- Node.js 18+ 
+- pnpm 9+
+- Supabase account (for database access)
 
-To build all apps and packages, run the following command:
+### Installation
 
-```
-cd my-turborepo
-pnpm build
-```
+1. Clone the repository:
+    ```bash
+    git clone [your-repo-url]
+    cd maps
+    ```
 
-### Develop
+2. Install dependencies:
+    ```bash
+    pnpm install
+    ```
 
-To develop all apps and packages, run the following command:
+3. Set up environment variables:
+    ```bash
+    # In apps/hs2/.env.local
+    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+    ```
 
-```
-cd my-turborepo
+4. Run the development server:
+    ```bash
+    pnpm dev
+    ```
+
+    This will start all apps in development mode:
+    - HS2 app: http://localhost:3000
+    - London Cycle Routes app: http://localhost:3001
+
+    Alternatively, you can run:
+    ```bash
+    pnpm dev --filter hs2
+    ```
+    This will start just the HS2 app on http://localhost:3000
+
+### Development Commands
+
+```bash
+# Run all apps in development
 pnpm dev
+
+# Build all apps and packages
+pnpm build
+
+# Run linting
+pnpm lint
+
+# Type checking
+pnpm check-types
 ```
 
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+## 📁 Project Structure
 
 ```
-cd my-turborepo
-npx turbo login
+maps/
+├── apps/
+│   ├── hs2/                    # HS Progress
+│   │   ├── app/               # Next.js app directory
+│   │   ├── components/        # React components
+│   │   └── utils/             # Utility functions
+│   └── london-cycle-routes/   # London Cycle Routes (planned)
+├── packages/
+│   ├── ui/                    # Shared UI components
+│   ├── supabase/             # Supabase configuration
+│   ├── eslint-config/        # ESLint configs
+│   └── typescript-config/    # TypeScript configs
+└── turbo.json                # Turborepo configuration
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+## 🗄️ Database Schema
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+The HS2 tracker uses Supabase with the following main tables:
+- `features` - Railway structures (stations, bridges, tunnels, viaducts, etc.)
+- `media` - Videos and images from content creators
+- `creators` - YouTube channels and content creators
+- `groupings` - Plan sheets and feature groupings
+- `media_features` - Links media to features
+- `grouping_features` - Links groupings to features
 
-```
-npx turbo link
-```
+## 📝 Contributing
 
-## Useful Links
+This is currently a personal project, but contributions and suggestions are welcome!
 
-Learn more about the power of Turborepo:
+<!-- ## 📄 License
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+[Your License Here] -->
+
+## 🙏 Acknowledgments
+
+- HS2 Ltd for public construction data
+- YouTube creators documenting the HS2 construction
+- Supabase for backend infrastructure
+- Vercel for hosting

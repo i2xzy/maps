@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import {
   Container,
   Heading,
@@ -39,12 +40,13 @@ function formatPhase(phase: string): string {
 }
 
 function getRegionFromPlan(plan: GroupingSearchResult): string {
-  const [london, south, north] = REGIONS;
   if (plan.name.includes('North Chord')) return 'north';
   if (plan.name.includes('Birmingham Spur')) return 'birmingham';
-  if (plan.chainage_from === london?.chainageFrom) return 'london';
-  if (plan.chainage_from === south?.chainageFrom) return 'south';
-  if (plan.chainage_from === north?.chainageFrom) return 'north';
+  const [london, south, north] = REGIONS;
+  if (!london || !south || !north || !plan.chainage_from) return 'london';
+  if (plan.chainage_from < london.chainageTo) return 'london';
+  if (plan.chainage_from < south.chainageTo) return 'south';
+  if (plan.chainage_from < north.chainageTo) return 'north';
   return 'unknown';
 }
 
@@ -52,15 +54,41 @@ interface PageProps {
   params: Promise<{ type: string; slug: string[] }>;
 }
 
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const id = slug[1] || slug[0] || '';
+
+  const supabase = await createClient();
+
+  const { data: feature } = await supabase
+    .from('features')
+    .select('name, description')
+    .eq('id', id)
+    .single();
+
+  if (!feature) {
+    return {
+      title: 'Structure Not Found',
+    };
+  }
+
+  return {
+    title: feature.name,
+    description:
+      feature.description ||
+      `${feature.name} on the HS2 railway route. View construction progress, photos, videos, and technical details.`,
+  };
+}
+
 export default async function StructureDetailPage({ params }: PageProps) {
   const { type, slug } = await params;
 
-  console.log({ type, slug });
   //   get the id from the slug, can be either type/id or type/sub_type/id
   const id = slug[1] || slug[0] || '';
-  console.log({ id });
+
   const subType = slug.length > 1 ? slug[0] : '';
-  console.log({ subType });
 
   const supabase = await createClient();
 

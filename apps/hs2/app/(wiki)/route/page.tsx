@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import {
   Card,
   Heading,
@@ -12,6 +13,12 @@ import { createClient } from '@supabase/server';
 import { generateOverallProgressData } from '@/utils/progress-data';
 import ProgressChart from '@/components/progress-chart';
 import { REGIONS } from './config';
+
+export const metadata: Metadata = {
+  title: 'Route Overview',
+  description:
+    'Explore the HS2 route organized by geographical regions: London Metropolitan, Country South, Country North, and Birmingham Spur. View plan sheets and construction progress for each section.',
+};
 
 export default async function RoutePage() {
   const supabase = await createClient();

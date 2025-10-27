@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import {
   Container,
   Stack,
@@ -7,11 +8,20 @@ import {
   VStack,
   Avatar,
   Text,
+  Link as ChakraLink,
+  LinkOverlay,
+  LinkBox,
 } from '@chakra-ui/react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { createClient } from '@supabase/server';
+
+export const metadata: Metadata = {
+  title: 'Content Creators',
+  description:
+    'Discover YouTube channels and content creators documenting HS2 construction. Browse creators, watch their videos, and follow their coverage of the High Speed 2 railway project.',
+};
 
 export default async function CreatorsPage() {
   const supabase = await createClient();
@@ -59,9 +69,9 @@ export default async function CreatorsPage() {
         {creators.length > 0 ? (
           <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} gap={6}>
             {creatorsWithCounts.map(creator => (
-              <Link key={creator.id} href={`/creators/${creator.id}`}>
-                <Card.Root h='100%' _hover={{ borderColor: 'blue.400' }}>
-                  <Card.Body>
+              <Card.Root key={creator.id} h='100%'>
+                <Card.Body>
+                  <LinkBox as='article'>
                     <VStack gap={4}>
                       <Avatar.Root size='2xl'>
                         <Avatar.Fallback name={creator.display_name} />
@@ -70,30 +80,32 @@ export default async function CreatorsPage() {
                         )}
                       </Avatar.Root>
                       <VStack gap={1}>
-                        <Text
-                          fontWeight='bold'
-                          fontSize='lg'
-                          textAlign='center'
-                          lineClamp={2}
-                        >
-                          {creator.display_name}
-                        </Text>
-                        <Text fontSize='sm' color='fg.muted'>
-                          @{creator.external_id}
-                        </Text>
-                        <Text
-                          fontSize='sm'
-                          color='blue.400'
-                          fontWeight='medium'
-                        >
+                        <LinkOverlay asChild>
+                          <Link href={`/creators/${creator.id}`}>
+                            <Text
+                              fontWeight='bold'
+                              fontSize='lg'
+                              textAlign='center'
+                              lineClamp={2}
+                            >
+                              {creator.display_name}
+                            </Text>
+                          </Link>
+                        </LinkOverlay>
+                        <ChakraLink href={creator.url} target='_blank'>
+                          <Text fontSize='sm' color='fg.muted'>
+                            @{creator.external_id}
+                          </Text>
+                        </ChakraLink>
+                        <Text fontSize='sm' fontWeight='medium'>
                           {creator.mediaCount || 0}{' '}
                           {creator.mediaCount === 1 ? 'video' : 'videos'}
                         </Text>
                       </VStack>
                     </VStack>
-                  </Card.Body>
-                </Card.Root>
-              </Link>
+                  </LinkBox>
+                </Card.Body>
+              </Card.Root>
             ))}
           </SimpleGrid>
         ) : (
