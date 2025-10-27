@@ -7,6 +7,7 @@ import {
   Text,
   Avatar,
   Link as ChakraLink,
+  Tabs,
 } from '@chakra-ui/react';
 import { notFound } from 'next/navigation';
 import { FaYoutube } from 'react-icons/fa6';
@@ -61,6 +62,9 @@ export default async function CreatorPage({ params }: PageProps) {
 
   const totalFeatures = allFeatures.length;
 
+  const videos = mediaData?.filter(m => m.type === 'video') || [];
+  const images = mediaData?.filter(m => m.type === 'image') || [];
+
   return (
     <Container maxW='6xl' py={8}>
       <VStack gap={8} align='stretch'>
@@ -92,8 +96,13 @@ export default async function CreatorPage({ params }: PageProps) {
                   </Text>
                 </ChakraLink>
                 <Text as='span' color='fg.muted'>
-                  {' • '} {mediaData?.length || 0} videos
+                  {' • '} {videos?.length} videos
                 </Text>
+                {images && images.length > 0 && (
+                  <Text as='span' color='fg.muted'>
+                    {' • '} {images.length} images
+                  </Text>
+                )}
                 {totalFeatures > 0 && (
                   <Text as='span' color='fg.muted'>
                     {' • '} {totalFeatures} features covered
@@ -119,8 +128,29 @@ export default async function CreatorPage({ params }: PageProps) {
           </VStack>
         </HStack>
 
-        {/* Creator's Media */}
-        <MediaGallery media={mediaData} title='Videos' isPage />
+        {images.length > 0 ? (
+          <Tabs.Root
+            defaultValue={videos.length > 0 ? 'videos' : 'images'}
+            orientation='horizontal'
+          >
+            <Tabs.List>
+              <Tabs.Trigger value='videos'>
+                Videos ({videos?.length})
+              </Tabs.Trigger>
+              <Tabs.Trigger value='images'>
+                Images ({images?.length})
+              </Tabs.Trigger>
+            </Tabs.List>
+            <Tabs.Content value='videos'>
+              <MediaGallery media={videos} isPage />
+            </Tabs.Content>
+            <Tabs.Content value='images'>
+              <MediaGallery media={images} isPage />
+            </Tabs.Content>
+          </Tabs.Root>
+        ) : (
+          <MediaGallery media={videos} title='Videos' isPage />
+        )}
       </VStack>
     </Container>
   );

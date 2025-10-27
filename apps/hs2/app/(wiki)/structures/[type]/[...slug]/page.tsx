@@ -240,7 +240,7 @@ export default async function StructureDetailPage({ params }: PageProps) {
               </Card.Root>
             )}
             {/* Related Media */}
-            <MediaGallery media={media} />
+            <MediaGallery media={media} title='Related Media' />
           </VStack>
 
           {/* Sidebar */}

@@ -39,29 +39,33 @@ interface MediaGalleryProps {
 
 export function MediaGallery({
   media,
-  title = 'Related Media',
+  title,
   isPage = false,
 }: MediaGalleryProps) {
   if (!media || media.length === 0) return null;
 
   return (
     <VStack gap={4} align='stretch'>
-      <Heading size='lg'>
-        {title} ({media.length})
-      </Heading>
+      {title && (
+        <Heading size='lg'>
+          {title} ({media.length})
+        </Heading>
+      )}
       <SimpleGrid columns={{ base: 1, sm: 2, md: isPage ? 4 : 3 }} gap={4}>
         {media.map(item => (
           <Link key={item.id} href={`/media/${item.id}`}>
             <VStack gap={3} align='stretch'>
-              {item.youtube_id && (
-                <AspectRatio ratio={16 / 9}>
+              <AspectRatio ratio={16 / 9}>
+                {item.youtube_id ? (
                   <Image
                     src={`https://img.youtube.com/vi/${item.youtube_id}/0.jpg`}
                     alt={item.title}
                     borderRadius='lg'
                   />
-                </AspectRatio>
-              )}
+                ) : (
+                  <Image src={item.url} alt={item.title} borderRadius='lg' />
+                )}
+              </AspectRatio>
 
               <HStack gap={2} align='stretch'>
                 {item.creators?.profile_image_url && (
@@ -87,11 +91,13 @@ export function MediaGallery({
                         </Text>
                       </Link>
                     )}
-                    <Text fontSize='xs' color='fg.muted'>
-                      {formatDate(
-                        item.recorded_date || item.published_at || ''
-                      )}
-                    </Text>
+                    {(item.recorded_date || item.published_at) && (
+                      <Text fontSize='xs' color='fg.muted'>
+                        {formatDate(
+                          item.recorded_date || item.published_at || ''
+                        )}
+                      </Text>
+                    )}
                   </VStack>
                 </VStack>
               </HStack>

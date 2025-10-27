@@ -9,6 +9,7 @@ import {
   SimpleGrid,
   Link as ChakraLink,
   DataList,
+  Image,
 } from '@chakra-ui/react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -80,6 +81,14 @@ export default async function MediaPage({ params }: PageProps) {
                 />
               </AspectRatio>
             )}
+            {media.type === 'image' && (
+              <>
+                <Image src={media.url} alt={media.title} borderRadius='lg' />
+                <Text fontWeight='semibold' fontSize='xl'>
+                  {media.title}
+                </Text>
+              </>
+            )}
             {media.description && (
               <ChakraLink href={media.url} target='_blank'>
                 <Text fontWeight='bold' fontSize='xl'>
@@ -107,20 +116,26 @@ export default async function MediaPage({ params }: PageProps) {
             <Card.Root bg='bg.subtle' w='full'>
               <Card.Body>
                 <DataList.Root orientation='horizontal'>
+                  {media.published_at && (
+                    <DataList.Item>
+                      <DataList.ItemLabel>Published:</DataList.ItemLabel>
+                      <DataList.ItemValue>
+                        {formatDate(media.published_at)}
+                      </DataList.ItemValue>
+                    </DataList.Item>
+                  )}
+                  {media.recorded_date && (
+                    <DataList.Item>
+                      <DataList.ItemLabel>Recorded:</DataList.ItemLabel>
+                      <DataList.ItemValue>
+                        {formatDate(media.recorded_date)}
+                      </DataList.ItemValue>
+                    </DataList.Item>
+                  )}
                   <DataList.Item>
-                    <DataList.ItemLabel>Published:</DataList.ItemLabel>
-                    <DataList.ItemValue>
-                      {media.published_at && formatDate(media.published_at)}
-                    </DataList.ItemValue>
-                  </DataList.Item>
-                  <DataList.Item>
-                    <DataList.ItemLabel>Recorded:</DataList.ItemLabel>
-                    <DataList.ItemValue>
-                      {media.recorded_date && formatDate(media.recorded_date)}
-                    </DataList.ItemValue>
-                  </DataList.Item>
-                  <DataList.Item>
-                    <DataList.ItemLabel>Shot Type:</DataList.ItemLabel>
+                    <DataList.ItemLabel>
+                      {media.type === 'video' ? 'Shot' : 'Image'} Type:
+                    </DataList.ItemLabel>
                     <DataList.ItemValue>
                       {snakeCaseToTitleCase(media.shot_type)}
                     </DataList.ItemValue>

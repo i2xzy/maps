@@ -45,17 +45,19 @@ export default function MediaFeatures({
         <Heading size='lg'>
           Featured Structures ({relatedFeatures.length})
         </Heading>
-        <Tooltip
-          content={`Sort from ${sort === 'asc' ? 'south to north' : 'north to south'}`}
-        >
-          <IconButton
-            variant='ghost'
-            aria-label='Sort by N/S direction'
-            onClick={() => setSort(sort === 'asc' ? 'desc' : 'asc')}
+        {relatedFeatures.length > 1 && (
+          <Tooltip
+            content={`Sort from ${sort === 'asc' ? 'south to north' : 'north to south'}`}
           >
-            {sort === 'asc' ? <LuArrowDown01 /> : <LuArrowDown10 />}
-          </IconButton>
-        </Tooltip>
+            <IconButton
+              variant='ghost'
+              aria-label='Sort by N/S direction'
+              onClick={() => setSort(sort === 'asc' ? 'desc' : 'asc')}
+            >
+              {sort === 'asc' ? <LuArrowDown01 /> : <LuArrowDown10 />}
+            </IconButton>
+          </Tooltip>
+        )}
       </HStack>
 
       <VStack gap={4} align='stretch'>
