@@ -50,13 +50,9 @@ function getRegionFromPlan(plan: GroupingSearchResult): string {
   return 'unknown';
 }
 
-interface PageProps {
-  params: Promise<{ type: string; slug: string[] }>;
-}
-
 export async function generateMetadata({
   params,
-}: PageProps): Promise<Metadata> {
+}: PageProps<'/structures/[type]/[...slug]'>): Promise<Metadata> {
   const { slug } = await params;
   const id = slug[1] || slug[0] || '';
 
@@ -82,7 +78,9 @@ export async function generateMetadata({
   };
 }
 
-export default async function StructureDetailPage({ params }: PageProps) {
+export default async function StructureDetailPage({
+  params,
+}: PageProps<'/structures/[type]/[...slug]'>) {
   const { type, slug } = await params;
 
   //   get the id from the slug, can be either type/id or type/sub_type/id

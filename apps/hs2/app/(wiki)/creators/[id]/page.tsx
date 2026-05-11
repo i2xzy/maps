@@ -17,13 +17,9 @@ import { createClient } from '@supabase/server';
 import { Breadcrumb } from '@ui/components/breadcrumb';
 import { MediaGallery } from '@/components/media/media-gallery';
 
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
-
 export async function generateMetadata({
   params,
-}: PageProps): Promise<Metadata> {
+}: PageProps<'/creators/[id]'>): Promise<Metadata> {
   const { id } = await params;
   const supabase = await createClient();
 
@@ -45,7 +41,9 @@ export async function generateMetadata({
   };
 }
 
-export default async function CreatorPage({ params }: PageProps) {
+export default async function CreatorPage({
+  params,
+}: PageProps<'/creators/[id]'>) {
   const { id } = await params;
 
   const supabase = await createClient();

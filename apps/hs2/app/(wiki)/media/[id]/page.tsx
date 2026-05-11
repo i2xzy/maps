@@ -21,13 +21,9 @@ import { formatDate } from '@ui/helpers/date-formatting';
 import { Breadcrumb } from '@ui/components/breadcrumb';
 import MediaFeatures from './media-features';
 
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
-
 export async function generateMetadata({
   params,
-}: PageProps): Promise<Metadata> {
+}: PageProps<'/media/[id]'>): Promise<Metadata> {
   const { id } = await params;
   const supabase = await createClient();
 
@@ -61,7 +57,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function MediaPage({ params }: PageProps) {
+export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
   const { id } = await params;
 
   const supabase = await createClient();

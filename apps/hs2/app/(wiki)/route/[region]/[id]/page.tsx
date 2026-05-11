@@ -20,11 +20,9 @@ import { getFeatureHref } from '@/utils/feature-routing';
 import { FeatureIcon } from '@/components/feature/feature-icon';
 import { REGIONS } from '../../config';
 
-interface PageProps {
-  params: Promise<{ region: string; id: string }>;
-}
-
-export default async function PlanPage({ params }: PageProps) {
+export default async function PlanPage({
+  params,
+}: PageProps<'/route/[region]/[id]'>) {
   const { region, id } = await params;
   const regionData = REGIONS.find(r => r.id === region);
 

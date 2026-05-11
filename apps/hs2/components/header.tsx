@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   Box,
   chakra,
@@ -75,14 +75,6 @@ const HeaderMobileMenuDropdown = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const pathname = usePathname();
-  const pathnameRef = useRef(pathname);
-
-  useEffect(() => {
-    if (pathnameRef.current !== pathname) {
-      setIsOpen(false);
-    }
-    pathnameRef.current = pathname;
-  }, [pathname, setIsOpen]);
 
   return (
     <Drawer.Root open={isOpen} onOpenChange={e => setIsOpen(e.open)}>
