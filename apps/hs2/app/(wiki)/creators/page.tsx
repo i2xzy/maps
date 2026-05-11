@@ -1,21 +1,9 @@
 import type { Metadata } from 'next';
-import {
-  Container,
-  Stack,
-  Heading,
-  SimpleGrid,
-  Card,
-  VStack,
-  Avatar,
-  Text,
-  Link as ChakraLink,
-  LinkOverlay,
-  LinkBox,
-} from '@chakra-ui/react';
-import Link from 'next/link';
+import { Container, Stack, Heading, SimpleGrid } from '@chakra-ui/react';
 import { notFound } from 'next/navigation';
 
 import { createClient } from '@supabase/server';
+import CreatorCard from './CreatorCard';
 
 export const metadata: Metadata = {
   title: 'Content Creators',
@@ -69,43 +57,7 @@ export default async function CreatorsPage() {
         {creators.length > 0 ? (
           <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} gap={6}>
             {creatorsWithCounts.map(creator => (
-              <Card.Root key={creator.id} h='100%'>
-                <Card.Body>
-                  <LinkBox as='article'>
-                    <VStack gap={4}>
-                      <Avatar.Root size='2xl'>
-                        <Avatar.Fallback name={creator.display_name} />
-                        {creator.profile_image_url && (
-                          <Avatar.Image src={creator.profile_image_url} />
-                        )}
-                      </Avatar.Root>
-                      <VStack gap={1}>
-                        <LinkOverlay asChild>
-                          <Link href={`/creators/${creator.id}`}>
-                            <Text
-                              fontWeight='bold'
-                              fontSize='lg'
-                              textAlign='center'
-                              lineClamp={2}
-                            >
-                              {creator.display_name}
-                            </Text>
-                          </Link>
-                        </LinkOverlay>
-                        <ChakraLink href={creator.url} target='_blank'>
-                          <Text fontSize='sm' color='fg.muted'>
-                            @{creator.external_id}
-                          </Text>
-                        </ChakraLink>
-                        <Text fontSize='sm' fontWeight='medium'>
-                          {creator.mediaCount || 0}{' '}
-                          {creator.mediaCount === 1 ? 'video' : 'videos'}
-                        </Text>
-                      </VStack>
-                    </VStack>
-                  </LinkBox>
-                </Card.Body>
-              </Card.Root>
+              <CreatorCard key={creator.id} creator={creator} />
             ))}
           </SimpleGrid>
         ) : (

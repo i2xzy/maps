@@ -59,33 +59,62 @@ export default async function CreatorPage({
     notFound();
   }
 
-  // Get creator's media with related features
+  // Get creator's media
   const { data: mediaData } = await supabase
     .from('media')
-    .select(
-      `
-      *,
-      media_features!inner (
-        features (
-          id,
-          name,
-          type
-        )
-      )
-    `
-    )
+    .select('*')
     .eq('creator_id', id)
     .order('published_at', { ascending: false });
 
-  // Get the total number of features covered by the creator
-  const allFeatures =
-    mediaData?.flatMap(
-      m => m.media_features?.map(mf => mf.features).filter(Boolean) || []
-    ) || [];
+  // Get unique features count for this creator
+  const { data: featureData } = await supabase
+    .from('media_features')
+    .select('feature_id')
+    .in('media_id', mediaData?.map(m => m.id) || []);
 
-  const totalFeatures = allFeatures.length;
+  const totalFeatures = new Set(featureData?.map(f => f.feature_id) || []).size;
 
-  const videos = mediaData?.filter(m => m.type === 'video') || [];
+  // Helper functions
+  const getTimestamp = (url: string | null): number => {
+    const match = url?.match(/[?&]t=(\d+)/);
+    return match?.[1] ? parseInt(match[1], 10) : -1;
+  };
+
+  const stripDate = (title: string) =>
+    title.replace(/^\d{4}-\d{2}-\d{2}\s+/, '');
+  const getDate = (title: string) =>
+    title.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || '';
+
+  // Group and deduplicate videos by youtube_id
+  const allVideos = mediaData?.filter(m => m.type === 'video') || [];
+  const videoMap = new Map<string, typeof allVideos>();
+
+  allVideos.forEach(video => {
+    const key = video.youtube_id || `no-id-${video.id}`;
+    videoMap.set(key, [...(videoMap.get(key) || []), video]);
+  });
+
+  const videos = Array.from(videoMap.values())
+    .map(group => {
+      if (group.length === 1) return group[0];
+
+      // Sort by timestamp, then combine first and last titles
+      const sorted = group.sort(
+        (a, b) => getTimestamp(a.url) - getTimestamp(b.url)
+      );
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      if (!first?.title || !last?.title) return first;
+
+      const date = getDate(first.title);
+      const combinedTitle = date
+        ? `${date} ${stripDate(first.title)} to ${stripDate(last.title)}`
+        : `${stripDate(first.title)} to ${stripDate(last.title)}`;
+
+      return { ...first, title: combinedTitle };
+    })
+    .filter((v): v is NonNullable<typeof v> => v !== null && v !== undefined);
+
   const images = mediaData?.filter(m => m.type === 'image') || [];
 
   return (
