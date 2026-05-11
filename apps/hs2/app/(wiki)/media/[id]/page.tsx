@@ -6,7 +6,6 @@ import {
   Text,
   Avatar,
   Card,
-  AspectRatio,
   SimpleGrid,
   Link as ChakraLink,
   DataList,
@@ -20,6 +19,7 @@ import { snakeCaseToTitleCase } from '@ui/helpers/text-formatting';
 import { formatDate } from '@ui/helpers/date-formatting';
 import { Breadcrumb } from '@ui/components/breadcrumb';
 import MediaFeatures from './media-features';
+import VideoPlayer from './VideoPlayer';
 
 export async function generateMetadata({
   params,
@@ -106,13 +106,14 @@ export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
           {/* Media Content */}
           <VStack gap={2} align='start'>
             {media.youtube_id && (
-              <AspectRatio ratio={16 / 9} w='full'>
-                <iframe
-                  src={`https://www.youtube.com/embed/${media.youtube_id}`}
-                  title={media.title}
-                  allowFullScreen
-                />
-              </AspectRatio>
+              <VideoPlayer
+                src={`https://www.youtube.com/embed/${media.youtube_id}?start=30`}
+                chapters={[
+                  { title: 'Chapter 1', seconds: 30 },
+                  { title: 'Chapter 2', seconds: 60 },
+                  { title: 'Chapter 3', seconds: 90 },
+                ]}
+              />
             )}
             {media.type === 'image' && (
               <>
