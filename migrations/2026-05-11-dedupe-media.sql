@@ -6,11 +6,19 @@
 -- See:      ~/.gstack/projects/i2xzy-maps/isaacraskin-i2xzy-office-hours-design-20260508-165500.md
 -- ============================================================================
 --
+-- HOW TO RUN:
+--   Primary path: Supabase Dashboard -> SQL Editor.
+--     Paste this entire file into a new query, then click Run.
+--     The BEGIN/COMMIT wrapping makes this a single atomic transaction:
+--     any error rolls back every change. Look for the green success indicator.
+--   Alternative: `psql $SUPABASE_CONNECTION_STRING -f migrations/2026-05-11-dedupe-media.sql`
+--
 -- BEFORE RUNNING:
 --   1. Run pre-migration audit queries (see test plan) to count duplicates,
 --      check for non-standard t= URL formats, and verify media.location type.
---   2. Run `pg_dump` or Supabase backup of `media` and `media_features` tables.
---   3. Rehearse on a Supabase branch first.
+--   2. Snapshot via Supabase Dashboard -> Database -> Backups, or take a
+--      manual export of `media` and `media_features` to CSV.
+--   3. Rehearse on a Supabase branch first (Dashboard -> Branches -> Create).
 --
 -- AFTER RUNNING:
 --   1. Run post-migration verification queries (see test plan).
