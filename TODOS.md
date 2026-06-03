@@ -2,17 +2,21 @@
 
 Deferred work captured during planning sessions. Items below are explicitly NOT in scope for the current PR but worth doing later. See `~/.gstack/projects/i2xzy-maps/ceo-plans/` for the strategic context behind each item.
 
-## High priority — natural follow-ups to the chapter migration
+## Data model decision (2026-05-11)
+
+Decided AGAINST a schema migration to dedupe media. The `media` table is already at marker/chapter grain (one row per Google My Maps pin, each with its own location, recorded_date, and feature links), which is exactly what the map and feature pages need. The only problem — one video appearing as N rows in the news feed and video page — is handled by `GROUP BY youtube_id` at the query layer. No `media_chapters` table, no destructive dedup. The creator page already does this grouping.
+
+## High priority — natural follow-ups
 
 ### Photo timeline per structure
 **What:** On each structure detail page, show all photos/videos that include this structure in chronological order. Allow scrubbing through construction history.
-**Why:** Already in README's "Planned Features." The chapter timestamp migration unlocks per-feature media chronology; this is the rendering of that unlocked data.
-**Depends on:** Chapter migration complete.
+**Why:** Already in README's "Planned Features." The per-marker `recorded_date` and feature links already exist in `media`; this is the rendering of that data, ordered chronologically.
+**Depends on:** Nothing structural — query `media` joined to `media_features` by feature, ordered by `recorded_date`.
 
 ### Interactive map with route visualization
 **What:** Replace the map placeholder under `(dashboard)/map` with a real interactive map. Render features as markers/lines, render media geometries (point or LINESTRING) as a second layer, deep-link each media marker to the feature page.
 **Why:** README "Planned." This is the headline feature the rest of the data model supports.
-**Depends on:** Chapter migration complete; `media.location` confirmed flexible (POINT + LINESTRING).
+**Depends on:** `media.location` confirmed flexible (POINT + LINESTRING). Markers come straight from `media` rows — no migration needed.
 
 ### Timeline view of construction progress
 **What:** UI for scrubbing through time — see structure statuses at any given month from 2017 to projected completion.
@@ -24,7 +28,7 @@ Deferred work captured during planning sessions. Items below are explicitly NOT 
 ### Media series / playlist concept
 **What:** New `media_series` table for recurring drone flyovers from the same creator over the same route. Each `media` row gets an optional `series_id`.
 **Why:** Surfaced in office-hours conversation. Real concept — drone creators repeat the same flyover every few months, and grouping them as a series creates a temporal narrative for that route segment.
-**Depends on:** Chapter migration complete.
+**Depends on:** News feed / video page grouping by youtube_id in place.
 **Context:** Park until current scope ships; revisit when adding 5+ recurring series.
 
 ### Planned vs actual comparison
@@ -39,11 +43,20 @@ Deferred work captured during planning sessions. Items below are explicitly NOT 
 
 ## Low priority — defensive / quality
 
-### `media_chapters` separate table
-**What:** Move chapter timestamps from `media_features` into a dedicated `media_chapters` table with synthetic PK.
-**Why:** The current first-write-wins approach in `media_features` loses data if a video chapters into the same feature at multiple distinct timestamps (camera circles back). If post-migration audit shows ≥3 cases, escalate.
-**Depends on:** Pre-migration audit query D from the test plan.
-**Context:** Conditional. Do not build unless data justifies it.
+### Review mis-linked chapter/marker titles (data quality)
+**What:** Some `media` rows have a `title` that names a different place than the feature they link to via `media_features` — e.g. a "Washwood Heath" marker linked to the Bromford Tunnel feature, "Delta Junction" linked to Birmingham Spur Diveunder. Review and re-link, or add the missing features.
+**Why:** Map markers and feature-page deep-links should point at the structure they're actually about. Either the true subject isn't a tracked feature yet, or the Google My Maps import linked the pin to a nearby/wrong feature.
+**How to find them:** Join `media` to `media_features` to `features` and flag rows where the feature name does not appear in the media title:
+```sql
+SELECT m.youtube_id, m.title, f.name AS linked_feature
+FROM media m
+JOIN media_features mf ON mf.media_id = m.id
+JOIN features f ON f.id = mf.feature_id
+WHERE m.title IS NOT NULL
+  AND position(lower(f.name) in lower(m.title)) = 0
+ORDER BY m.youtube_id;
+```
+**Context:** Pure data cleanup, no schema change. Known examples: CBZm7HVngig, mnha774yMU8 (Washwood Heath → Bromford Tunnel); yRzyZNMrmBY (Delta Junction → Birmingham Spur Diveunder).
 
 ### Audit logging for content edits
 **What:** Track who changed what when. Especially relevant once an admin dashboard exists.
