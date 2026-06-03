@@ -18,6 +18,11 @@ import { createClient } from '@supabase/server';
 import { snakeCaseToTitleCase } from '@ui/helpers/text-formatting';
 import { formatDate } from '@ui/helpers/date-formatting';
 import { Breadcrumb } from '@ui/components/breadcrumb';
+import {
+  buildChapters,
+  collectFeatures,
+  type MediaSegment,
+} from '@/utils/media-grouping';
 import MediaFeatures from './media-features';
 import VideoPlayer from './VideoPlayer';
 
@@ -91,8 +96,29 @@ export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
     notFound();
   }
 
-  const relatedFeatures =
-    media.media_features?.map(mf => mf.features).filter(Boolean) || [];
+  // A YouTube video may be stored as several rows (one per Google My Maps pin),
+  // each a timestamped "chapter". Gather the siblings by youtube_id, then build
+  // the chapter list and the union of features. Images and un-grouped rows fall
+  // back to just this row.
+  let segments: MediaSegment[] = [media];
+  if (media.youtube_id) {
+    const { data: siblings } = await supabase
+      .from('media')
+      .select(
+        `
+        url,
+        title,
+        media_features (
+          features ( id, name, type, status, chainage )
+        )
+      `
+      )
+      .eq('youtube_id', media.youtube_id);
+    if (siblings && siblings.length > 0) segments = siblings;
+  }
+
+  const chapters = buildChapters(segments);
+  const relatedFeatures = collectFeatures(segments);
 
   return (
     <Container maxW='8xl' py={8}>
@@ -107,12 +133,8 @@ export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
           <VStack gap={2} align='start'>
             {media.youtube_id && (
               <VideoPlayer
-                src={`https://www.youtube.com/embed/${media.youtube_id}?start=30`}
-                chapters={[
-                  { title: 'Chapter 1', seconds: 30 },
-                  { title: 'Chapter 2', seconds: 60 },
-                  { title: 'Chapter 3', seconds: 90 },
-                ]}
+                src={`https://www.youtube.com/embed/${media.youtube_id}`}
+                chapters={chapters}
               />
             )}
             {media.type === 'image' && (

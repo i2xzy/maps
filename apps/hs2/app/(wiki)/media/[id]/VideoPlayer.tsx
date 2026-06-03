@@ -2,14 +2,20 @@
 
 import { useRef } from 'react';
 import ReactPlayer from 'react-player';
-import { Button, AspectRatio, Stack, HStack } from '@chakra-ui/react';
+import {
+  Button,
+  AspectRatio,
+  Stack,
+  HStack,
+  VStack,
+  Text,
+} from '@chakra-ui/react';
+
+import { formatTimestamp, type Chapter } from '@/utils/media-grouping';
 
 type VideoPlayerProps = {
   src: string;
-  chapters?: {
-    title: string;
-    seconds: number;
-  }[];
+  chapters?: Chapter[];
 };
 
 const VideoPlayer = ({ src, chapters }: VideoPlayerProps) => {
@@ -33,18 +39,32 @@ const VideoPlayer = ({ src, chapters }: VideoPlayerProps) => {
           height='100%'
         />
       </AspectRatio>
-      <HStack gap={2}>
-        {chapters?.map(chapter => (
-          <Button
-            key={chapter.seconds}
-            onClick={() => handleSeekChange(chapter.seconds)}
-            variant='ghost'
-            size='sm'
-          >
-            {chapter.title}
-          </Button>
-        ))}
-      </HStack>
+      {chapters && chapters.length > 0 && (
+        <VStack gap={2} align='stretch' w='full'>
+          {chapters.map((chapter, i) => (
+            <HStack key={`${chapter.seconds}-${i}`} gap={3} align='start'>
+              <Button
+                onClick={() => handleSeekChange(chapter.seconds)}
+                variant='outline'
+                size='sm'
+                flexShrink={0}
+              >
+                {formatTimestamp(chapter.seconds)}
+              </Button>
+              <VStack gap={0} align='start'>
+                <Text fontWeight='medium' fontSize='sm'>
+                  {chapter.title}
+                </Text>
+                {chapter.features.length > 0 && (
+                  <Text fontSize='xs' color='fg.muted'>
+                    {chapter.features.map(f => f.name).join(' · ')}
+                  </Text>
+                )}
+              </VStack>
+            </HStack>
+          ))}
+        </VStack>
+      )}
     </Stack>
   );
 };
