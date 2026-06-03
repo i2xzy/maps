@@ -77,6 +77,58 @@ export function buildChapters(segments: MediaSegment[]): Chapter[] {
     .sort((a, b) => a.seconds - b.seconds);
 }
 
+/** Minimum fields needed to group a list of media rows into one-per-video. */
+export type MediaListItem = {
+  id: string;
+  youtube_id: string | null;
+  url: string | null;
+  title: string | null;
+};
+
+/**
+ * Collapse media rows to one entry per video for listing contexts (news feed,
+ * creator page). Rows sharing a youtube_id merge into a single representative
+ * entry whose title combines the first and last segment labels. Rows without a
+ * youtube_id (images, un-grouped) pass through unchanged. Input order is
+ * preserved, so a list already sorted by published_at stays sorted.
+ */
+export function groupVideosByYoutubeId<T extends MediaListItem>(rows: T[]): T[] {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = row.youtube_id || `no-id-${row.id}`;
+    const existing = groups.get(key);
+    if (existing) existing.push(row);
+    else groups.set(key, [row]);
+  }
+
+  const result: T[] = [];
+  for (const group of groups.values()) {
+    const sorted = [...group].sort(
+      (a, b) =>
+        (getTimestampSeconds(a.url) ?? 0) - (getTimestampSeconds(b.url) ?? 0)
+    );
+    const first = sorted[0];
+    if (!first) continue; // groups always hold >= 1 row; satisfies the checker
+    const last = sorted[sorted.length - 1];
+
+    // Single segment, or missing titles to combine: pass the row through.
+    if (sorted.length === 1 || !last || !first.title || !last.title) {
+      result.push(first);
+      continue;
+    }
+
+    const date = getDatePrefix(first.title);
+    const combinedTitle = date
+      ? `${date} ${stripDatePrefix(first.title)} to ${stripDatePrefix(last.title)}`
+      : `${stripDatePrefix(first.title)} to ${stripDatePrefix(last.title)}`;
+
+    // Spread + field override loses the generic identity; cast back to T.
+    // Safe: every key of T comes from `first`, only `title` (string) changes.
+    result.push({ ...first, title: combinedTitle } as T);
+  }
+  return result;
+}
+
 /** Union the features across all segments of a video, deduped by id. */
 export function collectFeatures(segments: MediaSegment[]): ChapterFeature[] {
   const byId = new Map<string, ChapterFeature>();

@@ -3,6 +3,7 @@ import { Container, Stack, Heading } from '@chakra-ui/react';
 
 import { createClient } from '@supabase/server';
 import { MediaGallery } from '@/components/media/media-gallery';
+import { groupVideosByYoutubeId } from '@/utils/media-grouping';
 
 export const metadata: Metadata = {
   title: 'News Feed',
@@ -37,6 +38,10 @@ export default async function MediaHomePage() {
     .not('published_at', 'is', null)
     .order('published_at', { ascending: false });
 
+  // One video is stored as several rows (one per Google My Maps pin). Collapse
+  // them to a single feed entry per youtube_id so a video appears once.
+  const feed = media ? groupVideosByYoutubeId(media) : [];
+
   return (
     <Container maxW='8xl' py={8}>
       <Stack gap={8}>
@@ -48,8 +53,8 @@ export default async function MediaHomePage() {
           </Heading>
         </Stack>
 
-        {media && media.length > 0 ? (
-          <MediaGallery media={media} title='Videos' isPage />
+        {feed.length > 0 ? (
+          <MediaGallery media={feed} title='Videos' isPage />
         ) : (
           <Heading size='md' color='fg.muted'>
             No updates yet.
