@@ -54,7 +54,7 @@ export default async function MediaHomePage() {
         </Stack>
 
         {feed.length > 0 ? (
-          <MediaGallery media={feed} title='Videos' isPage />
+          <MediaGallery media={feed} title='Videos' isPage dateField='published' />
         ) : (
           <Heading size='md' color='fg.muted'>
             No updates yet.

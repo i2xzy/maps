@@ -35,12 +35,19 @@ interface MediaGalleryProps {
   media: MediaItem[] | null;
   title?: string;
   isPage?: boolean;
+  /**
+   * Which date to show on each card. 'recorded' (default) prefers the filmed
+   * date — right for construction chronology. 'published' prefers the upload
+   * date — right for the news feed ("what's new").
+   */
+  dateField?: 'recorded' | 'published';
 }
 
 export function MediaGallery({
   media,
   title,
   isPage = false,
+  dateField = 'recorded',
 }: MediaGalleryProps) {
   if (!media || media.length === 0) return null;
 
@@ -94,13 +101,19 @@ export function MediaGallery({
                         </Text>
                       </Link>
                     )}
-                    {(item.recorded_date || item.published_at) && (
-                      <Text fontSize='xs' color='fg.muted'>
-                        {formatDate(
-                          item.recorded_date || item.published_at || ''
-                        )}
-                      </Text>
-                    )}
+                    {(() => {
+                      const date =
+                        dateField === 'published'
+                          ? item.published_at || item.recorded_date
+                          : item.recorded_date || item.published_at;
+                      return (
+                        date && (
+                          <Text fontSize='xs' color='fg.muted'>
+                            {formatDate(date)}
+                          </Text>
+                        )
+                      );
+                    })()}
                   </VStack>
                 </VStack>
               </HStack>
