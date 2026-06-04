@@ -3,7 +3,7 @@ import {
   VStack,
   HStack,
   Text,
-  AspectRatio,
+  Box,
   Avatar,
   Heading,
   Image,
@@ -62,17 +62,28 @@ export function MediaGallery({
         {media.map(item => (
           <Link key={item.id} href={`/media/${item.id}`}>
             <VStack gap={3} align='stretch'>
-              <AspectRatio ratio={16 / 9}>
+              <Box
+                position='relative'
+                aspectRatio={16 / 9}
+                overflow='hidden'
+                borderRadius='lg'
+              >
                 {item.youtube_id ? (
                   <Image
                     src={`https://img.youtube.com/vi/${item.youtube_id}/0.jpg`}
                     alt={item.title}
-                    borderRadius='lg'
+                    boxSize='full'
+                    objectFit='cover'
                   />
                 ) : (
-                  <Image src={item.url} alt={item.title} borderRadius='lg' />
+                  <Image
+                    src={item.url}
+                    alt={item.title}
+                    boxSize='full'
+                    objectFit='cover'
+                  />
                 )}
-              </AspectRatio>
+              </Box>
 
               <HStack gap={2} align='stretch'>
                 {item.creators?.profile_image_url && (

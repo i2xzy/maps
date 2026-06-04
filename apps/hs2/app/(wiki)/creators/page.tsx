@@ -12,7 +12,6 @@ import {
   LinkOverlay,
   LinkBox,
 } from '@chakra-ui/react';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { createClient } from '@supabase/server';
@@ -80,17 +79,15 @@ export default async function CreatorsPage() {
                         )}
                       </Avatar.Root>
                       <VStack gap={1}>
-                        <LinkOverlay asChild>
-                          <Link href={`/creators/${creator.id}`}>
-                            <Text
-                              fontWeight='bold'
-                              fontSize='lg'
-                              textAlign='center'
-                              lineClamp={2}
-                            >
-                              {creator.display_name}
-                            </Text>
-                          </Link>
+                        <LinkOverlay href={`/creators/${creator.id}`}>
+                          <Text
+                            fontWeight='bold'
+                            fontSize='lg'
+                            textAlign='center'
+                            lineClamp={2}
+                          >
+                            {creator.display_name}
+                          </Text>
                         </LinkOverlay>
                         <ChakraLink href={creator.url} target='_blank'>
                           <Text fontSize='sm' color='fg.muted'>
