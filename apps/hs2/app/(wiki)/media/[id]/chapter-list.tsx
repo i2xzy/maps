@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Heading, VStack, HStack, Text } from '@chakra-ui/react';
+import { Box, Button, Heading, VStack, HStack, Text } from '@chakra-ui/react';
 import Link from 'next/link';
 
 import {
@@ -10,6 +10,10 @@ import {
 } from '@/utils/media-grouping';
 import { getFeatureHref } from '@/utils/feature-routing';
 import { useVideoPlayer } from './video-player-context';
+
+// Fixed timestamp-button width so every title lines up in one column, and the
+// feature spacer below can match it.
+const TIMESTAMP_WIDTH = '3.5rem';
 
 export default function ChapterList({ chapters }: { chapters: Chapter[] }) {
   const { seekTo } = useVideoPlayer();
@@ -25,32 +29,43 @@ export default function ChapterList({ chapters }: { chapters: Chapter[] }) {
     <VStack gap={3} align='stretch'>
       <Heading size='sm'>Chapters</Heading>
       {chapters.map((chapter, i) => (
-        <HStack key={`${chapter.seconds}-${i}`} gap={3} align='start'>
-          <Button
-            onClick={() => seekTo(chapter.seconds)}
-            variant='outline'
-            size='xs'
-            flexShrink={0}
-          >
-            {formatTimestamp(chapter.seconds)}
-          </Button>
-          <VStack gap={0} align='start'>
+        <VStack key={`${chapter.seconds}-${i}`} gap={1} align='stretch'>
+          <HStack gap={3} align='center'>
+            <Button
+              onClick={() => seekTo(chapter.seconds)}
+              variant='outline'
+              size='xs'
+              minW={TIMESTAMP_WIDTH}
+              flexShrink={0}
+            >
+              {formatTimestamp(chapter.seconds)}
+            </Button>
             <Text fontWeight='medium' fontSize='sm'>
               {chapter.date || `Chapter ${i + 1}`}
             </Text>
-            {showFeatures &&
-              chapter.features.map(feature => (
-                <Link
-                  key={feature.id}
-                  href={getFeatureHref(feature.type, feature.id)}
-                >
-                  <Text fontSize='xs' color='fg.muted' _hover={{ color: 'fg' }}>
-                    {feature.name}
-                  </Text>
-                </Link>
-              ))}
-          </VStack>
-        </HStack>
+          </HStack>
+          {showFeatures && chapter.features.length > 0 && (
+            <HStack gap={3} align='start'>
+              <Box minW={TIMESTAMP_WIDTH} flexShrink={0} />
+              <VStack gap={0} align='start'>
+                {chapter.features.map(feature => (
+                  <Link
+                    key={feature.id}
+                    href={getFeatureHref(feature.type, feature.id)}
+                  >
+                    <Text
+                      fontSize='xs'
+                      color='fg.muted'
+                      _hover={{ color: 'fg' }}
+                    >
+                      {feature.name}
+                    </Text>
+                  </Link>
+                ))}
+              </VStack>
+            </HStack>
+          )}
+        </VStack>
       ))}
     </VStack>
   );
