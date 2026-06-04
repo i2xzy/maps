@@ -40,10 +40,14 @@ export default function ChapterList({ chapters }: { chapters: Chapter[] }) {
         const primary = placeLeads
           ? chapter.place || chapter.date || `Chapter ${i + 1}`
           : chapter.date;
-        // Show the date as a sub-line only when place is the lead and we have
-        // both, so we never repeat the same string twice.
+        // Show the date as a sub-line only when place leads AND dates actually
+        // vary — otherwise the same date repeats under every row. (A video with
+        // mixed places AND mixed dates shows both; a one-day flyover shows just
+        // the places.)
         const secondary =
-          placeLeads && chapter.place && chapter.date ? chapter.date : '';
+          placeLeads && datesVary && chapter.place && chapter.date
+            ? chapter.date
+            : '';
 
         return (
         <VStack key={`${chapter.seconds}-${i}`} gap={1} align='stretch'>
