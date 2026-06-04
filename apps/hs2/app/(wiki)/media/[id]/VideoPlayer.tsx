@@ -53,11 +53,11 @@ const VideoPlayer = ({ src, chapters }: VideoPlayerProps) => {
               </Button>
               <VStack gap={0} align='start'>
                 <Text fontWeight='medium' fontSize='sm'>
-                  {chapter.title}
+                  {chapter.label}
                 </Text>
-                {chapter.features.length > 0 && (
+                {chapter.date && (
                   <Text fontSize='xs' color='fg.muted'>
-                    {chapter.features.map(f => f.name).join(' · ')}
+                    {chapter.date}
                   </Text>
                 )}
               </VStack>

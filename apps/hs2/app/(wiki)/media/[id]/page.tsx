@@ -55,7 +55,7 @@ export async function generateMetadata({
   const mediaType = media.type === 'video' ? 'Video' : 'Image';
 
   return {
-    title: media.title,
+    title: media.description || media.title,
     description:
       media.description ||
       `${mediaType} of HS2 construction by ${creatorName}. Watch and explore High Speed 2 railway project updates.`,
@@ -125,7 +125,10 @@ export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
       <VStack gap={8} align='stretch'>
         {/* Breadcrumbs */}
         <Breadcrumb
-          items={[{ title: 'Media', url: '/media' }, { title: media.title }]}
+          items={[
+            { title: 'Media', url: '/media' },
+            { title: media.description || media.title },
+          ]}
         />
 
         <SimpleGrid gap={8} templateColumns={{ base: '1fr', lg: '1fr 300px' }}>

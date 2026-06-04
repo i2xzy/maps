@@ -23,9 +23,11 @@ export type ChapterFeature = {
 };
 
 export type Chapter = {
-  title: string;
   seconds: number;
-  features: ChapterFeature[];
+  /** Primary label: the feature name(s), or the place from the pin title. */
+  label: string;
+  /** Distinguishing date from the pin title, e.g. "Oct 2022" ("" if none). */
+  date: string;
 };
 
 /** A media row treated as one segment ("chapter") of a larger video. */
@@ -51,6 +53,30 @@ export function getDatePrefix(title: string): string {
   return title.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || '';
 }
 
+const MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/**
+ * Format a pin title's leading date for display. The curated prefix is
+ * "YYYY-MM-DD"; the day is often "00" (unknown), so collapse to month + year.
+ *   "2022-10-00 Colne Valley" -> "Oct 2022"
+ *   "2023-09-15 Colne Valley" -> "15 Sep 2023"
+ *   "Some place" (no prefix)  -> ""
+ */
+export function formatPinDate(title: string): string {
+  const m = title.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  const year = m[1];
+  const month = m[2];
+  const day = m[3];
+  if (!year || !month || !day) return '';
+  const monthName = MONTHS[parseInt(month, 10) - 1] ?? '';
+  const dayPart = day === '00' ? '' : `${parseInt(day, 10)} `;
+  return `${dayPart}${monthName} ${year}`.trim();
+}
+
 /** Format seconds as m:ss for a chapter label. */
 export function formatTimestamp(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -66,14 +92,21 @@ export function buildChapters(segments: MediaSegment[]): Chapter[] {
   if (segments.length <= 1) return [];
 
   return segments
-    .map(seg => ({
-      title: stripDatePrefix(seg.title ?? '') || 'Chapter',
-      seconds: getTimestampSeconds(seg.url) ?? 0,
-      features:
+    .map(seg => {
+      const features =
         seg.media_features
           ?.map(mf => mf.features)
-          .filter((f): f is ChapterFeature => f != null) ?? [],
-    }))
+          .filter((f): f is ChapterFeature => f != null) ?? [];
+      // Prefer the linked feature name(s); fall back to the pin title's place.
+      const label = features.length
+        ? features.map(f => f.name).join(' · ')
+        : stripDatePrefix(seg.title ?? '') || 'Chapter';
+      return {
+        seconds: getTimestampSeconds(seg.url) ?? 0,
+        label,
+        date: seg.title ? formatPinDate(seg.title) : '',
+      };
+    })
     .sort((a, b) => a.seconds - b.seconds);
 }
 
