@@ -16,6 +16,7 @@ import { FaYoutube } from 'react-icons/fa6';
 import { createClient } from '@supabase/server';
 import { Breadcrumb } from '@ui/components/breadcrumb';
 import { MediaGallery } from '@/components/media/media-gallery';
+import { groupVideosByYoutubeId } from '@/utils/media-grouping';
 
 export async function generateMetadata({
   params,
@@ -85,7 +86,11 @@ export default async function CreatorPage({
 
   const totalFeatures = allFeatures.length;
 
-  const videos = mediaData?.filter(m => m.type === 'video') || [];
+  // Collapse sibling rows (same youtube_id, one per Google My Maps pin) into a
+  // single entry so a video appears once, not once per chapter.
+  const videos = groupVideosByYoutubeId(
+    mediaData?.filter(m => m.type === 'video') || []
+  );
   const images = mediaData?.filter(m => m.type === 'image') || [];
 
   return (
