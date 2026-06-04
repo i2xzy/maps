@@ -15,6 +15,7 @@ import { FaYoutube } from 'react-icons/fa6';
 
 import { createClient } from '@supabase/server';
 import { Breadcrumb } from '@ui/components/breadcrumb';
+import { getInitials } from '@ui/helpers/text-formatting';
 import { MediaGallery } from '@/components/media/media-gallery';
 import { groupVideosByYoutubeId } from '@/utils/media-grouping';
 
@@ -107,7 +108,9 @@ export default async function CreatorPage({
         {/* Creator Header */}
         <HStack gap={6}>
           <Avatar.Root size='2xl'>
-            <Avatar.Fallback name={creator.display_name} />
+            <Avatar.Fallback name={creator.display_name}>
+              {getInitials(creator.display_name)}
+            </Avatar.Fallback>
             {creator.profile_image_url && (
               <Avatar.Image src={creator.profile_image_url} />
             )}

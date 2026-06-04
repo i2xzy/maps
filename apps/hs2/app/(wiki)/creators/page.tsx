@@ -15,6 +15,7 @@ import {
 import { notFound } from 'next/navigation';
 
 import { createClient } from '@supabase/server';
+import { getInitials } from '@ui/helpers/text-formatting';
 
 export const metadata: Metadata = {
   title: 'Content Creators',
@@ -73,7 +74,9 @@ export default async function CreatorsPage() {
                   <LinkBox as='article'>
                     <VStack gap={4}>
                       <Avatar.Root size='2xl'>
-                        <Avatar.Fallback name={creator.display_name} />
+                        <Avatar.Fallback name={creator.display_name}>
+                          {getInitials(creator.display_name)}
+                        </Avatar.Fallback>
                         {creator.profile_image_url && (
                           <Avatar.Image src={creator.profile_image_url} />
                         )}

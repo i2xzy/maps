@@ -15,7 +15,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { createClient } from '@supabase/server';
-import { snakeCaseToTitleCase } from '@ui/helpers/text-formatting';
+import {
+  snakeCaseToTitleCase,
+  getInitials,
+} from '@ui/helpers/text-formatting';
 import { formatDate } from '@ui/helpers/date-formatting';
 import { Breadcrumb } from '@ui/components/breadcrumb';
 import {
@@ -162,7 +165,9 @@ export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
               <Link href={`/creators/${media.creators.id}`}>
                 <HStack gap={4} align='center'>
                   <Avatar.Root>
-                    <Avatar.Fallback name={media.creators.display_name} />
+                    <Avatar.Fallback name={media.creators.display_name}>
+                      {getInitials(media.creators.display_name)}
+                    </Avatar.Fallback>
                     {media.creators.profile_image_url && (
                       <Avatar.Image src={media.creators.profile_image_url} />
                     )}

@@ -17,6 +17,7 @@ import {
 import Link from 'next/link';
 
 import { formatDate } from '@ui/helpers/date-formatting';
+import { getInitials } from '@ui/helpers/text-formatting';
 
 interface Creator {
   id: string;
@@ -146,7 +147,9 @@ export function MediaGallery({
                 <HStack gap={2} align='stretch'>
                   {item.creators?.profile_image_url && (
                     <Avatar.Root>
-                      <Avatar.Fallback name={item.creators.display_name} />
+                      <Avatar.Fallback name={item.creators.display_name}>
+                        {getInitials(item.creators.display_name)}
+                      </Avatar.Fallback>
                       <Avatar.Image src={item.creators.profile_image_url} />
                     </Avatar.Root>
                   )}
