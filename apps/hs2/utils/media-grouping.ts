@@ -24,10 +24,10 @@ export type ChapterFeature = {
 
 export type Chapter = {
   seconds: number;
-  /** Primary label: the feature name(s), or the place from the pin title. */
-  label: string;
   /** Distinguishing date from the pin title, e.g. "Oct 2022" ("" if none). */
   date: string;
+  /** Features this chapter covers (shown per-chapter only when they vary). */
+  features: ChapterFeature[];
 };
 
 /** A media row treated as one segment ("chapter") of a larger video. */
@@ -92,22 +92,31 @@ export function buildChapters(segments: MediaSegment[]): Chapter[] {
   if (segments.length <= 1) return [];
 
   return segments
-    .map(seg => {
-      const features =
+    .map(seg => ({
+      seconds: getTimestampSeconds(seg.url) ?? 0,
+      date: seg.title ? formatPinDate(seg.title) : '',
+      features:
         seg.media_features
           ?.map(mf => mf.features)
-          .filter((f): f is ChapterFeature => f != null) ?? [];
-      // Prefer the linked feature name(s); fall back to the pin title's place.
-      const label = features.length
-        ? features.map(f => f.name).join(' · ')
-        : stripDatePrefix(seg.title ?? '') || 'Chapter';
-      return {
-        seconds: getTimestampSeconds(seg.url) ?? 0,
-        label,
-        date: seg.title ? formatPinDate(seg.title) : '',
-      };
-    })
+          .filter((f): f is ChapterFeature => f != null) ?? [],
+    }))
     .sort((a, b) => a.seconds - b.seconds);
+}
+
+/**
+ * True when chapters cover different features (e.g. a drone flyover passing
+ * several structures), false when every chapter shares the same feature set
+ * (e.g. one viaduct filmed at several dates). Drives whether the chapter list
+ * repeats feature links per row.
+ */
+export function chaptersHaveVaryingFeatures(chapters: Chapter[]): boolean {
+  const signature = (c: Chapter) =>
+    c.features
+      .map(f => f.id)
+      .sort()
+      .join(',');
+  const first = chapters[0] ? signature(chapters[0]) : '';
+  return chapters.some(c => signature(c) !== first);
 }
 
 /** Minimum fields needed to group a list of media rows into one-per-video. */

@@ -25,6 +25,8 @@ import {
 } from '@/utils/media-grouping';
 import MediaFeatures from './media-features';
 import VideoPlayer from './VideoPlayer';
+import ChapterList from './chapter-list';
+import { VideoPlayerProvider } from './video-player-context';
 
 export async function generateMetadata({
   params,
@@ -131,13 +133,13 @@ export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
           ]}
         />
 
+        <VideoPlayerProvider>
         <SimpleGrid gap={8} templateColumns={{ base: '1fr', lg: '1fr 300px' }}>
           {/* Media Content */}
           <VStack gap={2} align='start'>
             {media.youtube_id && (
               <VideoPlayer
                 src={`https://www.youtube.com/embed/${media.youtube_id}`}
-                chapters={chapters}
               />
             )}
             {media.type === 'image' && (
@@ -204,11 +206,15 @@ export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
             </Card.Root>
           </VStack>
 
-          {/* Related Features */}
-          {relatedFeatures.length > 0 && (
-            <MediaFeatures relatedFeatures={relatedFeatures} />
-          )}
+          {/* Sidebar: chapter navigation + related features */}
+          <VStack gap={8} align='stretch'>
+            <ChapterList chapters={chapters} />
+            {relatedFeatures.length > 0 && (
+              <MediaFeatures relatedFeatures={relatedFeatures} />
+            )}
+          </VStack>
         </SimpleGrid>
+        </VideoPlayerProvider>
       </VStack>
     </Container>
   );
