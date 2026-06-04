@@ -79,13 +79,15 @@ export default async function CreatorPage({
     .eq('creator_id', id)
     .order('published_at', { ascending: false });
 
-  // Get the total number of features covered by the creator
+  // Count distinct features the creator has covered. Sibling rows (one per
+  // Google My Maps pin) repeat the same feature links, so dedupe by feature id
+  // rather than counting every link.
   const allFeatures =
     mediaData?.flatMap(
       m => m.media_features?.map(mf => mf.features).filter(Boolean) || []
     ) || [];
 
-  const totalFeatures = allFeatures.length;
+  const totalFeatures = new Set(allFeatures.map(f => f?.id)).size;
 
   // Collapse sibling rows (same youtube_id, one per Google My Maps pin) into a
   // single entry so a video appears once, not once per chapter.
