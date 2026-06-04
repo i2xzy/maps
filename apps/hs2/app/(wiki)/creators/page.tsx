@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 export default async function CreatorsPage() {
   const supabase = await createClient();
 
-  // Get all creators with their media count
+  // Get all creators.
   const { data: creators } = await supabase
     .from('creators')
     .select(
@@ -37,21 +37,36 @@ export default async function CreatorsPage() {
       platform,
       profile_image_url,
       bio,
-      url,
-      media (count)
+      url
     `
     )
-    .eq('media.type', 'video')
     .order('display_name', { ascending: true });
 
   if (!creators) {
     return notFound();
   }
 
+  // Count DISTINCT videos per creator. Sibling rows (one per Google My Maps
+  // pin) share a youtube_id, so a plain row count over-counts; dedupe by
+  // youtube_id (falling back to row id for pins with no youtube_id).
+  const { data: videoRows } = await supabase
+    .from('media')
+    .select('id, creator_id, youtube_id')
+    .eq('type', 'video');
+
+  const videosByCreator = new Map<string, Set<string>>();
+  videoRows?.forEach(row => {
+    if (!row.creator_id) return;
+    const key = row.youtube_id || `no-id-${row.id}`;
+    const set = videosByCreator.get(row.creator_id) ?? new Set<string>();
+    set.add(key);
+    videosByCreator.set(row.creator_id, set);
+  });
+
   const creatorsWithCounts = creators
     .map(creator => ({
       ...creator,
-      mediaCount: creator.media[0]?.count || 0,
+      mediaCount: videosByCreator.get(creator.id)?.size ?? 0,
     }))
     .sort((a, b) => b.mediaCount - a.mediaCount);
 
