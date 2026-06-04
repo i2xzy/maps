@@ -11,6 +11,8 @@ import {
   Heading,
   Image,
   SegmentGroup,
+  LinkBox,
+  LinkOverlay,
 } from '@chakra-ui/react';
 import Link from 'next/link';
 
@@ -116,7 +118,7 @@ export function MediaGallery({
         {sorted.map(item => {
           const date = activeDate(item, sort);
           return (
-            <Link key={item.id} href={`/media/${item.id}`}>
+            <LinkBox key={item.id}>
               <VStack gap={3} align='stretch'>
                 <Box
                   position='relative'
@@ -151,14 +153,24 @@ export function MediaGallery({
                   <VStack gap={1} align='stretch'>
                     {/* description holds the real YouTube title; title is the
                         curated date+feature label used as a fallback (images,
-                        or rows with no description). */}
-                    <Text fontWeight='bold' fontSize='sm' lineClamp={2}>
-                      {item.description || item.title}
-                    </Text>
+                        or rows with no description). The whole card links to
+                        the media page via this overlay; the creator link below
+                        is a sibling anchor (lifted above the overlay), so we
+                        avoid nesting <a> inside <a>. */}
+                    <LinkOverlay asChild>
+                      <Link href={`/media/${item.id}`}>
+                        <Text fontWeight='bold' fontSize='sm' lineClamp={2}>
+                          {item.description || item.title}
+                        </Text>
+                      </Link>
+                    </LinkOverlay>
 
                     <VStack gap={0} align='stretch'>
                       {item.creators && (
-                        <Link href={`/creators/${item.creators.id}`}>
+                        <Link
+                          href={`/creators/${item.creators.id}`}
+                          style={{ position: 'relative', zIndex: 1 }}
+                        >
                           <Text
                             fontSize='xs'
                             color='fg.muted'
@@ -177,7 +189,7 @@ export function MediaGallery({
                   </VStack>
                 </HStack>
               </VStack>
-            </Link>
+            </LinkBox>
           );
         })}
       </SimpleGrid>
