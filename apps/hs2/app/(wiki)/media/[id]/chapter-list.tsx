@@ -25,10 +25,27 @@ export default function ChapterList({ chapters }: { chapters: Chapter[] }) {
   // feature link belongs once in the related-features list, not on every row.
   const showFeatures = chaptersHaveVaryingFeatures(chapters);
 
+  // Show whichever field distinguishes the chapters. Same feature at different
+  // dates (Colne Valley) -> date leads. Different places on one date (a flyover
+  // shot in a day) -> place leads, with the shared date as context underneath.
+  const datesVary = new Set(chapters.map(c => c.date).filter(Boolean)).size > 1;
+  const placesVary =
+    new Set(chapters.map(c => c.place).filter(Boolean)).size > 1;
+  const placeLeads = placesVary || !datesVary;
+
   return (
     <VStack gap={3} align='stretch'>
       <Heading size='sm'>Chapters</Heading>
-      {chapters.map((chapter, i) => (
+      {chapters.map((chapter, i) => {
+        const primary = placeLeads
+          ? chapter.place || chapter.date || `Chapter ${i + 1}`
+          : chapter.date;
+        // Show the date as a sub-line only when place is the lead and we have
+        // both, so we never repeat the same string twice.
+        const secondary =
+          placeLeads && chapter.place && chapter.date ? chapter.date : '';
+
+        return (
         <VStack key={`${chapter.seconds}-${i}`} gap={1} align='stretch'>
           <HStack gap={3} align='center'>
             <Button
@@ -40,9 +57,16 @@ export default function ChapterList({ chapters }: { chapters: Chapter[] }) {
             >
               {formatTimestamp(chapter.seconds)}
             </Button>
-            <Text fontWeight='medium' fontSize='sm'>
-              {chapter.date || `Chapter ${i + 1}`}
-            </Text>
+            <VStack gap={0} align='start'>
+              <Text fontWeight='medium' fontSize='sm'>
+                {primary}
+              </Text>
+              {secondary && (
+                <Text fontSize='xs' color='fg.muted'>
+                  {secondary}
+                </Text>
+              )}
+            </VStack>
           </HStack>
           {showFeatures && chapter.features.length > 0 && (
             <HStack gap={3} align='start'>
@@ -66,7 +90,8 @@ export default function ChapterList({ chapters }: { chapters: Chapter[] }) {
             </HStack>
           )}
         </VStack>
-      ))}
+        );
+      })}
     </VStack>
   );
 }

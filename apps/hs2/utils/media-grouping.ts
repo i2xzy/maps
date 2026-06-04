@@ -24,8 +24,10 @@ export type ChapterFeature = {
 
 export type Chapter = {
   seconds: number;
-  /** Distinguishing date from the pin title, e.g. "Oct 2022" ("" if none). */
+  /** Date from the pin title, e.g. "Oct 2022" ("" if none). */
   date: string;
+  /** Place from the pin title (title minus the date prefix), "" if none. */
+  place: string;
   /** Features this chapter covers (shown per-chapter only when they vary). */
   features: ChapterFeature[];
 };
@@ -95,6 +97,7 @@ export function buildChapters(segments: MediaSegment[]): Chapter[] {
     .map(seg => ({
       seconds: getTimestampSeconds(seg.url) ?? 0,
       date: seg.title ? formatPinDate(seg.title) : '',
+      place: seg.title ? stripDatePrefix(seg.title) : '',
       features:
         seg.media_features
           ?.map(mf => mf.features)
