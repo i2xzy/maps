@@ -8,6 +8,12 @@ Decided AGAINST a schema migration to dedupe media. The `media` table is already
 
 ## High priority — natural follow-ups
 
+### Upload remaining Google My Maps layers
+**What:** Only the 2018-2023 layer is in Supabase (plus a couple of 2025 videos added directly in the dashboard, no CSV). Upload the 2024, 2025, and 2026 layers.
+**Why:** Videos and feature chronology are incomplete until all layers load. Example: the Colne Valley Viaduct montage (x3GN7owJOnQ) has a 2024 chapter still sitting in the un-uploaded layer, so the video page only shows 3 of its chapters. Query-grouping means new pins slot in automatically — no migration, no re-processing.
+**How:** Same CSV import path as the 2018-2023 layer. Each pin must keep its `youtube_id` and its `?t=Xs` timestamp in the URL so chapter grouping and deep-linking work. Spot-check grouping after the first new layer upload.
+**Depends on:** Nothing — additive data load.
+
 ### Photo timeline per structure
 **What:** On each structure detail page, show all photos/videos that include this structure in chronological order. Allow scrubbing through construction history.
 **Why:** Already in README's "Planned Features." The per-marker `recorded_date` and feature links already exist in `media`; this is the rendering of that data, ordered chronologically.
