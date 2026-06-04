@@ -12,10 +12,10 @@ import {
   LinkOverlay,
   LinkBox,
 } from '@chakra-ui/react';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { createClient } from '@supabase/server';
+import { getInitials } from '@ui/helpers/text-formatting';
 
 export const metadata: Metadata = {
   title: 'Content Creators',
@@ -74,23 +74,23 @@ export default async function CreatorsPage() {
                   <LinkBox as='article'>
                     <VStack gap={4}>
                       <Avatar.Root size='2xl'>
-                        <Avatar.Fallback name={creator.display_name} />
+                        <Avatar.Fallback name={creator.display_name}>
+                          {getInitials(creator.display_name)}
+                        </Avatar.Fallback>
                         {creator.profile_image_url && (
                           <Avatar.Image src={creator.profile_image_url} />
                         )}
                       </Avatar.Root>
                       <VStack gap={1}>
-                        <LinkOverlay asChild>
-                          <Link href={`/creators/${creator.id}`}>
-                            <Text
-                              fontWeight='bold'
-                              fontSize='lg'
-                              textAlign='center'
-                              lineClamp={2}
-                            >
-                              {creator.display_name}
-                            </Text>
-                          </Link>
+                        <LinkOverlay href={`/creators/${creator.id}`}>
+                          <Text
+                            fontWeight='bold'
+                            fontSize='lg'
+                            textAlign='center'
+                            lineClamp={2}
+                          >
+                            {creator.display_name}
+                          </Text>
                         </LinkOverlay>
                         <ChakraLink href={creator.url} target='_blank'>
                           <Text fontSize='sm' color='fg.muted'>

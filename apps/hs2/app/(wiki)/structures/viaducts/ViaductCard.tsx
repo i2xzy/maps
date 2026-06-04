@@ -17,16 +17,9 @@ const ViaductCard = ({
     <Card.Root size={{ base: 'sm', md: 'md' }}>
       <Card.Body gap='2'>
         <HStack justify='space-between'>
-          <Card.Title color='blue.400'>
-            {name.replace(' East Viaduct', ' Viaducts')}
-          </Card.Title>
+          <Card.Title color='blue.400'>{name}</Card.Title>
           <FeatureStatusBadge status={status} />
         </HStack>
-        {name.includes('East Viaduct') && (
-          <Card.Description>
-            {name} and {name.replace(' East Viaduct', ' West Viaduct')}
-          </Card.Description>
-        )}
       </Card.Body>
     </Card.Root>
   </Link>

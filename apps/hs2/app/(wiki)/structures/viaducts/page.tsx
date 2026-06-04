@@ -14,10 +14,7 @@ export default async function ViaductsPage() {
     .from('features')
     .select('id, name,type, status, chainage, route_element_id')
     .in('type', ['viaduct', 'box_structure'])
-    .not('name', 'like', '%West Viaduct%')
     .order('chainage', { ascending: true });
-
-  // Some viaducts are made up of 2 segments e.g.  but should be counted as 1
 
   const viaducts = features?.filter(feature => feature.type === 'viaduct');
   const boxStructures = features?.filter(

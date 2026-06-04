@@ -149,21 +149,9 @@ export default async function StructureDetailPage({
   const plans = groupings.filter(item => item.type === 'plan_sheet');
   const segments = groupings.filter(item => item.type !== 'plan_sheet');
 
-  // For paired structures (like East/West viaducts), get the counterpart
-  let pairedFeature = null;
-  if (feature.name.includes('East Viaduct')) {
-    const pairedName = feature.name.replace('East Viaduct', 'West Viaduct');
-    const { data } = await supabase
-      .from('features')
-      .select('*')
-      .eq('name', pairedName)
-      .single();
-    pairedFeature = data;
-  }
-
   const featureType = featureTypes[feature.type];
 
-  const displayName = feature.name.replace('East Viaduct', 'Viaducts');
+  const displayName = feature.name;
 
   return (
     <Container maxW='6xl' py={8}>
@@ -204,9 +192,7 @@ export default async function StructureDetailPage({
               <FeatureIcon {...feature} />
               {featureType.label}
             </Badge>
-            {!pairedFeature && (
-              <FeatureStatusBadge status={feature.status} size='md' />
-            )}
+            <FeatureStatusBadge status={feature.status} size='md' />
             <Badge colorPalette='teal' size='md'>
               {formatPhase(feature.phase)}
             </Badge>
@@ -232,39 +218,15 @@ export default async function StructureDetailPage({
                     <Text fontWeight='medium'>Phase:</Text>
                     <Text>{formatPhase(feature.phase)}</Text>
                   </HStack>
-                  {!pairedFeature && (
-                    <>
-                      <Separator />
-                      <HStack justify='space-between'>
-                        <Text fontWeight='medium'>Status:</Text>
-                        <FeatureStatusBadge status={feature.status} />
-                      </HStack>
-                    </>
-                  )}
+                  <Separator />
+                  <HStack justify='space-between'>
+                    <Text fontWeight='medium'>Status:</Text>
+                    <FeatureStatusBadge status={feature.status} />
+                  </HStack>
                 </VStack>
               </Card.Body>
             </Card.Root>
 
-            {/* Construction Progress */}
-            {pairedFeature && (
-              <Card.Root>
-                <Card.Header>
-                  <Card.Title>Segment Progress</Card.Title>
-                </Card.Header>
-                <Card.Body>
-                  <SimpleGrid columns={{ base: 1, md: 2 }} gap={4}>
-                    <VStack align='start'>
-                      <Text fontWeight='semibold'>{feature.name}</Text>
-                      <FeatureStatusBadge status={feature.status} />
-                    </VStack>
-                    <VStack align='start'>
-                      <Text fontWeight='semibold'>{pairedFeature.name}</Text>
-                      <FeatureStatusBadge status={pairedFeature.status} />
-                    </VStack>
-                  </SimpleGrid>
-                </Card.Body>
-              </Card.Root>
-            )}
             {/* Related Media */}
             <MediaGallery media={media} title='Related Media' />
           </VStack>

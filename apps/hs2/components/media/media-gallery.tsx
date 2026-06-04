@@ -1,16 +1,23 @@
+'use client';
+
+import { useState } from 'react';
 import {
   SimpleGrid,
   VStack,
   HStack,
   Text,
-  AspectRatio,
+  Box,
   Avatar,
   Heading,
   Image,
+  SegmentGroup,
+  LinkBox,
+  LinkOverlay,
 } from '@chakra-ui/react';
 import Link from 'next/link';
 
 import { formatDate } from '@ui/helpers/date-formatting';
+import { getInitials } from '@ui/helpers/text-formatting';
 
 interface Creator {
   id: string;
@@ -31,79 +38,163 @@ interface MediaItem {
   creators?: Creator | null;
 }
 
+type SortField = 'recorded' | 'published';
+
+/** The date used both for sorting and for display, per the active field, with
+ *  a fallback to the other date when the preferred one is missing. */
+function activeDate(item: MediaItem, field: SortField): string | null {
+  return field === 'published'
+    ? item.published_at || item.recorded_date
+    : item.recorded_date || item.published_at;
+}
+
+function sortTimestamp(item: MediaItem, field: SortField): number {
+  const value = activeDate(item, field);
+  return value ? new Date(value).getTime() : 0;
+}
+
 interface MediaGalleryProps {
   media: MediaItem[] | null;
   title?: string;
   isPage?: boolean;
+  /**
+   * Initial sort + displayed date. 'recorded' (default) for construction
+   * chronology (feature/creator pages); 'published' for the news feed
+   * ("what's new"). Users can toggle between the two.
+   */
+  defaultSort?: SortField;
 }
 
 export function MediaGallery({
   media,
   title,
   isPage = false,
+  defaultSort = 'recorded',
 }: MediaGalleryProps) {
+  const [sort, setSort] = useState<SortField>(defaultSort);
+
   if (!media || media.length === 0) return null;
+
+  const sorted = [...media].sort(
+    (a, b) => sortTimestamp(b, sort) - sortTimestamp(a, sort)
+  );
+
+  // Sorting is only meaningful with more than one item.
+  const showSort = media.length > 1;
 
   return (
     <VStack gap={4} align='stretch'>
-      {title && (
-        <Heading size='lg'>
-          {title} ({media.length})
-        </Heading>
+      {(title || showSort) && (
+        <HStack justify='space-between' align='center' wrap='wrap' gap={2}>
+          {title ? (
+            <Heading size='lg'>
+              {title} ({media.length})
+            </Heading>
+          ) : (
+            <Box />
+          )}
+          {showSort && (
+            <HStack gap={2} align='center'>
+              <Text fontSize='xs' color='fg.muted'>
+                Sort by
+              </Text>
+              <SegmentGroup.Root
+                size='xs'
+                value={sort}
+                onValueChange={e => setSort(e.value as SortField)}
+              >
+                <SegmentGroup.Indicator />
+                <SegmentGroup.Items
+                  items={[
+                    { value: 'recorded', label: 'Recorded' },
+                    { value: 'published', label: 'Published' },
+                  ]}
+                />
+              </SegmentGroup.Root>
+            </HStack>
+          )}
+        </HStack>
       )}
       <SimpleGrid columns={{ base: 1, sm: 2, md: isPage ? 4 : 3 }} gap={4}>
-        {media.map(item => (
-          <Link key={item.id} href={`/media/${item.id}`}>
-            <VStack gap={3} align='stretch'>
-              <AspectRatio ratio={16 / 9}>
-                {item.youtube_id ? (
-                  <Image
-                    src={`https://img.youtube.com/vi/${item.youtube_id}/0.jpg`}
-                    alt={item.title}
-                    borderRadius='lg'
-                  />
-                ) : (
-                  <Image src={item.url} alt={item.title} borderRadius='lg' />
-                )}
-              </AspectRatio>
+        {sorted.map(item => {
+          const date = activeDate(item, sort);
+          return (
+            <LinkBox key={item.id}>
+              <VStack gap={3} align='stretch'>
+                <Box
+                  position='relative'
+                  aspectRatio={16 / 9}
+                  overflow='hidden'
+                  borderRadius='lg'
+                >
+                  {item.youtube_id ? (
+                    <Image
+                      src={`https://img.youtube.com/vi/${item.youtube_id}/0.jpg`}
+                      alt={item.title}
+                      boxSize='full'
+                      objectFit='cover'
+                    />
+                  ) : (
+                    <Image
+                      src={item.url}
+                      alt={item.title}
+                      boxSize='full'
+                      objectFit='cover'
+                    />
+                  )}
+                </Box>
 
-              <HStack gap={2} align='stretch'>
-                {item.creators?.profile_image_url && (
-                  <Avatar.Root>
-                    <Avatar.Fallback name={item.creators.display_name} />
-                    <Avatar.Image src={item.creators.profile_image_url} />
-                  </Avatar.Root>
-                )}
-                <VStack gap={1} align='stretch'>
-                  <Text fontWeight='bold' fontSize='sm' lineClamp={2}>
-                    {item.title}
-                  </Text>
-
-                  <VStack gap={0} align='stretch' as='object'>
-                    {item.creators && (
-                      <Link href={`/creators/${item.creators.id}`}>
-                        <Text
-                          fontSize='xs'
-                          color='fg.muted'
-                          _hover={{ color: 'fg' }}
-                        >
-                          {item.creators.display_name}
+                <HStack gap={2} align='stretch'>
+                  {item.creators?.profile_image_url && (
+                    <Avatar.Root>
+                      <Avatar.Fallback name={item.creators.display_name}>
+                        {getInitials(item.creators.display_name)}
+                      </Avatar.Fallback>
+                      <Avatar.Image src={item.creators.profile_image_url} />
+                    </Avatar.Root>
+                  )}
+                  <VStack gap={1} align='stretch'>
+                    {/* description holds the real YouTube title; title is the
+                        curated date+feature label used as a fallback (images,
+                        or rows with no description). The whole card links to
+                        the media page via this overlay; the creator link below
+                        is a sibling anchor (lifted above the overlay), so we
+                        avoid nesting <a> inside <a>. */}
+                    <LinkOverlay asChild>
+                      <Link href={`/media/${item.id}`}>
+                        <Text fontWeight='bold' fontSize='sm' lineClamp={2}>
+                          {item.description || item.title}
                         </Text>
                       </Link>
-                    )}
-                    {(item.recorded_date || item.published_at) && (
-                      <Text fontSize='xs' color='fg.muted'>
-                        {formatDate(
-                          item.recorded_date || item.published_at || ''
-                        )}
-                      </Text>
-                    )}
+                    </LinkOverlay>
+
+                    <VStack gap={0} align='stretch'>
+                      {item.creators && (
+                        <Link
+                          href={`/creators/${item.creators.id}`}
+                          style={{ position: 'relative', zIndex: 1 }}
+                        >
+                          <Text
+                            fontSize='xs'
+                            color='fg.muted'
+                            _hover={{ color: 'fg' }}
+                          >
+                            {item.creators.display_name}
+                          </Text>
+                        </Link>
+                      )}
+                      {date && (
+                        <Text fontSize='xs' color='fg.muted'>
+                          {formatDate(date)}
+                        </Text>
+                      )}
+                    </VStack>
                   </VStack>
-                </VStack>
-              </HStack>
-            </VStack>
-          </Link>
-        ))}
+                </HStack>
+              </VStack>
+            </LinkBox>
+          );
+        })}
       </SimpleGrid>
     </VStack>
   );

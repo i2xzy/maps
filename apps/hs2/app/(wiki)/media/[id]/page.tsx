@@ -6,7 +6,6 @@ import {
   Text,
   Avatar,
   Card,
-  AspectRatio,
   SimpleGrid,
   Link as ChakraLink,
   DataList,
@@ -16,10 +15,21 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { createClient } from '@supabase/server';
-import { snakeCaseToTitleCase } from '@ui/helpers/text-formatting';
+import {
+  snakeCaseToTitleCase,
+  getInitials,
+} from '@ui/helpers/text-formatting';
 import { formatDate } from '@ui/helpers/date-formatting';
 import { Breadcrumb } from '@ui/components/breadcrumb';
+import {
+  buildChapters,
+  collectFeatures,
+  type MediaSegment,
+} from '@/utils/media-grouping';
 import MediaFeatures from './media-features';
+import VideoPlayer from './VideoPlayer';
+import ChapterList from './chapter-list';
+import { VideoPlayerProvider } from './video-player-context';
 
 export async function generateMetadata({
   params,
@@ -50,7 +60,7 @@ export async function generateMetadata({
   const mediaType = media.type === 'video' ? 'Video' : 'Image';
 
   return {
-    title: media.title,
+    title: media.description || media.title,
     description:
       media.description ||
       `${mediaType} of HS2 construction by ${creatorName}. Watch and explore High Speed 2 railway project updates.`,
@@ -91,28 +101,49 @@ export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
     notFound();
   }
 
-  const relatedFeatures =
-    media.media_features?.map(mf => mf.features).filter(Boolean) || [];
+  // A YouTube video may be stored as several rows (one per Google My Maps pin),
+  // each a timestamped "chapter". Gather the siblings by youtube_id, then build
+  // the chapter list and the union of features. Images and un-grouped rows fall
+  // back to just this row.
+  let segments: MediaSegment[] = [media];
+  if (media.youtube_id) {
+    const { data: siblings } = await supabase
+      .from('media')
+      .select(
+        `
+        url,
+        title,
+        media_features (
+          features ( id, name, type, status, chainage )
+        )
+      `
+      )
+      .eq('youtube_id', media.youtube_id);
+    if (siblings && siblings.length > 0) segments = siblings;
+  }
+
+  const chapters = buildChapters(segments);
+  const relatedFeatures = collectFeatures(segments);
 
   return (
     <Container maxW='8xl' py={8}>
       <VStack gap={8} align='stretch'>
         {/* Breadcrumbs */}
         <Breadcrumb
-          items={[{ title: 'Media', url: '/media' }, { title: media.title }]}
+          items={[
+            { title: 'Media', url: '/media' },
+            { title: media.description || media.title },
+          ]}
         />
 
+        <VideoPlayerProvider>
         <SimpleGrid gap={8} templateColumns={{ base: '1fr', lg: '1fr 300px' }}>
           {/* Media Content */}
           <VStack gap={2} align='start'>
             {media.youtube_id && (
-              <AspectRatio ratio={16 / 9} w='full'>
-                <iframe
-                  src={`https://www.youtube.com/embed/${media.youtube_id}`}
-                  title={media.title}
-                  allowFullScreen
-                />
-              </AspectRatio>
+              <VideoPlayer
+                src={`https://www.youtube.com/embed/${media.youtube_id}`}
+              />
             )}
             {media.type === 'image' && (
               <>
@@ -134,7 +165,9 @@ export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
               <Link href={`/creators/${media.creators.id}`}>
                 <HStack gap={4} align='center'>
                   <Avatar.Root>
-                    <Avatar.Fallback name={media.creators.display_name} />
+                    <Avatar.Fallback name={media.creators.display_name}>
+                      {getInitials(media.creators.display_name)}
+                    </Avatar.Fallback>
                     {media.creators.profile_image_url && (
                       <Avatar.Image src={media.creators.profile_image_url} />
                     )}
@@ -178,11 +211,15 @@ export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
             </Card.Root>
           </VStack>
 
-          {/* Related Features */}
-          {relatedFeatures.length > 0 && (
-            <MediaFeatures relatedFeatures={relatedFeatures} />
-          )}
+          {/* Sidebar: chapter navigation + related features */}
+          <VStack gap={8} align='stretch'>
+            <ChapterList chapters={chapters} />
+            {relatedFeatures.length > 0 && (
+              <MediaFeatures relatedFeatures={relatedFeatures} />
+            )}
+          </VStack>
         </SimpleGrid>
+        </VideoPlayerProvider>
       </VStack>
     </Container>
   );
