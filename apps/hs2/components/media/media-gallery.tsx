@@ -10,7 +10,7 @@ import {
   Avatar,
   Heading,
   Image,
-  Button,
+  SegmentGroup,
 } from '@chakra-ui/react';
 import Link from 'next/link';
 
@@ -95,22 +95,19 @@ export function MediaGallery({
               <Text fontSize='xs' color='fg.muted'>
                 Sort by
               </Text>
-              <HStack gap={1}>
-                <Button
-                  size='xs'
-                  variant={sort === 'recorded' ? 'solid' : 'outline'}
-                  onClick={() => setSort('recorded')}
-                >
-                  Recorded
-                </Button>
-                <Button
-                  size='xs'
-                  variant={sort === 'published' ? 'solid' : 'outline'}
-                  onClick={() => setSort('published')}
-                >
-                  Published
-                </Button>
-              </HStack>
+              <SegmentGroup.Root
+                size='xs'
+                value={sort}
+                onValueChange={e => setSort(e.value as SortField)}
+              >
+                <SegmentGroup.Indicator />
+                <SegmentGroup.Items
+                  items={[
+                    { value: 'recorded', label: 'Recorded' },
+                    { value: 'published', label: 'Published' },
+                  ]}
+                />
+              </SegmentGroup.Root>
             </HStack>
           )}
         </HStack>
