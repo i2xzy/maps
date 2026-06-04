@@ -49,6 +49,17 @@ Decided AGAINST a schema migration to dedupe media. The `media` table is already
 
 ## Low priority — defensive / quality
 
+### Upgrade Chakra UI for React 19 / Next 16 (durable fix for Children.only crashes)
+**What:** We're on `@chakra-ui/react` 3.19.1; latest is 3.35.0. Chakra's `Children.only`-based components (`AspectRatio`, the `asChild` Slot, `LinkOverlay asChild`) throw `React.Children.only expected to receive a single React element child` during SSR when a **server component** passes a **client-component child** (Chakra `Image`, `next/link`) across the RSC boundary under React 19.
+**Why:** This 500'd `/media`, `/creators`, and feature/creator detail pages after the Next 16 upgrade. Already patched at the call sites (MediaGallery uses a `Box` + CSS `aspectRatio`; creators list uses `LinkOverlay href` instead of `asChild`+`next/link`), but the underlying fragility remains — any new `asChild`/`AspectRatio` in a server component can reintroduce it. A Chakra upgrade with React 19 support is the durable fix.
+**How:** Bump Chakra, run the full app through QA (it's 16 minor versions — watch for component API/visual breaks). If the upgrade resolves the RSC `Children.only` issue, the call-site workarounds can optionally be reverted.
+**Context:** Not urgent now that call sites are patched, but it's the root cause. Do it in its own focused pass with QA, not bundled with feature work.
+
+### Drop the next-themes no-flash script workaround when a React 19 fix lands
+**What:** `next-themes` 0.4.6 triggers a React 19 dev warning ("Encountered a script tag while rendering React component") from its theme-init `<script>` in `ColorModeProvider`.
+**Why:** Benign — dev-console only, theme works, no flash, no production impact. You're already on the latest next-themes, so there's nothing to bump yet.
+**Context:** Revisit when next-themes ships a React 19-compatible release that stops rendering the raw script on the client.
+
 ### Review mis-linked chapter/marker titles (data quality)
 **What:** Some `media` rows have a `title` that names a different place than the feature they link to via `media_features` — e.g. a "Washwood Heath" marker linked to the Bromford Tunnel feature, "Delta Junction" linked to Birmingham Spur Diveunder. Review and re-link, or add the missing features.
 **Why:** Map markers and feature-page deep-links should point at the structure they're actually about. Either the true subject isn't a tracked feature yet, or the Google My Maps import linked the pin to a nearby/wrong feature.
