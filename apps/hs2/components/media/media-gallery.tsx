@@ -75,8 +75,11 @@ export function MediaGallery({
                   </Avatar.Root>
                 )}
                 <VStack gap={1} align='stretch'>
+                  {/* description holds the real YouTube title; title is the
+                      curated date+feature label used as a fallback (images, or
+                      rows with no description). */}
                   <Text fontWeight='bold' fontSize='sm' lineClamp={2}>
-                    {item.title}
+                    {item.description || item.title}
                   </Text>
 
                   <VStack gap={0} align='stretch' as='object'>
