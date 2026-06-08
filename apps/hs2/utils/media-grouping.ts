@@ -20,6 +20,7 @@ export type ChapterFeature = {
   type: FeatureType;
   status: FeatureStatus | null;
   chainage: number | null;
+  chainage_end: number | null;
 };
 
 export type Chapter = {

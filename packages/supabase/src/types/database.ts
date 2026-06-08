@@ -50,6 +50,7 @@ export type Database = {
       features: {
         Row: {
           chainage: number | null
+          chainage_end: number | null
           created_at: string
           description: string | null
           geom_type: string | null
@@ -64,6 +65,7 @@ export type Database = {
         }
         Insert: {
           chainage?: number | null
+          chainage_end?: number | null
           created_at?: string
           description?: string | null
           geom_type?: string | null
@@ -78,6 +80,7 @@ export type Database = {
         }
         Update: {
           chainage?: number | null
+          chainage_end?: number | null
           created_at?: string
           description?: string | null
           geom_type?: string | null

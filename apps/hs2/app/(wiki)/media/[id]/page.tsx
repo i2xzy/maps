@@ -89,7 +89,8 @@ export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
           name,
           type,
           status,
-          chainage
+          chainage,
+          chainage_end
         )
       )
     `
@@ -114,7 +115,7 @@ export default async function MediaPage({ params }: PageProps<'/media/[id]'>) {
         url,
         title,
         media_features (
-          features ( id, name, type, status, chainage )
+          features ( id, name, type, status, chainage, chainage_end )
         )
       `
       )
