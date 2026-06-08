@@ -20,6 +20,7 @@ type Feature = {
   type: FeatureType;
   status: FeatureStatus | null;
   chainage: number | null;
+  chainage_end: number | null;
 };
 
 import { getFeatureHref } from '@/utils/feature-routing';
@@ -33,10 +34,14 @@ export default function MediaFeatures({
 }) {
   const [sort, setSort] = useState<'asc' | 'desc'>('asc');
 
-  const sorted = relatedFeatures.sort((a, b) =>
+  // South -> north: sort by each feature's start (chainage). North -> south:
+  // sort by its north end (chainage_end) so a linear feature (cutting,
+  // embankment) appears at the point it actually ends, not its south start.
+  // Points have no chainage_end, so fall back to chainage.
+  const sorted = [...relatedFeatures].sort((a, b) =>
     sort === 'asc'
       ? (a.chainage ?? 0) - (b.chainage ?? 0)
-      : (b.chainage ?? 0) - (a.chainage ?? 0)
+      : (b.chainage_end ?? b.chainage ?? 0) - (a.chainage_end ?? a.chainage ?? 0)
   );
 
   return (
