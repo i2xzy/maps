@@ -29,6 +29,7 @@ import type { FeatureType, FeatureStatus } from '@supabase/types';
 import { featureTypes, featureStatuses } from '@/components/feature/config';
 import { FeatureIcon } from '@/components/feature/feature-icon';
 import { getFeatureHref } from '@/utils/feature-routing';
+import { thinScrollbar } from '@/components/map/panel-styles';
 
 export type SelectedFeature = {
   id: string;
@@ -112,6 +113,7 @@ export default function FeatureDetailPanel({
       w={{ base: 'calc(100% - 24px)', sm: '320px' }}
       maxH='calc(100% - 24px)'
       overflowY='auto'
+      css={thinScrollbar}
       bg='bg.panel'
       borderWidth='1px'
       borderColor='border'

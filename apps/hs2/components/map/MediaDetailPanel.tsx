@@ -28,6 +28,7 @@ import { formatDate } from '@ui/helpers/date-formatting';
 import { FeatureIcon } from '@/components/feature/feature-icon';
 import { getFeatureHref } from '@/utils/feature-routing';
 import { ShotTypeIcon, shotTypeLabel } from '@/components/map/shot-type-config';
+import { thinScrollbar } from '@/components/map/panel-styles';
 
 export type SelectedVideo = {
   id: string;
@@ -99,6 +100,7 @@ export default function MediaDetailPanel({
       w={{ base: 'calc(100% - 24px)', sm: '320px' }}
       maxH='calc(100% - 24px)'
       overflowY='auto'
+      css={thinScrollbar}
       bg='bg.panel'
       borderWidth='1px'
       borderColor='border'
