@@ -49,19 +49,29 @@ export default async function CreatorsPage() {
   // Count DISTINCT videos per creator. Sibling rows (one per Google My Maps
   // pin) share a youtube_id, so a plain row count over-counts; dedupe by
   // youtube_id (falling back to row id for pins with no youtube_id).
-  const { data: videoRows } = await supabase
-    .from('media')
-    .select('id, creator_id, youtube_id')
-    .eq('type', 'video');
-
+  // Page through results: a single select is capped at PostgREST's max-rows
+  // (1000), which silently undercounts every creator once the total number of
+  // video rows exceeds it.
   const videosByCreator = new Map<string, Set<string>>();
-  videoRows?.forEach(row => {
-    if (!row.creator_id) return;
-    const key = row.youtube_id || `no-id-${row.id}`;
-    const set = videosByCreator.get(row.creator_id) ?? new Set<string>();
-    set.add(key);
-    videosByCreator.set(row.creator_id, set);
-  });
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: videoRows } = await supabase
+      .from('media')
+      .select('id, creator_id, youtube_id')
+      .eq('type', 'video')
+      .order('id', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+
+    for (const row of videoRows ?? []) {
+      if (!row.creator_id) continue;
+      const key = row.youtube_id || `no-id-${row.id}`;
+      const set = videosByCreator.get(row.creator_id) ?? new Set<string>();
+      set.add(key);
+      videosByCreator.set(row.creator_id, set);
+    }
+
+    if (!videoRows || videoRows.length < PAGE_SIZE) break;
+  }
 
   const creatorsWithCounts = creators
     .map(creator => ({
