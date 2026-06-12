@@ -283,6 +283,22 @@ export default function MapView({ features, media }: Props) {
     return rowsToFeatureCollection(rows);
   }, [features, hiddenTypes, hiddenStatuses]);
 
+  // Total feature counts per type / per status (the universe, for the filter
+  // chips — independent of what's currently hidden).
+  const { typeCounts, statusCounts } = useMemo(() => {
+    const t: Record<string, number> = {};
+    const s: Record<string, number> = {};
+    for (const r of features) {
+      const ty = String(r.type);
+      t[ty] = (t[ty] ?? 0) + 1;
+      if (r.status != null) {
+        const st = String(r.status);
+        s[st] = (s[st] ?? 0) + 1;
+      }
+    }
+    return { typeCounts: t, statusCounts: s };
+  }, [features]);
+
   // The map shows VIDEOS only (media rows with a youtube_id), split into
   // per-year layers the Videos tab toggles.
   const videoRows = useMemo(() => media.filter(m => !!m.youtube_id), [media]);
@@ -379,6 +395,34 @@ export default function MapView({ features, media }: Props) {
     else next.add(key);
     return next;
   };
+
+  // Bulk set membership for category/band toggles (hide or show many at once).
+  const setKeys = (
+    setter: typeof setHiddenTypes,
+    keys: string[],
+    hidden: boolean
+  ) =>
+    setter(prev => {
+      const next = new Set(prev);
+      for (const k of keys) {
+        if (hidden) next.add(k);
+        else next.delete(k);
+      }
+      return next;
+    });
+
+  const onSetTypes = useCallback(
+    (keys: string[], hidden: boolean) => setKeys(setHiddenTypes, keys, hidden),
+    []
+  );
+  const onSetStatuses = useCallback(
+    (keys: string[], hidden: boolean) => setKeys(setHiddenStatuses, keys, hidden),
+    []
+  );
+  const onResetFilters = useCallback(() => {
+    setHiddenTypes(new Set());
+    setHiddenStatuses(new Set());
+  }, []);
 
   const selectFeatureProps = useCallback((props: Record<string, unknown>) => {
     if (!props.id || !props.type) return;
@@ -616,9 +660,12 @@ export default function MapView({ features, media }: Props) {
         collapsed={panelCollapsed}
         onToggleCollapsed={() => setPanelCollapsed(c => !c)}
         hiddenTypes={hiddenTypes}
-        onToggleType={type => setHiddenTypes(s => toggleInSet(s, type))}
         hiddenStatuses={hiddenStatuses}
-        onToggleStatus={status => setHiddenStatuses(s => toggleInSet(s, status))}
+        typeCounts={typeCounts}
+        statusCounts={statusCounts}
+        onSetTypes={onSetTypes}
+        onSetStatuses={onSetStatuses}
+        onResetFilters={onResetFilters}
         features={featureList}
         onSelectResult={onSelectResult}
         years={years}

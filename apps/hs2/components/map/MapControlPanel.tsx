@@ -16,6 +16,7 @@ import {
   Heading,
   IconButton,
   Button,
+  Badge,
   Wrap,
   Checkbox,
   Tabs,
@@ -28,10 +29,10 @@ import {
 } from 'react-icons/lu';
 
 import type { FeatureType, FeatureStatus } from '@supabase/types';
-import { featureTypes, featureStatuses } from '@/components/feature/config';
+import { featureTypes } from '@/components/feature/config';
 import { FeatureIcon } from '@/components/feature/feature-icon';
-import { TYPE_COLORS } from '@/components/map/map-colors';
 import { ShotTypeIcon } from '@/components/map/shot-type-config';
+import { thinScrollbar } from '@/components/map/panel-styles';
 
 export type SearchResult = {
   id: string;
@@ -60,9 +61,12 @@ type Props = {
 
   // Features tab
   hiddenTypes: Set<string>;
-  onToggleType: (type: FeatureType) => void;
   hiddenStatuses: Set<string>;
-  onToggleStatus: (status: NonNullable<FeatureStatus>) => void;
+  typeCounts: Record<string, number>;
+  statusCounts: Record<string, number>;
+  onSetTypes: (types: string[], hidden: boolean) => void;
+  onSetStatuses: (statuses: string[], hidden: boolean) => void;
+  onResetFilters: () => void;
   features: SearchResult[];
   onSelectResult: (r: SearchResult) => void;
 
@@ -74,10 +78,33 @@ type Props = {
   onSelectVideo: (v: VideoItem) => void;
 };
 
-const TYPE_KEYS = Object.keys(featureTypes) as FeatureType[];
-const STATUS_KEYS = Object.keys(
-  featureStatuses
-) as NonNullable<FeatureStatus>[];
+// Type chips grouped into one toggle per category (no subtypes).
+const TYPE_CATEGORIES: { label: string; types: FeatureType[] }[] = [
+  { label: 'Bridges', types: ['overbridge', 'underbridge', 'underpass'] },
+  { label: 'Tunnels', types: ['tunnel', 'cut_and_cover'] },
+  { label: 'Viaducts', types: ['viaduct', 'box_structure'] },
+  { label: 'Stations', types: ['station'] },
+  { label: 'Earthworks', types: ['embankment', 'cutting'] },
+  { label: 'Other', types: ['shaft', 'culvert'] },
+];
+
+// The 13 construction statuses fold into 4 progress bands by colour family.
+const STATUS_BANDS: {
+  label: string;
+  colorPalette: string;
+  statuses: NonNullable<FeatureStatus>[];
+}[] = [
+  { label: 'Not started', colorPalette: 'red', statuses: ['NOT_STARTED', 'PREP_WORK'] },
+  { label: 'Groundworks', colorPalette: 'yellow', statuses: ['FOUNDATIONS', 'DIGGING'] },
+  {
+    label: 'Construction',
+    colorPalette: 'blue',
+    statuses: ['SEGMENT_INSTALLATION', 'PIERS', 'SIDE_TUNNELS', 'DECK', 'PARAPET', 'SURFACE_BUILDINGS'],
+  },
+  { label: 'Finishing', colorPalette: 'green', statuses: ['LANDSCAPING', 'CIVILS', 'COMPLETED'] },
+];
+
+const plural = (s: string) => (s.endsWith('s') ? s : `${s}s`);
 
 const SectionLabel = ({ children }: { children: React.ReactNode }) => (
   <Text fontSize='xs' fontWeight='semibold' color='fg.muted' textTransform='uppercase'>
@@ -114,6 +141,13 @@ export default function MapControlPanel(props: Props) {
     if (arr) arr.push(v);
     else videosByYear.set(v.year, [v]);
   }
+
+  // Number of fully-hidden categories + bands, for the "N hidden" badge.
+  const totalHidden =
+    TYPE_CATEGORIES.filter(c => c.types.every(t => props.hiddenTypes.has(t)))
+      .length +
+    STATUS_BANDS.filter(b => b.statuses.every(s => props.hiddenStatuses.has(s)))
+      .length;
 
   return (
     <Box
@@ -166,35 +200,69 @@ export default function MapControlPanel(props: Props) {
           pb={4}
         >
           <Stack gap={3} minH='0' flex='1'>
-            {/* Collapsible filters */}
+            {/* Collapsible filters (grouped: type categories + status bands) */}
             <Box>
-              <Button
-                size='xs'
-                variant='ghost'
-                px={1}
-                onClick={() => setFiltersOpen(o => !o)}
-              >
-                {filtersOpen ? <LuChevronDown /> : <LuChevronRight />}
-                Filters
-              </Button>
+              <HStack justify='space-between'>
+                <Button
+                  size='xs'
+                  variant='ghost'
+                  px={1}
+                  onClick={() => setFiltersOpen(o => !o)}
+                >
+                  {filtersOpen ? <LuChevronDown /> : <LuChevronRight />}
+                  Filters
+                  {totalHidden > 0 && (
+                    <Badge ml={1} size='sm' colorPalette='blue'>
+                      {totalHidden} hidden
+                    </Badge>
+                  )}
+                </Button>
+                {totalHidden > 0 && (
+                  <Button
+                    size='xs'
+                    variant='plain'
+                    colorPalette='gray'
+                    onClick={props.onResetFilters}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </HStack>
 
               {filtersOpen && (
                 <Stack gap={3} mt={2}>
                   <Stack gap={1.5}>
                     <SectionLabel>Structure type</SectionLabel>
                     <Wrap gap={1.5}>
-                      {TYPE_KEYS.map(type => {
-                        const active = !props.hiddenTypes.has(type);
+                      {TYPE_CATEGORIES.map(cat => {
+                        const present = cat.types.filter(
+                          t => (props.typeCounts[t] ?? 0) > 0
+                        );
+                        if (present.length === 0) return null; // hide empty
+                        const count = present.reduce(
+                          (n, t) => n + (props.typeCounts[t] ?? 0),
+                          0
+                        );
+                        // Collapse to the single type's name when only one is present.
+                        const label =
+                          present.length === 1
+                            ? plural(featureTypes[present[0]!].label)
+                            : cat.label;
+                        const showing = !cat.types.every(t =>
+                          props.hiddenTypes.has(t)
+                        );
                         return (
                           <Button
-                            key={type}
+                            key={cat.label}
                             size='xs'
-                            variant={active ? 'subtle' : 'outline'}
-                            opacity={active ? 1 : 0.45}
-                            onClick={() => props.onToggleType(type)}
+                            variant={showing ? 'subtle' : 'outline'}
+                            opacity={showing ? 1 : 0.45}
+                            onClick={() => props.onSetTypes(cat.types, showing)}
                           >
-                            <Box w='8px' h='8px' borderRadius='full' bg={TYPE_COLORS[type]} mr={1} />
-                            {featureTypes[type].label}
+                            {label}
+                            <Text as='span' color='fg.muted' ml={1}>
+                              {count}
+                            </Text>
                           </Button>
                         );
                       })}
@@ -203,18 +271,30 @@ export default function MapControlPanel(props: Props) {
                   <Stack gap={1.5}>
                     <SectionLabel>Construction status</SectionLabel>
                     <Wrap gap={1.5}>
-                      {STATUS_KEYS.map(status => {
-                        const active = !props.hiddenStatuses.has(status);
+                      {STATUS_BANDS.map(band => {
+                        const count = band.statuses.reduce(
+                          (n, s) => n + (props.statusCounts[s] ?? 0),
+                          0
+                        );
+                        if (count === 0) return null; // hide empty band
+                        const showing = !band.statuses.every(s =>
+                          props.hiddenStatuses.has(s)
+                        );
                         return (
                           <Button
-                            key={status}
+                            key={band.label}
                             size='xs'
-                            variant={active ? 'subtle' : 'outline'}
-                            colorPalette={featureStatuses[status].colorPalette}
-                            opacity={active ? 1 : 0.45}
-                            onClick={() => props.onToggleStatus(status)}
+                            variant={showing ? 'subtle' : 'outline'}
+                            colorPalette={band.colorPalette}
+                            opacity={showing ? 1 : 0.45}
+                            onClick={() =>
+                              props.onSetStatuses(band.statuses, showing)
+                            }
                           >
-                            {featureStatuses[status].labelShort ?? featureStatuses[status].label}
+                            {band.label}
+                            <Text as='span' color='fg.muted' ml={1}>
+                              {count}
+                            </Text>
                           </Button>
                         );
                       })}
@@ -226,7 +306,7 @@ export default function MapControlPanel(props: Props) {
 
             {/* Structure list */}
             <SectionLabel>Structures ({props.features.length})</SectionLabel>
-            <Stack gap={0} overflowY='auto' minH='120px'>
+            <Stack gap={0} overflowY='auto' minH='120px' css={thinScrollbar}>
               {props.features.length === 0 ? (
                 <Text fontSize='sm' color='fg.muted' px={1} py={2}>
                   No structures match.
@@ -268,7 +348,7 @@ export default function MapControlPanel(props: Props) {
           <Stack gap={3} minH='0' flex='1'>
             {/* Each year is a checkbox header; its videos nest beneath and
                 collapse (and their markers hide) when unchecked. */}
-            <Stack gap={2} minH='0' flex='1' overflowY='auto'>
+            <Stack gap={2} minH='0' flex='1' overflowY='auto' css={thinScrollbar}>
               {props.years.length === 0 ? (
                 <Text fontSize='sm' color='fg.muted'>
                   No videos loaded.
