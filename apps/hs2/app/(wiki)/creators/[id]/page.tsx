@@ -61,13 +61,15 @@ export default async function CreatorPage({
     notFound();
   }
 
-  // Get creator's media with related features
+  // Get creator's media with related features. LEFT join (no !inner) so videos
+  // with no linked features still appear in the creator's library — they're just
+  // shown without feature chips, rather than being hidden entirely.
   const { data: mediaData } = await supabase
     .from('media')
     .select(
       `
       *,
-      media_features!inner (
+      media_features (
         features (
           id,
           name,
