@@ -26,42 +26,33 @@ export const metadata: Metadata = {
 export default async function CreatorsPage() {
   const supabase = await createClient();
 
-  // Get all creators.
-  const { data: creators } = await supabase
-    .from('creators')
+  // Creators with their distinct video count, in one query via the
+  // creators_with_video_counts view (see
+  // packages/supabase/sql/creators_with_video_counts.sql). The view counts in a
+  // single aggregate — no PostgREST 1000-row fetch cap, no bulk row transfer —
+  // and we sort server-side (most videos first, then by name).
+  const { data: rows } = await supabase
+    .from('creators_with_video_counts')
     .select(
-      `
-      id,
-      display_name,
-      external_id,
-      platform,
-      profile_image_url,
-      bio,
-      url
-    `
+      'id, display_name, external_id, platform, profile_image_url, bio, url, video_count'
     )
+    .order('video_count', { ascending: false })
     .order('display_name', { ascending: true });
 
-  if (!creators) {
+  if (!rows) {
     return notFound();
   }
 
-  // Distinct videos per creator, counted server-side via the creator_video_counts
-  // RPC. Doing it in one aggregate avoids PostgREST's 1000-row fetch cap (which
-  // silently undercounted once total video rows exceeded it) and the cost of
-  // transferring every row just to count. See
-  // packages/supabase/sql/creator_video_counts.sql.
-  const { data: counts } = await supabase.rpc('creator_video_counts');
-  const countByCreator = new Map<string, number>(
-    counts?.map(c => [c.creator_id, c.video_count]) ?? []
-  );
-
-  const creatorsWithCounts = creators
-    .map(creator => ({
-      ...creator,
-      mediaCount: countByCreator.get(creator.id) ?? 0,
-    }))
-    .sort((a, b) => b.mediaCount - a.mediaCount);
+  // View columns are nullable in the generated types; every row is backed by a
+  // real creator, so default the fields the cards rely on to non-null values.
+  const creatorsWithCounts = rows.map(c => ({
+    ...c,
+    id: c.id ?? '',
+    display_name: c.display_name ?? '',
+    external_id: c.external_id ?? '',
+    url: c.url ?? '',
+    video_count: c.video_count ?? 0,
+  }));
 
   return (
     <Container maxW='8xl' py={8}>
@@ -69,12 +60,12 @@ export default async function CreatorsPage() {
         <Stack gap={2}>
           <Heading size='2xl'>Content Creators</Heading>
           <Heading as='h2' size='lg' color='gray.600' fontWeight='normal'>
-            Explore videos from {creators.length} YouTube channels covering HS2
-            construction progress
+            Explore videos from {creatorsWithCounts.length} YouTube channels
+            covering HS2 construction progress
           </Heading>
         </Stack>
 
-        {creators.length > 0 ? (
+        {creatorsWithCounts.length > 0 ? (
           <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} gap={6}>
             {creatorsWithCounts.map(creator => (
               <Card.Root key={creator.id} h='100%'>
@@ -106,8 +97,8 @@ export default async function CreatorsPage() {
                           </Text>
                         </ChakraLink>
                         <Text fontSize='sm' fontWeight='medium'>
-                          {creator.mediaCount || 0}{' '}
-                          {creator.mediaCount === 1 ? 'video' : 'videos'}
+                          {creator.video_count}{' '}
+                          {creator.video_count === 1 ? 'video' : 'videos'}
                         </Text>
                       </VStack>
                     </VStack>
