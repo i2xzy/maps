@@ -19,9 +19,11 @@ Decided AGAINST a schema migration to dedupe media. The `media` table is already
 **Why:** Already in README's "Planned Features." The per-marker `recorded_date` and feature links already exist in `media`; this is the rendering of that data, ordered chronologically.
 **Depends on:** Nothing structural — query `media` joined to `media_features` by feature, ordered by `recorded_date`.
 
-### Interactive map with route visualization
+### Interactive map with route visualization — IN PROGRESS (branch: feature/interactive-map)
 **What:** Replace the map placeholder under `(dashboard)/map` with a real interactive map. Render features as markers/lines, render media geometries (point or LINESTRING) as a second layer, deep-link each media marker to the feature page.
 **Why:** README "Planned." This is the headline feature the rest of the data model supports.
+**Status (2026-06-08):** Being built per `/plan-eng-review` plan (`~/.gstack/projects/i2xzy-maps/isaacraskin-HEAD-map-plan-20260608-222444.md`). Stack: MapLibre via react-map-gl, OpenFreeMap basemap, GeoJSON from `features_geo`/`media_geo` SQL views (`.context/map-views.sql`). Helper + Vitest + MapView + page done and building green. Remaining: run the SQL views in the Supabase dashboard, regen `database.ts`, then visual QA.
+**Open caveat:** the map page reads via the cookie-based server client, which forces dynamic rendering and makes `revalidate` (daily caching, decision D9) a no-op. To make caching real, read the two public views via a cookieless anon client.
 **Depends on:** `media.location` confirmed flexible (POINT + LINESTRING). Markers come straight from `media` rows — no migration needed.
 
 ### Timeline view of construction progress
@@ -48,6 +50,13 @@ Decided AGAINST a schema migration to dedupe media. The `media` table is already
 **Depends on:** Auth setup (Supabase auth already exists via middleware/proxy).
 
 ## Low priority — defensive / quality
+
+### Custom feature-type marker icons on the map (GL sprites)
+**What:** Replace the map's status-colored circle markers with the real `FeatureIcon` set (tunnel, viaduct, station, etc.) by registering each as a MapLibre GL sprite image (`map.addImage`) and using a `symbol` layer with `icon-image` keyed off the feature `type`.
+**Why:** Visual parity with the rest of the site (every other page shows type icons) and faster at-a-glance reading of the map.
+**Cons / why deferred (decision D4):** GL sprites need raster/SDF images, but `FeatureIcon` is React/react-icons (SVG components). Converting each to a PNG/SDF, building a sprite sheet, and wiring `addImage` is disproportionate effort for v1, which ships colored clustered circles instead.
+**How to start:** Reuse the `featureTypes` config; render each icon to PNG (or generate an SDF sprite sheet) at build time; `map.addImage(type, img)`; swap the `feature-points-unclustered` circle layer for a symbol layer with `icon-image: ['get','type']`. Keep circles as the cluster representation.
+**Depends on:** The interactive map (feature/interactive-map) shipping first.
 
 ### Upgrade Chakra UI for React 19 / Next 16 (durable fix for Children.only crashes)
 **What:** We're on `@chakra-ui/react` 3.19.1; latest is 3.35.0. Chakra's `Children.only`-based components (`AspectRatio`, the `asChild` Slot, `LinkOverlay asChild`) throw `React.Children.only expected to receive a single React element child` during SSR when a **server component** passes a **client-component child** (Chakra `Image`, `next/link`) across the RSC boundary under React 19.
