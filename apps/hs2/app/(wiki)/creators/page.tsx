@@ -46,37 +46,20 @@ export default async function CreatorsPage() {
     return notFound();
   }
 
-  // Count DISTINCT videos per creator. Sibling rows (one per Google My Maps
-  // pin) share a youtube_id, so a plain row count over-counts; dedupe by
-  // youtube_id (falling back to row id for pins with no youtube_id).
-  // Page through results: a single select is capped at PostgREST's max-rows
-  // (1000), which silently undercounts every creator once the total number of
-  // video rows exceeds it.
-  const videosByCreator = new Map<string, Set<string>>();
-  const PAGE_SIZE = 1000;
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data: videoRows } = await supabase
-      .from('media')
-      .select('id, creator_id, youtube_id')
-      .eq('type', 'video')
-      .order('id', { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-
-    for (const row of videoRows ?? []) {
-      if (!row.creator_id) continue;
-      const key = row.youtube_id || `no-id-${row.id}`;
-      const set = videosByCreator.get(row.creator_id) ?? new Set<string>();
-      set.add(key);
-      videosByCreator.set(row.creator_id, set);
-    }
-
-    if (!videoRows || videoRows.length < PAGE_SIZE) break;
-  }
+  // Distinct videos per creator, counted server-side via the creator_video_counts
+  // RPC. Doing it in one aggregate avoids PostgREST's 1000-row fetch cap (which
+  // silently undercounted once total video rows exceeded it) and the cost of
+  // transferring every row just to count. See
+  // packages/supabase/sql/creator_video_counts.sql.
+  const { data: counts } = await supabase.rpc('creator_video_counts');
+  const countByCreator = new Map<string, number>(
+    counts?.map(c => [c.creator_id, c.video_count]) ?? []
+  );
 
   const creatorsWithCounts = creators
     .map(creator => ({
       ...creator,
-      mediaCount: videosByCreator.get(creator.id)?.size ?? 0,
+      mediaCount: countByCreator.get(creator.id) ?? 0,
     }))
     .sort((a, b) => b.mediaCount - a.mediaCount);
 

@@ -476,6 +476,13 @@ export type Database = {
           route_element_id: string
         }[]
       }
+      creator_video_counts: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          creator_id: string
+          video_count: number
+        }[]
+      }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
         | {
