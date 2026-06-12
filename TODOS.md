@@ -26,6 +26,38 @@ Decided AGAINST a schema migration to dedupe media. The `media` table is already
 **Open caveat:** the map page reads via the cookie-based server client, which forces dynamic rendering and makes `revalidate` (daily caching, decision D9) a no-op. To make caching real, read the two public views via a cookieless anon client.
 **Depends on:** `media.location` confirmed flexible (POINT + LINESTRING). Markers come straight from `media` rows — no migration needed.
 
+### Backfill missing feature geometry (stations, culverts, cuttings, embankments)
+**What:** Only **248 of 547 features have `geometry`**, so 299 never appear on the map. Full per-type gap (verified 2026-06-12 via `features` vs `features_geo`):
+
+| Type           | In DB | Mapped | Missing |
+|----------------|------:|-------:|--------:|
+| embankment     |   104 |      0 |     104 |
+| culvert        |    89 |      8 |      81 |
+| cutting        |    75 |      0 |      75 |
+| shaft          |    13 |      0 |      13 |
+| viaduct        |    57 |     45 |      12 |
+| tunnel         |     7 |      1 |       6 |
+| station        |     4 |      0 |       4 |
+| cut_and_cover  |     6 |      4 |       2 |
+| overbridge     |   149 |    147 |       2 |
+| underbridge    |    26 |     26 |       0 |
+| underpass      |    13 |     13 |       0 |
+| box_structure  |     4 |      4 |       0 |
+| **TOTAL**      | **547** | **248** | **299** |
+
+Bridges are nearly complete; the big gaps are all earthworks (embankment + cutting = 179), most culverts (81) and shafts (13), all stations (4), and notably **6 of 7 tunnels** and **12 viaducts** still missing.
+
+**Why:** The map can only render features that have coordinates, so whole categories (all stations, all earthworks) are invisible today — the "Stations 0 / Earthworks 0" filter counts are the symptom. Stations especially matter (Old Oak Common, Curzon Street, etc. should be on the map).
+
+**Origin (per Isaac):** Two causes — (1) most culverts (and shafts/stations) were never placed on the Google My Maps, so no point was ever imported; (2) linear features (cuttings, embankments, and many viaducts/tunnels) had segmented, inaccurate WKT in the source data that was deliberately NOT imported — they need accurate alignments.
+
+**How — two paths:**
+1. **Reconstruct from the plan documents** — use each feature's chainage (start + `chainage_end`) to derive points/lines along the route alignment. Accurate, but scripted/manual.
+2. **Wait for the in-app map editor** — add/move/draw markers and lines and place them by hand. Extends the "Admin dashboard for content management" TODO (which already lists "drawing LINESTRING geometries").
+
+**Depends on:** Path 1 — nothing (data work in Supabase). Path 2 — building the map-editing feature.
+**Verify after:** the filter counts for Stations / Earthworks / Other climb above 0 and the structures show on the map. No app change needed — `features_geo` + the filters already handle them once geometry exists.
+
 ### Timeline view of construction progress
 **What:** UI for scrubbing through time — see structure statuses at any given month from 2017 to projected completion.
 **Why:** README "Planned." The status enum + recorded_date columns already exist; this is the rendering layer.
@@ -44,10 +76,10 @@ Decided AGAINST a schema migration to dedupe media. The `media` table is already
 **Why:** README "Planned." The differentiating feature for "reference of record" framing.
 **Depends on:** Data source for HS2 Ltd plan dates — may require manual data entry.
 
-### Admin dashboard for content management
-**What:** Internal-only UI for adding new media, drawing LINESTRING geometries, linking media to features, setting chapter timestamps.
-**Why:** README "Planned." Replaces the current Supabase Studio + manual SQL workflow.
-**Depends on:** Auth setup (Supabase auth already exists via middleware/proxy).
+### Admin dashboard for content management (incl. map geometry editor)
+**What:** Internal-only UI for adding new media, linking media to features, setting chapter timestamps, AND a **map editor** to place/move/draw feature geometry directly on the map — edit existing markers and lines, and add new ones.
+**Why:** README "Planned." Replaces the current Supabase Studio + manual SQL workflow. The map editor is the hands-on path to fixing the missing-geometry gap (see "Backfill missing feature geometry") — draw the 179 earthworks + 4 stations + culverts in place instead of reconstructing WKT from plan documents.
+**Depends on:** Auth setup (Supabase auth already exists via middleware/proxy). For drawing, a MapLibre draw tool (e.g. mapbox-gl-draw / terra-draw) writing back to `features.geometry`.
 
 ## Low priority — defensive / quality
 
