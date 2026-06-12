@@ -233,6 +233,13 @@ export type Database = {
             referencedRelation: "creators"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "media_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creators_with_video_counts"
+            referencedColumns: ["id"]
+          },
         ]
       }
       media_features: {
@@ -297,6 +304,20 @@ export type Database = {
       }
     }
     Views: {
+      creators_with_video_counts: {
+        Row: {
+          bio: string | null
+          created_at: string | null
+          display_name: string | null
+          external_id: string | null
+          id: string | null
+          platform: string | null
+          profile_image_url: string | null
+          url: string | null
+          video_count: number | null
+        }
+        Relationships: []
+      }
       geography_columns: {
         Row: {
           coord_dimension: number | null
@@ -608,6 +629,25 @@ export type Database = {
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
       gettransactionid: { Args: never; Returns: unknown }
+      link_media_span:
+        | {
+            Args: {
+              p_end: string
+              p_media_id: string
+              p_route_prefix?: string
+              p_start: string
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_end: string
+              p_route_prefix?: string
+              p_start: string
+              p_youtube_id: string
+            }
+            Returns: number
+          }
       longtransactionsenabled: { Args: never; Returns: boolean }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
@@ -649,6 +689,8 @@ export type Database = {
       }
       postgis_version: { Args: never; Returns: string }
       postgis_wagyu_version: { Args: never; Returns: string }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       st_3dclosestpoint: {
         Args: { geom1: unknown; geom2: unknown }
         Returns: unknown
