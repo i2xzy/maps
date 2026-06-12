@@ -29,7 +29,7 @@ import Map, {
   type MapLayerMouseEvent,
   type LayerProps,
 } from 'react-map-gl/maplibre';
-import type { GeoJSONSource, StyleSpecification } from 'maplibre-gl';
+import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Box, Text } from '@chakra-ui/react';
 
@@ -41,12 +41,7 @@ import {
 import { usePersistedState } from '@/utils/use-persisted-state';
 import type { FeatureType, FeatureStatus } from '@supabase/types';
 import { featureStatuses } from '@/components/feature/config';
-import {
-  typeColorExpression,
-  MEDIA_COLOR,
-  CLUSTER_COLOR,
-  CLUSTER_TEXT_COLOR,
-} from '@/components/map/map-colors';
+import { typeColorExpression, MEDIA_COLOR } from '@/components/map/map-colors';
 import MapControlPanel, {
   type SearchResult,
   type VideoItem,
@@ -98,22 +93,20 @@ const BASEMAP_STYLE: Record<Basemap, string | StyleSpecification> = {
 // HS2 phase 1 corridor: London (SE) to Birmingham (NW).
 const INITIAL_VIEW = { longitude: -1.0, latitude: 52.0, zoom: 6.4 };
 
+// Videos are dense secondary data — keep them off until the user zooms into an
+// area. Features (the primary content) are always shown, unclustered.
+const VIDEO_MIN_ZOOM = 12;
+
 const L = {
-  featureClusters: 'feature-clusters',
-  featureClusterCount: 'feature-cluster-count',
-  featurePoints: 'feature-points-unclustered',
+  featurePoints: 'feature-points-markers',
   featureLines: 'feature-lines',
-  mediaClusters: 'media-clusters',
-  mediaClusterCount: 'media-cluster-count',
-  mediaPoints: 'media-points-unclustered',
+  mediaPoints: 'media-points-markers',
   mediaLines: 'media-lines',
 } as const;
 
 const INTERACTIVE_LAYERS = [
-  L.featureClusters,
   L.featurePoints,
   L.featureLines,
-  L.mediaClusters,
   L.mediaPoints,
   L.mediaLines,
 ];
@@ -135,35 +128,6 @@ type HoverInfo = {
 };
 
 const typeColor = typeColorExpression();
-
-const clusterLayer = (id: string, source: string, color: string): LayerProps => ({
-  id,
-  source,
-  type: 'circle',
-  filter: ['has', 'point_count'],
-  paint: {
-    'circle-color': color,
-    'circle-opacity': 0.85,
-    'circle-radius': ['step', ['get', 'point_count'], 14, 10, 18, 50, 24],
-    'circle-stroke-width': 2,
-    'circle-stroke-color': '#FFFFFF',
-  },
-});
-
-const clusterCountLayer = (id: string, source: string): LayerProps => ({
-  id,
-  source,
-  type: 'symbol',
-  filter: ['has', 'point_count'],
-  layout: {
-    'text-field': ['get', 'point_count_abbreviated'],
-    'text-size': 12,
-    // Pin the font so cluster counts render on both the street and the custom
-    // satellite style (each must resolve it against its glyphs endpoint).
-    'text-font': ['Noto Sans Regular'],
-  },
-  paint: { 'text-color': CLUSTER_TEXT_COLOR },
-});
 
 const featurePointLayer: LayerProps = {
   id: L.featurePoints,
@@ -206,6 +170,7 @@ const mediaPointLayer: LayerProps = {
   id: L.mediaPoints,
   source: 'media-points',
   type: 'circle',
+  minzoom: VIDEO_MIN_ZOOM,
   filter: ['!', ['has', 'point_count']],
   paint: {
     'circle-color': MEDIA_COLOR,
@@ -219,6 +184,7 @@ const mediaLineLayer: LayerProps = {
   id: L.mediaLines,
   source: 'media-lines',
   type: 'line',
+  minzoom: VIDEO_MIN_ZOOM,
   layout: { 'line-cap': 'round', 'line-join': 'round' },
   paint: { 'line-color': MEDIA_COLOR, 'line-width': 2, 'line-dasharray': [2, 1] },
 };
@@ -229,6 +195,7 @@ const mediaIconLayer: LayerProps = {
   id: 'media-points-icons',
   source: 'media-points',
   type: 'symbol',
+  minzoom: VIDEO_MIN_ZOOM,
   filter: ['!', ['has', 'point_count']],
   layout: {
     'icon-image': ['concat', SHOT_ICON_PREFIX, ['get', 'shot_type']],
@@ -470,25 +437,6 @@ export default function MapView({ features, media }: Props) {
       const layerId = feature.layer?.id;
       const props = feature.properties ?? {};
 
-      if (layerId === L.featureClusters || layerId === L.mediaClusters) {
-        const sourceId =
-          layerId === L.featureClusters ? 'feature-points' : 'media-points';
-        const map = mapRef.current;
-        const source = map?.getSource(sourceId) as GeoJSONSource | undefined;
-        const clusterId = props.cluster_id as number | undefined;
-        if (source && clusterId != null && feature.geometry.type === 'Point') {
-          const [longitude, latitude] = feature.geometry.coordinates as [
-            number,
-            number,
-          ];
-          source
-            .getClusterExpansionZoom(clusterId)
-            .then(zoom => map?.easeTo({ center: [longitude, latitude], zoom }))
-            .catch(() => undefined);
-        }
-        return;
-      }
-
       if (layerId === L.mediaPoints || layerId === L.mediaLines) {
         if (props.youtube_id && props.id) {
           setSelected(null);
@@ -609,30 +557,14 @@ export default function MapView({ features, media }: Props) {
           <Layer {...mediaLineLayer} />
         </Source>
 
-        {/* Clustered point layers. */}
-        <Source
-          id='feature-points'
-          type='geojson'
-          data={featureGeo.points}
-          cluster
-          clusterMaxZoom={12}
-          clusterRadius={45}
-        >
-          <Layer {...clusterLayer(L.featureClusters, 'feature-points', CLUSTER_COLOR)} />
-          <Layer {...clusterCountLayer(L.featureClusterCount, 'feature-points')} />
+        {/* Features: all shown individually (no clustering). */}
+        <Source id='feature-points' type='geojson' data={featureGeo.points}>
           <Layer {...featurePointLayer} />
           {iconsReady && <Layer {...featureIconLayer} />}
         </Source>
-        <Source
-          id='media-points'
-          type='geojson'
-          data={mediaGeo.points}
-          cluster
-          clusterMaxZoom={12}
-          clusterRadius={45}
-        >
-          <Layer {...clusterLayer(L.mediaClusters, 'media-points', MEDIA_COLOR)} />
-          <Layer {...clusterCountLayer(L.mediaClusterCount, 'media-points')} />
+        {/* Videos: unclustered, hidden until zoomed in (minzoom per layer) so
+            the point markers appear together with the flyover lines. */}
+        <Source id='media-points' type='geojson' data={mediaGeo.points}>
           <Layer {...mediaPointLayer} />
           {iconsReady && <Layer {...mediaIconLayer} />}
         </Source>
