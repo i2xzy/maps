@@ -10,6 +10,7 @@ import dynamic from 'next/dynamic';
 import { Center, Spinner } from '@chakra-ui/react';
 
 import type { GeoRow } from '@/utils/map-geojson';
+import type { Creator } from './MapView';
 
 const MapView = dynamic(() => import('./MapView'), {
   ssr: false,
@@ -20,6 +21,10 @@ const MapView = dynamic(() => import('./MapView'), {
   ),
 });
 
-export default function MapLoader(props: { features: GeoRow[]; media: GeoRow[] }) {
+export default function MapLoader(props: {
+  features: GeoRow[];
+  media: GeoRow[];
+  creators: Creator[];
+}) {
   return <MapView {...props} />;
 }

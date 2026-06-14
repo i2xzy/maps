@@ -68,7 +68,7 @@ async function fetchGeo(
 export default async function MapPage() {
   const supabase = await createClient();
 
-  const [features, media] = await Promise.all([
+  const [features, media, creatorsRes] = await Promise.all([
     fetchGeo(
       supabase,
       'features_geo',
@@ -77,13 +77,21 @@ export default async function MapPage() {
     fetchGeo(
       supabase,
       'media_geo',
-      'id,title,type,youtube_id,recorded_date,published_at,shot_type,geojson'
+      'id,title,type,youtube_id,recorded_date,published_at,shot_type,creator_id,geojson'
     ),
+    supabase.from('creators').select('id, display_name, colour, profile_image_url'),
   ]);
+
+  const creators = (creatorsRes.data ?? []).map(c => ({
+    id: c.id,
+    name: c.display_name,
+    color: c.colour,
+    imageUrl: c.profile_image_url,
+  }));
 
   return (
     <Box position='absolute' inset={0}>
-      <MapLoader features={features} media={media} />
+      <MapLoader features={features} media={media} creators={creators} />
     </Box>
   );
 }
