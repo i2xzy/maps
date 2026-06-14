@@ -17,6 +17,7 @@ export type Database = {
       creators: {
         Row: {
           bio: string | null
+          colour: string | null
           created_at: string | null
           display_name: string
           external_id: string
@@ -27,6 +28,7 @@ export type Database = {
         }
         Insert: {
           bio?: string | null
+          colour?: string | null
           created_at?: string | null
           display_name: string
           external_id: string
@@ -37,6 +39,7 @@ export type Database = {
         }
         Update: {
           bio?: string | null
+          colour?: string | null
           created_at?: string | null
           display_name?: string
           external_id?: string
