@@ -19,10 +19,44 @@ Decided AGAINST a schema migration to dedupe media. The `media` table is already
 **Why:** Already in README's "Planned Features." The per-marker `recorded_date` and feature links already exist in `media`; this is the rendering of that data, ordered chronologically.
 **Depends on:** Nothing structural — query `media` joined to `media_features` by feature, ordered by `recorded_date`.
 
-### Interactive map with route visualization
+### Interactive map with route visualization — IN PROGRESS (branch: feature/interactive-map)
 **What:** Replace the map placeholder under `(dashboard)/map` with a real interactive map. Render features as markers/lines, render media geometries (point or LINESTRING) as a second layer, deep-link each media marker to the feature page.
 **Why:** README "Planned." This is the headline feature the rest of the data model supports.
+**Status (2026-06-08):** Being built per `/plan-eng-review` plan (`~/.gstack/projects/i2xzy-maps/isaacraskin-HEAD-map-plan-20260608-222444.md`). Stack: MapLibre via react-map-gl, OpenFreeMap basemap, GeoJSON from `features_geo`/`media_geo` SQL views (`.context/map-views.sql`). Helper + Vitest + MapView + page done and building green. Remaining: run the SQL views in the Supabase dashboard, regen `database.ts`, then visual QA.
+**Open caveat:** the map page reads via the cookie-based server client, which forces dynamic rendering and makes `revalidate` (daily caching, decision D9) a no-op. To make caching real, read the two public views via a cookieless anon client.
 **Depends on:** `media.location` confirmed flexible (POINT + LINESTRING). Markers come straight from `media` rows — no migration needed.
+
+### Backfill missing feature geometry (stations, culverts, cuttings, embankments)
+**What:** Only **248 of 547 features have `geometry`**, so 299 never appear on the map. Full per-type gap (verified 2026-06-12 via `features` vs `features_geo`):
+
+| Type           | In DB | Mapped | Missing |
+|----------------|------:|-------:|--------:|
+| embankment     |   104 |      0 |     104 |
+| culvert        |    89 |      8 |      81 |
+| cutting        |    75 |      0 |      75 |
+| shaft          |    13 |      0 |      13 |
+| viaduct        |    57 |     45 |      12 |
+| tunnel         |     7 |      1 |       6 |
+| station        |     4 |      0 |       4 |
+| cut_and_cover  |     6 |      4 |       2 |
+| overbridge     |   149 |    147 |       2 |
+| underbridge    |    26 |     26 |       0 |
+| underpass      |    13 |     13 |       0 |
+| box_structure  |     4 |      4 |       0 |
+| **TOTAL**      | **547** | **248** | **299** |
+
+Bridges are nearly complete; the big gaps are all earthworks (embankment + cutting = 179), most culverts (81) and shafts (13), all stations (4), and notably **6 of 7 tunnels** and **12 viaducts** still missing.
+
+**Why:** The map can only render features that have coordinates, so whole categories (all stations, all earthworks) are invisible today — the "Stations 0 / Earthworks 0" filter counts are the symptom. Stations especially matter (Old Oak Common, Curzon Street, etc. should be on the map).
+
+**Origin (per Isaac):** Two causes — (1) most culverts (and shafts/stations) were never placed on the Google My Maps, so no point was ever imported; (2) linear features (cuttings, embankments, and many viaducts/tunnels) had segmented, inaccurate WKT in the source data that was deliberately NOT imported — they need accurate alignments.
+
+**How — two paths:**
+1. **Reconstruct from the plan documents** — use each feature's chainage (start + `chainage_end`) to derive points/lines along the route alignment. Accurate, but scripted/manual.
+2. **Wait for the in-app map editor** — add/move/draw markers and lines and place them by hand. Extends the "Admin dashboard for content management" TODO (which already lists "drawing LINESTRING geometries").
+
+**Depends on:** Path 1 — nothing (data work in Supabase). Path 2 — building the map-editing feature.
+**Verify after:** the filter counts for Stations / Earthworks / Other climb above 0 and the structures show on the map. No app change needed — `features_geo` + the filters already handle them once geometry exists.
 
 ### Timeline view of construction progress
 **What:** UI for scrubbing through time — see structure statuses at any given month from 2017 to projected completion.
@@ -42,12 +76,19 @@ Decided AGAINST a schema migration to dedupe media. The `media` table is already
 **Why:** README "Planned." The differentiating feature for "reference of record" framing.
 **Depends on:** Data source for HS2 Ltd plan dates — may require manual data entry.
 
-### Admin dashboard for content management
-**What:** Internal-only UI for adding new media, drawing LINESTRING geometries, linking media to features, setting chapter timestamps.
-**Why:** README "Planned." Replaces the current Supabase Studio + manual SQL workflow.
-**Depends on:** Auth setup (Supabase auth already exists via middleware/proxy).
+### Admin dashboard for content management (incl. map geometry editor)
+**What:** Internal-only UI for adding new media, linking media to features, setting chapter timestamps, AND a **map editor** to place/move/draw feature geometry directly on the map — edit existing markers and lines, and add new ones.
+**Why:** README "Planned." Replaces the current Supabase Studio + manual SQL workflow. The map editor is the hands-on path to fixing the missing-geometry gap (see "Backfill missing feature geometry") — draw the 179 earthworks + 4 stations + culverts in place instead of reconstructing WKT from plan documents.
+**Depends on:** Auth setup (Supabase auth already exists via middleware/proxy). For drawing, a MapLibre draw tool (e.g. mapbox-gl-draw / terra-draw) writing back to `features.geometry`.
 
 ## Low priority — defensive / quality
+
+### Custom feature-type marker icons on the map (GL sprites)
+**What:** Replace the map's status-colored circle markers with the real `FeatureIcon` set (tunnel, viaduct, station, etc.) by registering each as a MapLibre GL sprite image (`map.addImage`) and using a `symbol` layer with `icon-image` keyed off the feature `type`.
+**Why:** Visual parity with the rest of the site (every other page shows type icons) and faster at-a-glance reading of the map.
+**Cons / why deferred (decision D4):** GL sprites need raster/SDF images, but `FeatureIcon` is React/react-icons (SVG components). Converting each to a PNG/SDF, building a sprite sheet, and wiring `addImage` is disproportionate effort for v1, which ships colored clustered circles instead.
+**How to start:** Reuse the `featureTypes` config; render each icon to PNG (or generate an SDF sprite sheet) at build time; `map.addImage(type, img)`; swap the `feature-points-unclustered` circle layer for a symbol layer with `icon-image: ['get','type']`. Keep circles as the cluster representation.
+**Depends on:** The interactive map (feature/interactive-map) shipping first.
 
 ### Upgrade Chakra UI for React 19 / Next 16 (durable fix for Children.only crashes)
 **What:** We're on `@chakra-ui/react` 3.19.1; latest is 3.35.0. Chakra's `Children.only`-based components (`AspectRatio`, the `asChild` Slot, `LinkOverlay asChild`) throw `React.Children.only expected to receive a single React element child` during SSR when a **server component** passes a **client-component child** (Chakra `Image`, `next/link`) across the RSC boundary under React 19.
