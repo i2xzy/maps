@@ -4,12 +4,12 @@
  * The `features_geo` / `media_geo` Postgres views expose each row's geometry as
  * a parsed GeoJSON object in a `geojson` column (ST_AsGeoJSON(geom, 6)::json).
  * MapLibre wants those rows as two FeatureCollections per layer — one of points,
- * one of lines — because clustering is a point-source-only feature.
+ * one of lines — because point and line geometries drive different layer types.
  *
  *   view rows ({ geojson, ...props })
  *        │  partition by geometry type
- *        ├── Point             ─▶ points  FeatureCollection   (clustered)
- *        └── LineString / Multi ─▶ lines  FeatureCollection   (not clustered)
+ *        ├── Point             ─▶ points  FeatureCollection
+ *        └── LineString / Multi ─▶ lines  FeatureCollection
  *
  * Rows with null / malformed geometry are skipped, never thrown — a single bad
  * import row must not blank the whole layer.

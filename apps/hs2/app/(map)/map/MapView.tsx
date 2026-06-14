@@ -3,21 +3,21 @@
 /**
  * Interactive HS2 map workspace (client-only — MapLibre needs the browser).
  *
- *   props.features / props.media  (GeoJSON view rows)
- *        │  filter by layer/type/status  →  rowsToFeatureCollection
+ *   props.features / props.media / props.creators  (GeoJSON view rows)
+ *        │  filter by type/status/year/creator  →  rowsToFeatureCollection
  *        ▼
- *   4 sources ── feature-points (clustered) · feature-lines
- *             └─ media-points  (clustered) · media-lines
+ *   4 sources ── feature-points · feature-lines
+ *             └─ media-points  · media-lines   (videos revealed at zoom 12)
  *        │
- *   click ─┬─ cluster   → zoom to expansion
- *          ├─ feature   → open detail panel (info + related media + link)
- *          └─ media     → /media/[id]
- *   hover ─── point marker → subtle glow (feature-state, no re-render)
+ *   click ─┬─ feature → open detail panel (info + related media + link)
+ *          └─ media   → open video detail panel
+ *   hover ─── marker → glow + lift · line → white casing (feature-state)
  *   search ─ pick result → fly to it + open detail panel
  *
- * Overlay UI (MapControlPanel / FeatureDetailPanel / MapLegend) floats over a
- * full-bleed map. Loaded via next/dynamic({ ssr:false }) so MapLibre never runs
- * server-side (the Children.only/SSR crash class from the Next 16 upgrade).
+ * Overlay UI (MapControlPanel / FeatureDetailPanel / MediaDetailPanel) floats
+ * over a full-bleed map. Loaded via next/dynamic({ ssr:false }) so MapLibre
+ * never runs server-side (the Children.only/SSR crash class from the Next 16
+ * upgrade).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Map, {
@@ -74,7 +74,7 @@ export type Basemap = 'streets' | 'satellite';
 const STREETS_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 
 // Esri World Imagery — free aerial tiles, no key. Reuse OpenFreeMap's glyphs so
-// the cluster-count labels render on this style too.
+// any symbol text layers render on this style too.
 const SATELLITE_STYLE: StyleSpecification = {
   version: 8,
   glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
@@ -349,9 +349,8 @@ export default function MapView({ features, media, creators }: Props) {
   // Restore the camera from the URL on first render (falls back to the corridor).
   const initialView = useMemo(() => loadViewFromUrl() ?? INITIAL_VIEW, []);
 
-  // Features: filtered by type/status. Re-clustering happens automatically when
-  // the source data changes (a layer `filter` would leave clusters counting
-  // hidden points).
+  // Features: filtered by type/status at the source (rebuilding the GeoJSON)
+  // rather than via a layer `filter`, so hidden rows are truly absent.
   const featureGeo = useMemo(() => {
     const rows = features.filter(
       r =>
@@ -466,7 +465,7 @@ export default function MapView({ features, media, creators }: Props) {
         videoRows.filter(
           r =>
             !hiddenYears.has(yearOf(r)) &&
-            !hiddenCreators.has(String(r.creator_id))
+            !hiddenCreators.has(r.creator_id ? String(r.creator_id) : '')
         )
       ),
     [videoRows, hiddenYears, hiddenCreators]
@@ -543,56 +542,70 @@ export default function MapView({ features, media, creators }: Props) {
     const map = mapRef.current?.getMap();
     if (!map) return;
     loadCombinedMarkerIcons(map, neededCombos)
+      // Mark ready even on failure: a sprite error must not leave the video
+      // markers (and the hover overlays gated on this flag) permanently hidden.
       .then(() => setCombinedReady(true))
-      .catch(() => undefined);
+      .catch(() => setCombinedReady(true));
   }, [neededCombos]);
 
+  // These layers wrap memoised expressions; useMemo keeps their object identity
+  // stable so react-map-gl doesn't re-diff paint/layout on unrelated renders.
+
   // Single combined sprite per marker → markers occlude as whole units.
-  const mediaMarkerLayer: LayerProps = {
-    id: L.mediaPoints,
-    source: 'media-points',
-    type: 'symbol',
-    minzoom: VIDEO_MIN_ZOOM,
-    filter: ['!', ['has', 'point_count']],
-    layout: {
-      'icon-image': markerImageExpr,
-      'icon-size': MARKER_ICON_SIZE,
-      'icon-allow-overlap': true,
-      'icon-ignore-placement': true,
-    },
-  };
+  const mediaMarkerLayer = useMemo<LayerProps>(
+    () => ({
+      id: L.mediaPoints,
+      source: 'media-points',
+      type: 'symbol',
+      minzoom: VIDEO_MIN_ZOOM,
+      filter: ['!', ['has', 'point_count']],
+      layout: {
+        'icon-image': markerImageExpr,
+        'icon-size': MARKER_ICON_SIZE,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+    }),
+    [markerImageExpr]
+  );
 
   // Hover lift for video markers — same sprite, same size, on top of all other
   // markers, faded in only when hovered (see featureRaiseLayer for the why).
-  const mediaRaiseLayer: LayerProps = {
-    id: 'media-points-raise',
-    source: 'media-points',
-    type: 'symbol',
-    minzoom: VIDEO_MIN_ZOOM,
-    filter: ['!', ['has', 'point_count']],
-    layout: {
-      'icon-image': markerImageExpr,
-      'icon-size': MARKER_ICON_SIZE,
-      'icon-allow-overlap': true,
-      'icon-ignore-placement': true,
-    },
-    paint: {
-      'icon-opacity': ['case', isHovered, 1, 0],
-      'icon-opacity-transition': HOVER_FADE,
-    },
-  };
+  const mediaRaiseLayer = useMemo<LayerProps>(
+    () => ({
+      id: 'media-points-raise',
+      source: 'media-points',
+      type: 'symbol',
+      minzoom: VIDEO_MIN_ZOOM,
+      filter: ['!', ['has', 'point_count']],
+      layout: {
+        'icon-image': markerImageExpr,
+        'icon-size': MARKER_ICON_SIZE,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+      paint: {
+        'icon-opacity': ['case', isHovered, 1, 0],
+        'icon-opacity-transition': HOVER_FADE,
+      },
+    }),
+    [markerImageExpr]
+  );
 
-  const mediaLineLayer: LayerProps = {
-    id: L.mediaLines,
-    source: 'media-lines',
-    type: 'line',
-    minzoom: VIDEO_MIN_ZOOM,
-    layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: {
-      'line-color': creatorColorExpr,
-      'line-width': 2,
-    },
-  };
+  const mediaLineLayer = useMemo<LayerProps>(
+    () => ({
+      id: L.mediaLines,
+      source: 'media-lines',
+      type: 'line',
+      minzoom: VIDEO_MIN_ZOOM,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': creatorColorExpr,
+        'line-width': 2,
+      },
+    }),
+    [creatorColorExpr]
+  );
 
   const toResult = useCallback((r: GeoRow): SearchResult | null => {
     const center = representativePoint(r.geojson);
@@ -780,13 +793,23 @@ export default function MapView({ features, media, creators }: Props) {
     hoveredRef.current = null;
   }, []);
 
+  // Clear the hover highlight whenever the source data changes (filter/creator
+  // toggle). The cursor may be sitting still over a marker, so no mouseleave
+  // fires — without this the glow/lift stays stuck on a now-removed feature id.
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    const prev = hoveredRef.current;
+    if (map && prev) map.setFeatureState(prev, { hover: false });
+    hoveredRef.current = null;
+  }, [featureGeo, mediaGeo]);
+
   const onLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
     if (!map) return;
     const addCombined = () =>
       loadCombinedMarkerIcons(map, combosRef.current)
         .then(() => setCombinedReady(true))
-        .catch(() => undefined);
+        .catch(() => setCombinedReady(true));
     loadTypeIcons(map)
       .then(() => setIconsReady(true))
       .catch(() => undefined);

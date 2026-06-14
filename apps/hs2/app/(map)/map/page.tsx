@@ -72,7 +72,7 @@ export default async function MapPage() {
     fetchGeo(
       supabase,
       'features_geo',
-      'id,name,type,status,chainage,chainage_end,route_element_id,geojson'
+      'id,name,type,status,chainage,geojson'
     ),
     fetchGeo(
       supabase,

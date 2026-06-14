@@ -5,10 +5,10 @@
  * `featureTypes` / `featureStatuses` config uses Chakra design tokens
  * (`purple.500`, `fg`, ...) which MapLibre can't read. This module is the
  * map-only translation of those tokens to hex, plus the data-driven
- * expression that colours markers/lines by construction status.
+ * expression that colours markers/lines by feature type.
  */
 import type { ExpressionSpecification } from 'maplibre-gl';
-import type { FeatureStatus, FeatureType } from '@supabase/types';
+import type { FeatureType } from '@supabase/types';
 
 /**
  * Feature type -> hex, mirroring the Chakra tokens in featureTypes (config.ts).
@@ -33,46 +33,8 @@ export const TYPE_COLORS: Record<FeatureType, string> = {
 /** Fallback for rows with an unknown/missing type. */
 export const TYPE_FALLBACK = '#718096';
 
-/** Construction status -> hex, mirroring featureStatuses colours in config.ts. */
-export const STATUS_COLORS: Record<NonNullable<FeatureStatus>, string> = {
-  NOT_STARTED: '#C53030',
-  PREP_WORK: '#E53E3E',
-  FOUNDATIONS: '#B7791F',
-  DIGGING: '#D69E2E',
-  SEGMENT_INSTALLATION: '#3182CE',
-  PIERS: '#3182CE',
-  SIDE_TUNNELS: '#3182CE',
-  DECK: '#3182CE',
-  PARAPET: '#2B6CB0',
-  SURFACE_BUILDINGS: '#2B6CB0',
-  LANDSCAPING: '#38A169',
-  CIVILS: '#38A169',
-  COMPLETED: '#2F855A',
-};
-
-/** Fallback for rows with no/unknown status. */
-export const STATUS_FALLBACK = '#718096';
-
-/** Default video-marker colour — neutral grey for creators outside the top N. */
+/** Default video-marker colour — neutral grey for creators with no stored colour. */
 export const DEFAULT_MEDIA_COLOR = '#94A3B8';
-
-/** Cluster bubble + count colours. */
-export const CLUSTER_COLOR = '#2D3748';
-export const CLUSTER_TEXT_COLOR = '#FFFFFF';
-
-/**
- * MapLibre `match` expression: colour a feature by its `status` property,
- * falling back to grey. Used for both the unclustered point and line layers.
- */
-export function statusColorExpression(): ExpressionSpecification {
-  const pairs = Object.entries(STATUS_COLORS).flat();
-  return [
-    'match',
-    ['get', 'status'],
-    ...pairs,
-    STATUS_FALLBACK,
-  ] as unknown as ExpressionSpecification;
-}
 
 /**
  * MapLibre `match` expression: colour a feature by its `type` property,

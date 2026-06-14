@@ -68,24 +68,31 @@ export default function MediaDetailPanel({
       .from('media')
       .select('media_features ( features ( id, name, type ) )')
       .eq('youtube_id', video.youtubeId)
-      .then(({ data }) => {
-        if (cancelled) return;
-        const rows = (data ?? []) as unknown as {
-          media_features: { features: LinkedFeature | null }[] | null;
-        }[];
-        const seen = new Set<string>();
-        const features: LinkedFeature[] = [];
-        for (const row of rows) {
-          for (const mf of row.media_features ?? []) {
-            const f = mf.features;
-            if (f && !seen.has(f.id)) {
-              seen.add(f.id);
-              features.push(f);
+      .then(
+        ({ data }) => {
+          if (cancelled) return;
+          const rows = (data ?? []) as unknown as {
+            media_features: { features: LinkedFeature | null }[] | null;
+          }[];
+          const seen = new Set<string>();
+          const features: LinkedFeature[] = [];
+          for (const row of rows) {
+            for (const mf of row.media_features ?? []) {
+              const f = mf.features;
+              if (f && !seen.has(f.id)) {
+                seen.add(f.id);
+                features.push(f);
+              }
             }
           }
+          setResult({ forId: video.id, features });
+        },
+        // On a network failure the promise rejects; resolve to an empty list so
+        // the panel shows "No linked structures" instead of spinning forever.
+        () => {
+          if (!cancelled) setResult({ forId: video.id, features: [] });
         }
-        setResult({ forId: video.id, features });
-      });
+      );
 
     return () => {
       cancelled = true;
