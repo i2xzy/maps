@@ -17,14 +17,17 @@ import {
   Image,
   Spinner,
   IconButton,
+  Avatar,
   Link as ChakraLink,
 } from '@chakra-ui/react';
 import Link from 'next/link';
-import { LuX, LuExternalLink } from 'react-icons/lu';
+import { LuX } from 'react-icons/lu';
+import { FaYoutube } from 'react-icons/fa6';
 
 import { createClient } from '@supabase/client';
 import type { FeatureType } from '@supabase/types';
 import { formatDate } from '@ui/helpers/date-formatting';
+import { getInitials } from '@ui/helpers/text-formatting';
 import { FeatureIcon } from '@/components/feature/feature-icon';
 import { getFeatureHref } from '@/utils/feature-routing';
 import { ShotTypeIcon, shotTypeLabel } from '@/components/map/shot-type-config';
@@ -37,6 +40,9 @@ export type SelectedVideo = {
   recordedDate: string | null;
   publishedDate: string | null;
   shotType: string | null;
+  creator: string | null;
+  creatorId: string | null;
+  creatorImage: string | null;
 };
 
 type LinkedFeature = { id: string; name: string; type: FeatureType };
@@ -124,24 +130,60 @@ export default function MediaDetailPanel({
           </Link>
         </ChakraLink>
 
-        <HStack gap={3} color='fg.muted' fontSize='sm'>
-          {video.recordedDate ? (
+        {video.creator && (
+          <HStack gap={2}>
+            <Avatar.Root size='xs'>
+              <Avatar.Fallback name={video.creator}>
+                {getInitials(video.creator)}
+              </Avatar.Fallback>
+              {video.creatorImage && (
+                <Avatar.Image
+                  src={video.creatorImage}
+                  referrerPolicy='no-referrer'
+                />
+              )}
+            </Avatar.Root>
+            {video.creatorId ? (
+              <ChakraLink asChild fontSize='sm' fontWeight='medium' color='blue.400'>
+                <Link href={`/creators/${video.creatorId}`}>{video.creator}</Link>
+              </ChakraLink>
+            ) : (
+              <Text fontSize='sm' fontWeight='medium'>
+                {video.creator}
+              </Text>
+            )}
+          </HStack>
+        )}
+
+        <Stack gap={1} color='fg.muted' fontSize='sm'>
+          {video.recordedDate && (
             <Text>Recorded {formatDate(video.recordedDate)}</Text>
-          ) : video.publishedDate ? (
-            <Text>Published {formatDate(video.publishedDate)}</Text>
-          ) : null}
+          )}
+          {video.publishedDate &&
+            video.publishedDate !== video.recordedDate && (
+              <Text>Published {formatDate(video.publishedDate)}</Text>
+            )}
           {video.shotType && (
             <HStack gap={1}>
               <ShotTypeIcon shotType={video.shotType} color='fg.muted' />
               <Text>{shotTypeLabel(video.shotType)}</Text>
             </HStack>
           )}
-        </HStack>
+        </Stack>
 
-        <Button asChild size='sm' variant='outline'>
-          <Link href={`/media/${video.id}`}>
-            Open video page <LuExternalLink />
-          </Link>
+        {/* The thumbnail already opens the internal video page; this button is
+            the explicit jump out to YouTube (new tab). */}
+        <Button colorPalette='red' size='sm' asChild>
+          <a
+            href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
+            target='_blank'
+            rel='noopener noreferrer'
+          >
+            <FaYoutube />
+            <Text as='span' fontWeight='bold'>
+              Open in YouTube
+            </Text>
+          </a>
         </Button>
 
         <Box>
