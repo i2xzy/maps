@@ -20,12 +20,15 @@ import {
   Wrap,
   Checkbox,
   Tabs,
+  Input,
+  InputGroup,
 } from '@chakra-ui/react';
 import {
   LuPanelLeftClose,
   LuPanelLeftOpen,
   LuChevronDown,
   LuChevronRight,
+  LuSearch,
 } from 'react-icons/lu';
 
 import type { FeatureType, FeatureStatus } from '@supabase/types';
@@ -49,11 +52,18 @@ export type VideoItem = {
   recordedDate: string | null;
   publishedDate: string | null;
   shotType: string | null;
+  creatorId: string | null;
   year: string;
   center: [number, number];
 };
 
 export type YearGroup = { year: string; count: number };
+export type CreatorGroup = {
+  id: string;
+  name: string;
+  color: string;
+  count: number;
+};
 
 type Props = {
   collapsed: boolean;
@@ -76,6 +86,11 @@ type Props = {
   onToggleYear: (year: string) => void;
   videos: VideoItem[];
   onSelectVideo: (v: VideoItem) => void;
+
+  // Creators tab
+  creators: CreatorGroup[];
+  hiddenCreators: Set<string>;
+  onToggleCreator: (id: string) => void;
 };
 
 // Type chips grouped into one toggle per category (no subtypes).
@@ -114,6 +129,7 @@ const SectionLabel = ({ children }: { children: React.ReactNode }) => (
 
 export default function MapControlPanel(props: Props) {
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [creatorQuery, setCreatorQuery] = useState('');
 
   if (props.collapsed) {
     return (
@@ -141,6 +157,12 @@ export default function MapControlPanel(props: Props) {
     if (arr) arr.push(v);
     else videosByYear.set(v.year, [v]);
   }
+
+  // Creator list filtered by the in-tab search.
+  const cq = creatorQuery.trim().toLowerCase();
+  const creatorsFiltered = cq
+    ? props.creators.filter(c => c.name.toLowerCase().includes(cq))
+    : props.creators;
 
   // Number of fully-hidden categories + bands, for the "N hidden" badge.
   const totalHidden =
@@ -187,6 +209,7 @@ export default function MapControlPanel(props: Props) {
         <Tabs.List px={4}>
           <Tabs.Trigger value='features'>Features</Tabs.Trigger>
           <Tabs.Trigger value='videos'>Videos</Tabs.Trigger>
+          <Tabs.Trigger value='creators'>Creators</Tabs.Trigger>
         </Tabs.List>
 
         {/* FEATURES TAB */}
@@ -399,6 +422,62 @@ export default function MapControlPanel(props: Props) {
                     </Box>
                   );
                 })
+              )}
+            </Stack>
+          </Stack>
+        </Tabs.Content>
+
+        {/* CREATORS TAB */}
+        <Tabs.Content
+          value='creators'
+          display='flex'
+          flexDirection='column'
+          minH='0'
+          flex='1'
+          px={4}
+          pb={4}
+        >
+          <Stack gap={3} minH='0' flex='1'>
+            <InputGroup startElement={<LuSearch />}>
+              <Input
+                size='sm'
+                placeholder='Search creators'
+                value={creatorQuery}
+                onChange={e => setCreatorQuery(e.target.value)}
+              />
+            </InputGroup>
+            <Stack gap={1} minH='0' flex='1' overflowY='auto' css={thinScrollbar}>
+              {creatorsFiltered.length === 0 ? (
+                <Text fontSize='sm' color='fg.muted' px={1} py={2}>
+                  No creators match.
+                </Text>
+              ) : (
+                creatorsFiltered.map(c => (
+                  <Checkbox.Root
+                    key={c.id}
+                    size='sm'
+                    checked={!props.hiddenCreators.has(c.id)}
+                    onCheckedChange={() => props.onToggleCreator(c.id)}
+                  >
+                    <Checkbox.HiddenInput />
+                    <Checkbox.Control />
+                    <Box
+                      w='10px'
+                      h='10px'
+                      borderRadius='full'
+                      bg={c.color}
+                      borderWidth='1px'
+                      borderColor='whiteAlpha.700'
+                      flexShrink={0}
+                    />
+                    <Checkbox.Label flex='1' fontWeight='normal' lineClamp={1}>
+                      {c.name}
+                    </Checkbox.Label>
+                    <Text fontSize='xs' color='fg.muted'>
+                      {c.count}
+                    </Text>
+                  </Checkbox.Root>
+                ))
               )}
             </Stack>
           </Stack>

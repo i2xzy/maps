@@ -14,11 +14,11 @@ import type { Map as MlMap } from 'maplibre-gl';
 
 import type { FeatureType } from '@supabase/types';
 import { featureTypes } from '@/components/feature/config';
-import { TYPE_COLORS, MEDIA_COLOR } from './map-colors';
+import { TYPE_COLORS } from './map-colors';
 import { shotTypes, type ShotType } from './shot-type-config';
 
 export const ICON_PREFIX = 'type-';
-export const SHOT_ICON_PREFIX = 'shot-';
+export const COMBINED_PREFIX = 'cmb-';
 
 const LOGICAL = 44; // pin size in logical px
 const DPR = 2; // rasterise at 2x for crisp retina sprites
@@ -96,27 +96,38 @@ export async function loadTypeIcons(map: MlMap): Promise<void> {
   );
 }
 
+export type MarkerCombo = { group: string; shot: string; color: string };
+
 /**
- * Register a teal pin sprite per shot type for the video markers — same pin
- * shape as features but in the media colour, so videos stay visually distinct
- * while a drone clip, ground clip, vehicle pass, etc. read differently.
- * Idempotent; re-runnable after a style switch.
+ * Register a combined video-marker sprite per (colour group × shot type): a
+ * coloured circle (the group's colour) with the shot-type's white glyph baked
+ * in. Because each marker is then a SINGLE sprite, markers occlude each other
+ * as whole units (a front marker hides the one behind), unlike a separate
+ * circle+glyph layer pair. Pass only the combos that actually occur in the data
+ * (group = a creator id or 'default') so we don't rasterise hundreds of unused
+ * combinations on load. Idempotent; re-runnable after a style switch.
  */
-export async function loadShotTypeIcons(map: MlMap): Promise<void> {
-  const types = Object.keys(shotTypes) as ShotType[];
-  await Promise.all(
-    types.map(async t => {
-      const id = `${SHOT_ICON_PREFIX}${t}`;
-      if (map.hasImage(id)) return;
-      try {
-        const glyph = glyphFromIcon(
-          shotTypes[t].icon as ComponentType<Record<string, unknown>>
-        );
-        const img = await svgToImage(wrapPin(MEDIA_COLOR, glyph));
-        if (!map.hasImage(id)) map.addImage(id, img, { pixelRatio: DPR });
-      } catch {
-        /* skip a single bad icon; the circle layer is the fallback */
-      }
-    })
-  );
+export async function loadCombinedMarkerIcons(
+  map: MlMap,
+  combos: MarkerCombo[]
+): Promise<void> {
+  const jobs: Promise<void>[] = [];
+  for (const { group, shot, color } of combos) {
+    const id = `${COMBINED_PREFIX}${group}-${shot}`;
+    if (map.hasImage(id)) continue;
+    const icon = shotTypes[shot as ShotType]?.icon;
+    if (!icon) continue;
+    jobs.push(
+      (async () => {
+        try {
+          const glyph = glyphFromIcon(icon as ComponentType<Record<string, unknown>>);
+          const img = await svgToImage(wrapPin(color, glyph));
+          if (!map.hasImage(id)) map.addImage(id, img, { pixelRatio: DPR });
+        } catch {
+          /* skip a single bad combo */
+        }
+      })()
+    );
+  }
+  await Promise.all(jobs);
 }

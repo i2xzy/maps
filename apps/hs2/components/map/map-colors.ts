@@ -53,8 +53,8 @@ export const STATUS_COLORS: Record<NonNullable<FeatureStatus>, string> = {
 /** Fallback for rows with no/unknown status. */
 export const STATUS_FALLBACK = '#718096';
 
-/** Media layer colour (teal) — visually distinct from status-coloured features. */
-export const MEDIA_COLOR = '#0BC5EA';
+/** Default video-marker colour — neutral grey for creators outside the top N. */
+export const DEFAULT_MEDIA_COLOR = '#94A3B8';
 
 /** Cluster bubble + count colours. */
 export const CLUSTER_COLOR = '#2D3748';
