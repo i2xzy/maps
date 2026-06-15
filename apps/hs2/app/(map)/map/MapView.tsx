@@ -34,7 +34,7 @@ import type {
   CircleLayerSpecification,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Box, Text } from '@chakra-ui/react';
+import { Box, Center, Text } from '@chakra-ui/react';
 
 import {
   rowsToFeatureCollection,
@@ -833,7 +833,7 @@ export default function MapView({ features, media, creators }: Props) {
 
   if (failed) {
     return (
-      <Box position='absolute' inset={0} display='flex' alignItems='center' justifyContent='center' p={6}>
+      <Center position='absolute' inset={0} p={6}>
         <Box textAlign='center' maxW='sm'>
           <Text fontWeight='semibold' mb={2}>
             Map unavailable
@@ -843,7 +843,7 @@ export default function MapView({ features, media, creators }: Props) {
             basemap service is temporarily unreachable.
           </Text>
         </Box>
-      </Box>
+      </Center>
     );
   }
 

@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import {
   Box,
+  Circle,
   Stack,
   HStack,
   Text,
@@ -461,10 +462,8 @@ export default function MapControlPanel(props: Props) {
                   >
                     <Checkbox.HiddenInput />
                     <Checkbox.Control />
-                    <Box
-                      w='10px'
-                      h='10px'
-                      borderRadius='full'
+                    <Circle
+                      size='10px'
                       bg={c.color}
                       borderWidth='1px'
                       borderColor='whiteAlpha.700'
