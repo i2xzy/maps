@@ -302,54 +302,6 @@ export type Database = {
           },
         ]
       }
-      media_import_staging: {
-        Row: {
-          channel: string | null
-          description: string | null
-          geometry_kind: string | null
-          location_wkt: string | null
-          published_at: string | null
-          published_raw: string | null
-          recorded_date: string | null
-          recorded_raw: string | null
-          shot_type: string | null
-          title: string | null
-          type: string | null
-          url: string
-          youtube_id: string | null
-        }
-        Insert: {
-          channel?: string | null
-          description?: string | null
-          geometry_kind?: string | null
-          location_wkt?: string | null
-          published_at?: string | null
-          published_raw?: string | null
-          recorded_date?: string | null
-          recorded_raw?: string | null
-          shot_type?: string | null
-          title?: string | null
-          type?: string | null
-          url: string
-          youtube_id?: string | null
-        }
-        Update: {
-          channel?: string | null
-          description?: string | null
-          geometry_kind?: string | null
-          location_wkt?: string | null
-          published_at?: string | null
-          published_raw?: string | null
-          recorded_date?: string | null
-          recorded_raw?: string | null
-          shot_type?: string | null
-          title?: string | null
-          type?: string | null
-          url?: string
-          youtube_id?: string | null
-        }
-        Relationships: []
-      }
       spatial_ref_sys: {
         Row: {
           auth_name: string | null
