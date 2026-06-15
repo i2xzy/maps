@@ -7,7 +7,7 @@
  * Self-contained — owns its own query/open state.
  */
 import { useState } from 'react';
-import { Box, Input, InputGroup, HStack, Text } from '@chakra-ui/react';
+import { Box, Card, Input, InputGroup, HStack, Text } from '@chakra-ui/react';
 import { LuSearch } from 'react-icons/lu';
 
 import { FeatureIcon } from '@/components/feature/feature-icon';
@@ -47,7 +47,7 @@ export default function MapSearch({
       w={{ base: 'calc(100% - 68px)', sm: '380px' }}
       zIndex={5}
     >
-      <Box bg='bg.panel' borderRadius='lg' shadow='lg' borderWidth='1px' borderColor='border'>
+      <Card.Root variant='elevated' borderRadius='lg'>
         <InputGroup startElement={<LuSearch />}>
           <Input
             size='md'
@@ -68,16 +68,13 @@ export default function MapSearch({
             }}
           />
         </InputGroup>
-      </Box>
+      </Card.Root>
 
       {open && q && (
-        <Box
+        <Card.Root
           mt={1}
-          bg='bg.panel'
+          variant='elevated'
           borderRadius='lg'
-          shadow='lg'
-          borderWidth='1px'
-          borderColor='border'
           maxH='320px'
           overflowY='auto'
           py={1}
@@ -108,7 +105,7 @@ export default function MapSearch({
               </HStack>
             ))
           )}
-        </Box>
+        </Card.Root>
       )}
     </Box>
   );

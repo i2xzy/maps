@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import {
   Box,
+  Card,
   Circle,
   Stack,
   HStack,
@@ -173,7 +174,7 @@ export default function MapControlPanel(props: Props) {
       .length;
 
   return (
-    <Box
+    <Card.Root
       position='absolute'
       top={3}
       left={3}
@@ -181,11 +182,8 @@ export default function MapControlPanel(props: Props) {
       maxH='calc(100% - 24px)'
       display='flex'
       flexDirection='column'
-      bg='bg.panel'
-      borderWidth='1px'
-      borderColor='border'
+      variant='elevated'
       borderRadius='lg'
-      shadow='lg'
     >
       <HStack justify='space-between' px={4} pt={3}>
         <Heading size='sm'>Explore the map</Heading>
@@ -482,6 +480,6 @@ export default function MapControlPanel(props: Props) {
           </Stack>
         </Tabs.Content>
       </Tabs.Root>
-    </Box>
+    </Card.Root>
   );
 }

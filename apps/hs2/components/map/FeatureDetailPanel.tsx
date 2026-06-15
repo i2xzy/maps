@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import {
   Box,
+  Card,
   Stack,
   HStack,
   Heading,
@@ -106,7 +107,7 @@ export default function FeatureDetailPanel({
   const statusConfig = status ? featureStatuses[status] : null;
 
   return (
-    <Box
+    <Card.Root
       position='absolute'
       top={3}
       right={3}
@@ -114,11 +115,8 @@ export default function FeatureDetailPanel({
       maxH='calc(100% - 24px)'
       overflowY='auto'
       css={thinScrollbar}
-      bg='bg.panel'
-      borderWidth='1px'
-      borderColor='border'
+      variant='elevated'
       borderRadius='lg'
-      shadow='lg'
       p={4}
     >
       <Stack gap={3}>
@@ -205,6 +203,6 @@ export default function FeatureDetailPanel({
           )}
         </Box>
       </Stack>
-    </Box>
+    </Card.Root>
   );
 }
