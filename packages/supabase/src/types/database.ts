@@ -302,6 +302,54 @@ export type Database = {
           },
         ]
       }
+      media_import_staging: {
+        Row: {
+          channel: string | null
+          description: string | null
+          geometry_kind: string | null
+          location_wkt: string | null
+          published_at: string | null
+          published_raw: string | null
+          recorded_date: string | null
+          recorded_raw: string | null
+          shot_type: string | null
+          title: string | null
+          type: string | null
+          url: string
+          youtube_id: string | null
+        }
+        Insert: {
+          channel?: string | null
+          description?: string | null
+          geometry_kind?: string | null
+          location_wkt?: string | null
+          published_at?: string | null
+          published_raw?: string | null
+          recorded_date?: string | null
+          recorded_raw?: string | null
+          shot_type?: string | null
+          title?: string | null
+          type?: string | null
+          url: string
+          youtube_id?: string | null
+        }
+        Update: {
+          channel?: string | null
+          description?: string | null
+          geometry_kind?: string | null
+          location_wkt?: string | null
+          published_at?: string | null
+          published_raw?: string | null
+          recorded_date?: string | null
+          recorded_raw?: string | null
+          shot_type?: string | null
+          title?: string | null
+          type?: string | null
+          url?: string
+          youtube_id?: string | null
+        }
+        Relationships: []
+      }
       spatial_ref_sys: {
         Row: {
           auth_name: string | null
@@ -419,6 +467,7 @@ export type Database = {
       }
       media_geo: {
         Row: {
+          creator_id: string | null
           geojson: Json | null
           id: string | null
           published_at: string | null
@@ -429,6 +478,7 @@ export type Database = {
           youtube_id: string | null
         }
         Insert: {
+          creator_id?: string | null
           geojson?: never
           id?: string | null
           published_at?: string | null
@@ -439,6 +489,7 @@ export type Database = {
           youtube_id?: string | null
         }
         Update: {
+          creator_id?: string | null
           geojson?: never
           id?: string | null
           published_at?: string | null
@@ -448,7 +499,22 @@ export type Database = {
           type?: Database["public"]["Enums"]["media_type"] | null
           youtube_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "media_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creators_with_video_counts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
@@ -620,6 +686,7 @@ export type Database = {
         | { Args: { table_name: string }; Returns: string }
       enablelongtransactions: { Args: never; Returns: string }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      features_geo_all: { Args: never; Returns: Json }
       geometry: { Args: { "": string }; Returns: unknown }
       geometry_above: {
         Args: { geom1: unknown; geom2: unknown }
@@ -729,6 +796,7 @@ export type Database = {
         Returns: number
       }
       longtransactionsenabled: { Args: never; Returns: boolean }
+      media_geo_all: { Args: never; Returns: Json }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
         | { Args: { use_typmod?: boolean }; Returns: string }
