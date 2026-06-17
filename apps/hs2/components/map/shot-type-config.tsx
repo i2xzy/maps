@@ -10,13 +10,13 @@ import { Icon } from '@chakra-ui/react';
 import type { IconType } from 'react-icons';
 import {
   LuVideo,
-  LuBinoculars,
   LuCar,
   LuPlane,
   LuTowerControl,
   LuPencilRuler,
 } from 'react-icons/lu';
 import { TbDrone } from 'react-icons/tb';
+import { MakiViewpoint } from '@/components/icons/maki-viewpoint';
 
 export type ShotType =
   | 'drone'
@@ -29,7 +29,7 @@ export type ShotType =
 
 export const shotTypes: Record<ShotType, { label: string; icon: IconType }> = {
   drone: { label: 'Drone', icon: TbDrone },
-  ground: { label: 'Ground', icon: LuBinoculars },
+  ground: { label: 'Ground', icon: MakiViewpoint },
   vehicle: { label: 'Vehicle', icon: LuCar },
   aircraft: { label: 'Aircraft', icon: LuPlane },
   elevated: { label: 'Elevated', icon: LuTowerControl },
