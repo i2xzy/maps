@@ -58,7 +58,9 @@ export function asGeometry(value: unknown): MapGeometry | null {
   if (!value || typeof value !== 'object') return null;
   const g = value as { type?: unknown; coordinates?: unknown };
   if (typeof g.type !== 'string') return null;
-  if (g.coordinates == null) return null;
+  // Coordinates must be an array — a malformed payload (null, object, scalar)
+  // would otherwise pass through and break the MapLibre layer at render.
+  if (!Array.isArray(g.coordinates)) return null;
   return value as MapGeometry;
 }
 
@@ -120,7 +122,8 @@ export function representativePoint(
     return mid && mid.length >= 2 ? [mid[0]!, mid[1]!] : null;
   }
   if (g.type === 'MultiLineString') {
-    const line = (g.coordinates as number[][][])[0];
+    // First non-empty segment (segment 0 may be empty in malformed data).
+    const line = (g.coordinates as number[][][]).find(l => l.length > 0);
     const mid = line?.[Math.floor(line.length / 2)];
     return mid && mid.length >= 2 ? [mid[0]!, mid[1]!] : null;
   }

@@ -10,7 +10,7 @@ export function usePersistedState<T>(
   key: string,
   initial: T
 ): [T, (v: T) => void] {
-  const [value, setValue] = useState<T>(() => {
+  const read = (): T => {
     if (typeof window === 'undefined') return initial;
     try {
       const raw = window.localStorage.getItem(key);
@@ -18,7 +18,18 @@ export function usePersistedState<T>(
     } catch {
       return initial;
     }
-  });
+  };
+
+  const [value, setValue] = useState<T>(read);
+
+  // If `key` changes, reload from the new slot before the write effect runs, so
+  // we don't copy the previous key's value into the new one. React's
+  // adjust-state-during-render pattern (tracked via state, not a ref).
+  const [prevKey, setPrevKey] = useState(key);
+  if (key !== prevKey) {
+    setPrevKey(key);
+    setValue(read());
+  }
 
   useEffect(() => {
     try {

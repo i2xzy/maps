@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Box } from '@chakra-ui/react';
 
-import { createClient } from '@supabase/server';
+import { createStaticClient } from '@supabase/server';
 import type { GeoRow } from '@/utils/map-geojson';
 import MapLoader from './MapLoader';
 
@@ -24,7 +24,7 @@ export const revalidate = 86400;
  * silently showing an empty map.
  */
 async function fetchGeo(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: ReturnType<typeof createStaticClient>,
   fn: 'features_geo_all' | 'media_geo_all'
 ): Promise<{ rows: GeoRow[]; ok: boolean }> {
   const { data, error } = await supabase.rpc(fn);
@@ -36,13 +36,17 @@ async function fetchGeo(
 }
 
 export default async function MapPage() {
-  const supabase = await createClient();
+  const supabase = createStaticClient();
 
   const [featuresRes, mediaRes, creatorsRes] = await Promise.all([
     fetchGeo(supabase, 'features_geo_all'),
     fetchGeo(supabase, 'media_geo_all'),
     supabase.from('creators').select('id, display_name, colour, profile_image_url'),
   ]);
+
+  if (creatorsRes.error) {
+    console.error('[map] creators failed:', creatorsRes.error.message);
+  }
 
   const creators = (creatorsRes.data ?? []).map(c => ({
     id: c.id,
@@ -53,7 +57,7 @@ export default async function MapPage() {
 
   // Distinguish a load failure from a genuinely empty result so the map can
   // surface a banner instead of looking like there's just nothing to show.
-  const dataError = !featuresRes.ok || !mediaRes.ok;
+  const dataError = !featuresRes.ok || !mediaRes.ok || creatorsRes.error != null;
 
   return (
     <Box position='absolute' inset={0}>

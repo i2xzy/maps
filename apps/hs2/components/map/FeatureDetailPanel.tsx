@@ -77,20 +77,27 @@ export default function FeatureDetailPanel({
       .from('media_features')
       .select('media ( id, title, type, youtube_id, url )')
       .eq('feature_id', feature.id)
-      .then(({ data }) => {
-        if (cancelled) return;
-        const rows = (data ?? []) as unknown as { media: RelatedMedia | null }[];
-        const seen = new Set<string>();
-        const list: RelatedMedia[] = [];
-        for (const row of rows) {
-          const m = row.media;
-          if (m && !seen.has(m.id)) {
-            seen.add(m.id);
-            list.push(m);
+      .then(
+        ({ data }) => {
+          if (cancelled) return;
+          const rows = (data ?? []) as unknown as { media: RelatedMedia | null }[];
+          const seen = new Set<string>();
+          const list: RelatedMedia[] = [];
+          for (const row of rows) {
+            const m = row.media;
+            if (m && !seen.has(m.id)) {
+              seen.add(m.id);
+              list.push(m);
+            }
           }
+          setResult({ forId: feature.id, media: list });
+        },
+        // On a network failure the promise rejects; resolve to an empty list so
+        // the panel shows "No media linked yet." instead of spinning forever.
+        () => {
+          if (!cancelled) setResult({ forId: feature.id, media: [] });
         }
-        setResult({ forId: feature.id, media: list });
-      });
+      );
 
     return () => {
       cancelled = true;
