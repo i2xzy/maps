@@ -41,7 +41,7 @@ import {
   representativePoint,
   type GeoRow,
 } from '@/utils/map-geojson';
-import { usePersistedState } from '@/utils/use-persisted-state';
+import { useLocalStorage } from 'react-use';
 import type { FeatureType, FeatureStatus } from '@supabase/types';
 import {
   typeColorExpression,
@@ -336,10 +336,12 @@ export default function MapView({ features, media, creators, dataError }: Props)
   const [iconsReady, setIconsReady] = useState(false);
 
   // Persisted preference (localStorage): satellite is the default basemap.
-  const [basemap, setBasemap] = usePersistedState<Basemap>(
+  // useLocalStorage can return undefined (cleared slot), so default it.
+  const [storedBasemap, setBasemap] = useLocalStorage<Basemap>(
     'hs2.map.basemap',
     'satellite'
   );
+  const basemap = storedBasemap ?? 'satellite';
 
   // Overlay state (session-only).
   const [panelCollapsed, setPanelCollapsed] = useState(false);
