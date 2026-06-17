@@ -5,8 +5,6 @@
  * react-icons components render to clean <svg><path/></svg>, so we
  * renderToStaticMarkup them, recolour to white, and nest inside a coloured
  * circle SVG, then rasterise to an HTMLImageElement and map.addImage() it.
- * RailTunnel is a chakra.svg (needs Chakra context under static render), so its
- * path is inlined directly here instead.
  */
 import { createElement, type ComponentType } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -23,20 +21,7 @@ export const COMBINED_PREFIX = 'cmb-';
 const LOGICAL = 44; // pin size in logical px
 const DPR = 2; // rasterise at 2x for crisp retina sprites
 
-// Types whose config icon is a chakra.svg (RailTunnel) — inline the path so we
-// don't need Chakra context during static rendering.
-const RAW_PATHS: Partial<Record<FeatureType, { viewBox: string; path: string }>> = {
-  tunnel: {
-    viewBox: '0 0 512 512',
-    path: 'M256 0C114.6 0 0 114.6 0 256v192c0 35.3 28.7 64 64 64h41.4l64.3-64.3c-32.4-3.2-57.7-30.5-57.7-63.7V192c0-35.3 28.7-64 64-64h160c35.3 0 64 28.7 64 64v192c0 33.2-25.3 60.5-57.7 63.7l64.3 64.3H448c35.3 0 64-28.7 64-64V256C512 114.6 397.4 0 256 0zm105.4 512-64-64h-82.7l-64 64h210.7zM184 192c-13.3 0-24 10.7-24 24v80c0 13.3 10.7 24 24 24h144c13.3 0 24-10.7 24-24v-80c0-13.3-10.7-24-24-24H184zm104 192a32 32 0 1 0-64 0 32 32 0 1 0 64 0z',
-  },
-  cut_and_cover: {
-    viewBox: '0 0 512 512',
-    path: 'M256 0C114.6 0 0 114.6 0 256v192c0 35.3 28.7 64 64 64h41.4l64.3-64.3c-32.4-3.2-57.7-30.5-57.7-63.7V192c0-35.3 28.7-64 64-64h160c35.3 0 64 28.7 64 64v192c0 33.2-25.3 60.5-57.7 63.7l64.3 64.3H448c35.3 0 64-28.7 64-64V256C512 114.6 397.4 0 256 0zm105.4 512-64-64h-82.7l-64 64h210.7zM184 192c-13.3 0-24 10.7-24 24v80c0 13.3 10.7 24 24 24h144c13.3 0 24-10.7 24-24v-80c0-13.3-10.7-24-24-24H184zm104 192a32 32 0 1 0-64 0 32 32 0 1 0 64 0z',
-  },
-};
-
-/** Render a react-icons component to a white, pin-positioned inner <svg>. */
+/** Render an icon component to a white, pin-positioned inner <svg>. */
 function glyphFromIcon(icon: ComponentType<Record<string, unknown>>): string {
   return renderToStaticMarkup(createElement(icon))
     .replace(/\swidth="1em"/, '')
@@ -44,15 +29,6 @@ function glyphFromIcon(icon: ComponentType<Record<string, unknown>>): string {
     .replace(/fill="currentColor"/g, 'fill="#ffffff"')
     .replace(/stroke="currentColor"/g, 'stroke="#ffffff"')
     .replace(/^<svg/, '<svg x="12" y="11" width="20" height="20"');
-}
-
-/** Inner <svg> for a feature type's glyph (RAW_PATHS for chakra.svg icons). */
-function glyphSvg(type: FeatureType): string {
-  const raw = RAW_PATHS[type];
-  if (raw) {
-    return `<svg x="12" y="11" width="20" height="20" viewBox="${raw.viewBox}"><path d="${raw.path}" fill="#ffffff"/></svg>`;
-  }
-  return glyphFromIcon(featureTypes[type].icon as ComponentType<Record<string, unknown>>);
 }
 
 /** Wrap a glyph in a coloured circular pin. */
@@ -75,19 +51,27 @@ function svgToImage(svg: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Register a pin sprite for every feature type on the map. Idempotent (skips
+ * Register a pin sprite for each given feature type. Pass only the types that
+ * actually render as point markers (linear features draw as lines and never
+ * reference a sprite), so we don't rasterise unused pins. Idempotent (skips
  * images already present), so it can be re-run after a basemap/style switch
  * (a style change clears registered images). A single failing icon is skipped,
- * not fatal — that type falls back to its plain circle layer.
+ * not fatal — that type falls back to its plain circle layer (e.g. an icon that
+ * needs React context, like the chakra.svg tunnel glyph, degrades to a circle).
  */
-export async function loadTypeIcons(map: MlMap): Promise<void> {
-  const types = Object.keys(featureTypes) as FeatureType[];
+export async function loadTypeIcons(
+  map: MlMap,
+  types: Iterable<string>
+): Promise<void> {
   await Promise.all(
-    types.map(async type => {
+    Array.from(new Set(types)).map(async type => {
+      const cfg = featureTypes[type as FeatureType];
+      if (!cfg) return; // unknown type — no sprite to build
       const id = `${ICON_PREFIX}${type}`;
       if (map.hasImage(id)) return;
       try {
-        const img = await svgToImage(wrapPin(TYPE_COLORS[type], glyphSvg(type)));
+        const glyph = glyphFromIcon(cfg.icon as ComponentType<Record<string, unknown>>);
+        const img = await svgToImage(wrapPin(TYPE_COLORS[type as FeatureType], glyph));
         if (!map.hasImage(id)) map.addImage(id, img, { pixelRatio: DPR });
       } catch {
         /* skip a single bad icon; the circle layer is the fallback */

@@ -507,6 +507,23 @@ export default function MapView({ features, media, creators }: Props) {
     combosRef.current = neededCombos;
   }, [neededCombos]);
 
+  // Feature types that occur as POINT markers — line features never reference
+  // an icon sprite, so we only rasterise the pins actually drawn (e.g. no
+  // tunnel/cut-and-cover pins). Mirrors neededCombos.
+  const pointTypes = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of features) {
+      if ((r.geojson as { type?: string } | null)?.type === 'Point' && r.type) {
+        s.add(String(r.type));
+      }
+    }
+    return s;
+  }, [features]);
+  const pointTypesRef = useRef(pointTypes);
+  useEffect(() => {
+    pointTypesRef.current = pointTypes;
+  }, [pointTypes]);
+
   // Line colour by creator (grey when the creator has no colour).
   const creatorColorExpr = useMemo<ExpressionSpecification | string>(() => {
     const pairs = coloredCreators.flatMap(c => [c.id, c.color]);
@@ -810,13 +827,13 @@ export default function MapView({ features, media, creators }: Props) {
       loadCombinedMarkerIcons(map, combosRef.current)
         .then(() => setCombinedReady(true))
         .catch(() => setCombinedReady(true));
-    loadTypeIcons(map)
+    loadTypeIcons(map, pointTypesRef.current)
       .then(() => setIconsReady(true))
       .catch(() => undefined);
     addCombined();
     // A style switch (basemap change) clears registered images — re-add them.
     map.on('styledata', () => {
-      loadTypeIcons(map).catch(() => undefined);
+      loadTypeIcons(map, pointTypesRef.current).catch(() => undefined);
       addCombined();
     });
   }, []);
