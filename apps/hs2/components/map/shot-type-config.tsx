@@ -9,13 +9,13 @@
 import { Icon } from '@chakra-ui/react';
 import type { IconType } from 'react-icons';
 import {
-  LuVideo,
-  LuCar,
-  LuPlane,
-  LuTowerControl,
-  LuPencilRuler,
-} from 'react-icons/lu';
-import { TbDrone } from 'react-icons/tb';
+  FaCar,
+  FaPlane,
+  FaTowerObservation,
+  FaVideo,
+  FaPenRuler,
+} from 'react-icons/fa6';
+import { PiDroneBold } from 'react-icons/pi';
 import { MakiViewpoint } from '@/components/icons/maki-viewpoint';
 
 export type ShotType =
@@ -28,13 +28,13 @@ export type ShotType =
   | 'illustration';
 
 export const shotTypes: Record<ShotType, { label: string; icon: IconType }> = {
-  drone: { label: 'Drone', icon: TbDrone },
+  drone: { label: 'Drone', icon: PiDroneBold },
   ground: { label: 'Ground', icon: MakiViewpoint },
-  vehicle: { label: 'Vehicle', icon: LuCar },
-  aircraft: { label: 'Aircraft', icon: LuPlane },
-  elevated: { label: 'Elevated', icon: LuTowerControl },
-  mixed: { label: 'Mixed', icon: LuVideo },
-  illustration: { label: 'Illustration', icon: LuPencilRuler },
+  vehicle: { label: 'Vehicle', icon: FaCar },
+  aircraft: { label: 'Aircraft', icon: FaPlane },
+  elevated: { label: 'Elevated', icon: FaTowerObservation },
+  mixed: { label: 'Mixed', icon: FaVideo },
+  illustration: { label: 'Illustration', icon: FaPenRuler },
 };
 
 const FALLBACK = shotTypes.mixed;
