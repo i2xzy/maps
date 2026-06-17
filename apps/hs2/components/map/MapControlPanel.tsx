@@ -398,7 +398,7 @@ export default function MapControlPanel(props: Props) {
                       </Checkbox.Root>
 
                       {shown && (
-                        <Stack gap={0} pl={5} pt={1}>
+                        <Stack gap={0} pl={2} pt={1}>
                           {vids.map(v => (
                             <HStack
                               key={v.id}
