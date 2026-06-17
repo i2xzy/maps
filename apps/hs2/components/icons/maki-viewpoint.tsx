@@ -10,7 +10,10 @@ import type { IconType } from 'react-icons';
  */
 export const MakiViewpoint: IconType = GenIcon({
   tag: 'svg',
-  attr: { viewBox: '0 0 15 15' },
+  // Cropped to the artwork's bounding box (~1 unit of horizontal and ~2.2 of
+  // vertical padding in Maki's 15x15 grid) + a small even margin, so the glyph
+  // fills the marker pin instead of rendering small and skinny.
+  attr: { viewBox: '0.5 1.7 14 11.8' },
   child: [
     {
       tag: 'path',
