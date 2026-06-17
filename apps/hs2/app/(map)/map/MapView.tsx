@@ -34,7 +34,7 @@ import type {
   CircleLayerSpecification,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Box, Center, Text } from '@chakra-ui/react';
+import { Alert, Box, Center, Text } from '@chakra-ui/react';
 
 import {
   rowsToFeatureCollection,
@@ -167,7 +167,13 @@ export type Creator = {
   imageUrl: string | null;
 };
 
-type Props = { features: GeoRow[]; media: GeoRow[]; creators: Creator[] };
+type Props = {
+  features: GeoRow[];
+  media: GeoRow[];
+  creators: Creator[];
+  /** Server-side RPC load failed — show a non-fatal banner over the map. */
+  dataError?: boolean;
+};
 
 // Subtle hover affordance: a soft white glow drawn UNDER each point marker,
 // faded in only for the feature whose `hover` feature-state is true. Because
@@ -320,7 +326,7 @@ const yearOf = (r: GeoRow): string => {
   return d ? d.slice(0, 4) : 'Undated';
 };
 
-export default function MapView({ features, media, creators }: Props) {
+export default function MapView({ features, media, creators, dataError }: Props) {
   const mapRef = useRef<MapRef>(null);
 
   // The point marker currently showing the hover glow (its source + generated
@@ -1005,6 +1011,29 @@ export default function MapView({ features, media, creators }: Props) {
       <FeatureDetailPanel feature={selected} onClose={() => setSelected(null)} />
 
       <MediaDetailPanel video={selectedVideo} onClose={() => setSelectedVideo(null)} />
+
+      {dataError && (
+        <Alert.Root
+          status='warning'
+          position='absolute'
+          bottom={4}
+          left='50%'
+          transform='translateX(-50%)'
+          width='fit-content'
+          maxW='calc(100% - 24px)'
+          zIndex={10}
+          borderRadius='lg'
+          shadow='lg'
+        >
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Couldn&rsquo;t load all map data</Alert.Title>
+            <Alert.Description>
+              Some structures or videos didn&rsquo;t load. Try refreshing.
+            </Alert.Description>
+          </Alert.Content>
+        </Alert.Root>
+      )}
     </Box>
   );
 }

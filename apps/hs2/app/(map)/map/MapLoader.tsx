@@ -25,6 +25,7 @@ export default function MapLoader(props: {
   features: GeoRow[];
   media: GeoRow[];
   creators: Creator[];
+  dataError?: boolean;
 }) {
   return <MapView {...props} />;
 }

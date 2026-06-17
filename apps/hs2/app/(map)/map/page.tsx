@@ -17,26 +17,28 @@ export const revalidate = 86400;
 
 /**
  * Load all rows of a GeoJSON view via its RPC. The features_geo_all /
- * media_geo_all functions (see .context/map-views.sql) each return the whole
- * row set as one JSON array, so we sidestep PostgREST's 1000-row cap — one
- * request, no pagination, no per-page COUNT. Each element matches GeoRow.
+ * media_geo_all functions (see packages/supabase/sql/map_geo.sql) each return
+ * the whole row set as one JSON array, so we sidestep PostgREST's 1000-row cap
+ * — one request, no pagination, no per-page COUNT. Each element matches GeoRow.
+ * `ok` is false on an RPC error so the page can flag a load failure rather than
+ * silently showing an empty map.
  */
 async function fetchGeo(
   supabase: Awaited<ReturnType<typeof createClient>>,
   fn: 'features_geo_all' | 'media_geo_all'
-): Promise<GeoRow[]> {
+): Promise<{ rows: GeoRow[]; ok: boolean }> {
   const { data, error } = await supabase.rpc(fn);
   if (error) {
     console.error(`[map] ${fn} failed:`, error.message);
-    return [];
+    return { rows: [], ok: false };
   }
-  return (data ?? []) as unknown as GeoRow[];
+  return { rows: (data ?? []) as unknown as GeoRow[], ok: true };
 }
 
 export default async function MapPage() {
   const supabase = await createClient();
 
-  const [features, media, creatorsRes] = await Promise.all([
+  const [featuresRes, mediaRes, creatorsRes] = await Promise.all([
     fetchGeo(supabase, 'features_geo_all'),
     fetchGeo(supabase, 'media_geo_all'),
     supabase.from('creators').select('id, display_name, colour, profile_image_url'),
@@ -49,9 +51,18 @@ export default async function MapPage() {
     imageUrl: c.profile_image_url,
   }));
 
+  // Distinguish a load failure from a genuinely empty result so the map can
+  // surface a banner instead of looking like there's just nothing to show.
+  const dataError = !featuresRes.ok || !mediaRes.ok;
+
   return (
     <Box position='absolute' inset={0}>
-      <MapLoader features={features} media={media} creators={creators} />
+      <MapLoader
+        features={featuresRes.rows}
+        media={mediaRes.rows}
+        creators={creators}
+        dataError={dataError}
+      />
     </Box>
   );
 }
