@@ -5,10 +5,36 @@ import { createStaticClient } from '@supabase/server';
 import type { GeoRow } from '@/utils/map-geojson';
 import MapLoader from './MapLoader';
 
+const TITLE = 'Interactive HS2 Route Map';
+const DESCRIPTION =
+  'Explore the HS2 route on an interactive map: stations, bridges, tunnels and ' +
+  'viaducts with construction status, plus videos mapped to the structures they ' +
+  'cover, from London to Birmingham.';
+
 export const metadata: Metadata = {
-  title: 'Interactive Map',
-  description:
-    'Explore the HS2 route on an interactive map showing stations, bridges, tunnels, viaducts, and other structures with real-time construction progress from London to Birmingham.',
+  title: TITLE,
+  description: DESCRIPTION,
+  // The root layout sets generic og/twitter; override here so a shared /map
+  // link previews as the map, not the site default. (Next replaces openGraph
+  // rather than deep-merging, so the non-text fields are re-stated. The
+  // og:image comes from app/opengraph-image.tsx.)
+  openGraph: {
+    type: 'website',
+    locale: 'en_GB',
+    siteName: 'HS2 Progress Tracker',
+    url: 'https://hs2.highspeedprogress.com/map',
+    title: TITLE,
+    description: DESCRIPTION,
+    // Overriding openGraph replaces the inherited object, so re-attach the
+    // site og:image (app/opengraph-image.tsx) explicitly.
+    images: ['/opengraph-image'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: TITLE,
+    description: DESCRIPTION,
+    images: ['/opengraph-image'],
+  },
 };
 
 // Geometry changes rarely (only on a data import) and an HS2-news traffic spike
