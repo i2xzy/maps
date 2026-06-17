@@ -662,17 +662,22 @@ export default function MapView({ features, media, creators }: Props) {
           ? (creatorName.get(video.creatorId) ?? null)
           : null;
         const shot = video.shotType ? shotTypeLabel(video.shotType) : '';
+        // Same colour as the video's map marker (creator colour, else grey).
+        const color =
+          (video.creatorId && creatorColorMap.get(video.creatorId)) ||
+          DEFAULT_MEDIA_COLOR;
         return {
           kind: 'video' as const,
           video,
           creator,
+          color,
           search: [video.title, creator, video.youtubeId, shot]
             .filter(Boolean)
             .join(' '),
         };
       }),
     ],
-    [searchIndex, allVideos, creatorName]
+    [searchIndex, allVideos, creatorName, creatorColorMap]
   );
 
   // Route-ordered (by chainage) browse list of the *visible* features for the

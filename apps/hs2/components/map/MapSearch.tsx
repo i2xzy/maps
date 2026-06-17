@@ -13,6 +13,7 @@ import { useState } from 'react';
 import {
   Box,
   Card,
+  Circle,
   Combobox,
   HStack,
   InputGroup,
@@ -42,6 +43,8 @@ export type MapSearchItem =
       video: VideoItem;
       search: string;
       creator: string | null;
+      /** The video's marker colour (creator colour, or grey default). */
+      color: string;
     };
 
 // kind-prefixed so a feature and a video can never collide on value.
@@ -123,7 +126,19 @@ export default function MapSearch({
                 <Combobox.Item item={item} key={itemId(item)}>
                   <HStack gap={2} minW={0}>
                     {item.kind === 'video' ? (
-                      <ShotTypeIcon shotType={item.video.shotType} />
+                      // Mirror the map marker: white glyph on a creator-colour
+                      // disc, so it stays legible whatever the creator colour.
+                      <Circle
+                        size='20px'
+                        bg={item.color}
+                        fontSize='11px'
+                        flexShrink={0}
+                      >
+                        <ShotTypeIcon
+                          shotType={item.video.shotType}
+                          color='white'
+                        />
+                      </Circle>
                     ) : (
                       <FeatureIcon
                         type={item.result.type}
