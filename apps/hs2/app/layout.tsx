@@ -41,7 +41,6 @@ export const metadata: Metadata = {
     title: 'HS2 Progress Tracker',
     description:
       'Track HS2 construction progress with real-time updates, photos, and videos.',
-    creator: '@isaacraskin',
   },
   robots: {
     index: true,
