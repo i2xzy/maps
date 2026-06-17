@@ -2,8 +2,8 @@
 
 /**
  * Marker-style discs for the search results and side-panel lists: the entity's
- * colour with a white glyph and a white edge, mirroring the map markers so the
- * lists read as the same things you see on the map.
+ * colour with a white glyph, mirroring the map markers so the lists read as the
+ * same things you see on the map.
  */
 import { Circle, Icon } from '@chakra-ui/react';
 
@@ -17,8 +17,6 @@ const discStyle = (bg: string, size: string) => ({
   bg,
   color: 'white' as const,
   fontSize: '11px',
-  borderWidth: '1.5px',
-  borderColor: 'whiteAlpha.800',
   flexShrink: 0,
 });
 
