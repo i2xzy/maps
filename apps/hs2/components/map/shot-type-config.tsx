@@ -42,12 +42,15 @@ const FALLBACK = shotTypes.mixed;
 export const ShotTypeIcon = ({
   shotType,
   color = 'cyan.500',
+  boxSize,
 }: {
   shotType: string | null | undefined;
   color?: string;
+  /** Explicit glyph size; omit to inherit the surrounding font size. */
+  boxSize?: string;
 }) => {
   const cfg = shotTypes[shotType as ShotType] ?? FALLBACK;
-  return <Icon as={cfg.icon} color={color} />;
+  return <Icon as={cfg.icon} color={color} boxSize={boxSize} />;
 };
 
 export const shotTypeLabel = (shotType: string | null | undefined): string =>
