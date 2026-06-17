@@ -21,14 +21,26 @@ export const COMBINED_PREFIX = 'cmb-';
 const LOGICAL = 44; // pin size in logical px
 const DPR = 2; // rasterise at 2x for crisp retina sprites
 
-/** Render an icon component to a white, pin-positioned inner <svg>. */
-function glyphFromIcon(icon: ComponentType<Record<string, unknown>>): string {
+const GLYPH_SIZE = 20; // default glyph box within the 44px pin
+
+/**
+ * Render an icon component to a white, pin-centred inner <svg> at the given box
+ * size. A bigger size makes the glyph fill more of the pin — used to even out
+ * icons that carry more internal padding than the rest (e.g. the Phosphor drone
+ * and Maki viewpoint vs the denser FA solids).
+ */
+function glyphFromIcon(
+  icon: ComponentType<Record<string, unknown>>,
+  size: number = GLYPH_SIZE
+): string {
+  const x = (LOGICAL - size) / 2; // centre horizontally in the pin
+  const y = x - 1; // nudge up 1px (matches the original 20px placement)
   return renderToStaticMarkup(createElement(icon))
     .replace(/\swidth="1em"/, '')
     .replace(/\sheight="1em"/, '')
     .replace(/fill="currentColor"/g, 'fill="#ffffff"')
     .replace(/stroke="currentColor"/g, 'stroke="#ffffff"')
-    .replace(/^<svg/, '<svg x="12" y="11" width="20" height="20"');
+    .replace(/^<svg/, `<svg x="${x}" y="${y}" width="${size}" height="${size}"`);
 }
 
 /** Wrap a glyph in a coloured circular pin. */
@@ -82,6 +94,14 @@ export async function loadTypeIcons(
 
 export type MarkerCombo = { group: string; shot: string; color: string };
 
+// Per-shot glyph box overrides: drone (Phosphor) and ground (Maki viewpoint)
+// have more internal padding than the FA solids, so give them a bigger box to
+// read at a comparable size. Others fall back to GLYPH_SIZE.
+const SHOT_GLYPH_SIZE: Record<string, number> = {
+  drone: 26,
+  ground: 26,
+};
+
 /**
  * Register a combined video-marker sprite per (colour group × shot type): a
  * coloured circle (the group's colour) with the shot-type's white glyph baked
@@ -104,7 +124,10 @@ export async function loadCombinedMarkerIcons(
     jobs.push(
       (async () => {
         try {
-          const glyph = glyphFromIcon(icon as ComponentType<Record<string, unknown>>);
+          const glyph = glyphFromIcon(
+            icon as ComponentType<Record<string, unknown>>,
+            SHOT_GLYPH_SIZE[shot] ?? GLYPH_SIZE
+          );
           const img = await svgToImage(wrapPin(color, glyph));
           if (!map.hasImage(id)) map.addImage(id, img, { pixelRatio: DPR });
         } catch {
