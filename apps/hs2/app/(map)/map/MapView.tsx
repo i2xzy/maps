@@ -53,7 +53,7 @@ import MapControlPanel, {
   type YearGroup,
   type CreatorGroup,
 } from '@/components/map/MapControlPanel';
-import MapSearch from '@/components/map/MapSearch';
+import MapSearch, { type MapSearchItem } from '@/components/map/MapSearch';
 import FeatureDetailPanel, {
   type SelectedFeature,
 } from '@/components/map/FeatureDetailPanel';
@@ -646,6 +646,16 @@ export default function MapView({ features, media, creators }: Props) {
     return out;
   }, [features, toResult]);
 
+  // Floating search covers both structures and videos (all of them, regardless
+  // of the active layer filters).
+  const searchItems = useMemo<MapSearchItem[]>(
+    () => [
+      ...searchIndex.map(result => ({ kind: 'feature' as const, result })),
+      ...allVideos.map(video => ({ kind: 'video' as const, video })),
+    ],
+    [searchIndex, allVideos]
+  );
+
   // Route-ordered (by chainage) browse list of the *visible* features for the
   // control panel.
   const featureList = useMemo<SearchResult[]>(() => {
@@ -737,6 +747,15 @@ export default function MapView({ features, media, creators }: Props) {
       });
     },
     [creatorName, creatorImage]
+  );
+
+  // Floating-search pick: dispatch to the feature or video handler by kind.
+  const onSelectSearch = useCallback(
+    (item: MapSearchItem) => {
+      if (item.kind === 'video') onSelectVideo(item.video);
+      else onSelectResult(item.result);
+    },
+    [onSelectVideo, onSelectResult]
   );
 
   const onClick = useCallback(
@@ -957,7 +976,7 @@ export default function MapView({ features, media, creators }: Props) {
         onToggleCreator={id => setHiddenCreators(s => toggleInSet(s, id))}
       />
 
-      <MapSearch features={searchIndex} onSelect={onSelectResult} left={topLeftInset} />
+      <MapSearch items={searchItems} onSelect={onSelectSearch} left={topLeftInset} />
 
       <BasemapToggle basemap={basemap} onChange={setBasemap} left={bottomLeftInset} />
 

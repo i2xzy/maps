@@ -3,7 +3,8 @@
 /**
  * Standalone floating search for the map (Google-Maps style): a search box that
  * sits over the map, separate from the control panel, with a dropdown of
- * matching structures. Picking one flies to it and opens its detail panel.
+ * matching structures AND videos. Picking one flies to it and opens its detail
+ * panel (feature → FeatureDetailPanel, video → MediaDetailPanel).
  *
  * Built on Chakra's Combobox so open/close, keyboard navigation, filtering and
  * a11y are handled by the component rather than hand-rolled state.
@@ -23,26 +24,39 @@ import {
 import { LuSearch } from 'react-icons/lu';
 
 import { FeatureIcon } from '@/components/feature/feature-icon';
-import type { SearchResult } from '@/components/map/MapControlPanel';
+import { ShotTypeIcon } from '@/components/map/shot-type-config';
+import type { SearchResult, VideoItem } from '@/components/map/MapControlPanel';
 
 const MAX_RESULTS = 12;
 
+/** A searchable map entity: a structure (feature) or a video. */
+export type MapSearchItem =
+  | { kind: 'feature'; result: SearchResult }
+  | { kind: 'video'; video: VideoItem };
+
+// kind-prefixed so a feature and a video can never collide on value, and the
+// label the user types against.
+const itemId = (it: MapSearchItem) =>
+  it.kind === 'feature' ? `feature:${it.result.id}` : `video:${it.video.id}`;
+const itemLabel = (it: MapSearchItem) =>
+  it.kind === 'feature' ? it.result.name : it.video.title;
+
 export default function MapSearch({
-  features,
+  items,
   onSelect,
   left,
 }: {
-  features: SearchResult[];
-  onSelect: (r: SearchResult) => void;
+  items: MapSearchItem[];
+  onSelect: (item: MapSearchItem) => void;
   /** Left inset so the bar clears the control panel (open or collapsed). */
   left: { base: string; sm: string };
 }) {
   const [inputValue, setInputValue] = useState('');
   const { contains } = useFilter({ sensitivity: 'base' });
-  const { collection, filter } = useListCollection<SearchResult>({
-    initialItems: features,
-    itemToString: f => f.name,
-    itemToValue: f => f.id,
+  const { collection, filter } = useListCollection<MapSearchItem>({
+    initialItems: items,
+    itemToString: itemLabel,
+    itemToValue: itemId,
     filter: contains,
     limit: MAX_RESULTS,
   });
@@ -65,12 +79,12 @@ export default function MapSearch({
         // Fire the action on pick, then reset — this is a search-and-go box, it
         // doesn't retain a selection.
         onValueChange={e => {
-          const r = features.find(f => f.id === e.value[0]);
-          if (r) onSelect(r);
+          const picked = items.find(i => itemId(i) === e.value[0]);
+          if (picked) onSelect(picked);
           setInputValue('');
           filter('');
         }}
-        // Don't dump all 248 structures on focus — only open while typing.
+        // Don't dump everything on focus — only open while typing.
         openOnClick={false}
         // Clear the box after a pick (search-and-go), not keep the label.
         selectionBehavior='clear'
@@ -79,7 +93,10 @@ export default function MapSearch({
         <Card.Root variant='elevated' borderRadius='lg'>
           <Combobox.Control>
             <InputGroup startElement={<LuSearch />}>
-              <Combobox.Input border='none' placeholder='Search structures' />
+              <Combobox.Input
+                border='none'
+                placeholder='Search structures and videos'
+              />
             </InputGroup>
           </Combobox.Control>
         </Card.Root>
@@ -88,14 +105,21 @@ export default function MapSearch({
           <Combobox.Positioner>
             <Combobox.Content maxH='320px' overflowY='auto'>
               <Combobox.Empty px={3} py={2} fontSize='sm' color='fg.muted'>
-                No structures match.
+                No matches.
               </Combobox.Empty>
               {collection.items.map(item => (
-                <Combobox.Item item={item} key={item.id}>
+                <Combobox.Item item={item} key={itemId(item)}>
                   <HStack gap={2}>
-                    <FeatureIcon type={item.type} name={item.name} />
+                    {item.kind === 'video' ? (
+                      <ShotTypeIcon shotType={item.video.shotType} />
+                    ) : (
+                      <FeatureIcon
+                        type={item.result.type}
+                        name={item.result.name}
+                      />
+                    )}
                     <Text fontSize='sm' lineClamp={1}>
-                      {item.name}
+                      {itemLabel(item)}
                     </Text>
                   </HStack>
                 </Combobox.Item>
