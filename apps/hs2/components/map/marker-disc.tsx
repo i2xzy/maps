@@ -15,7 +15,7 @@ import { ShotTypeIcon } from './shot-type-config';
 // Explicit glyph size (not inherited font-size) so the disc renders the same
 // in the side panel and the search dropdown, which sit in different font
 // contexts.
-const GLYPH_SIZE = '12px';
+const DISC_GLYPH_SIZE = '12px';
 
 const discStyle = (bg: string, size: string) => ({
   size,
@@ -37,7 +37,7 @@ export function FeatureDisc({
   const { icon, iconProps } = featureGlyph(type, name);
   return (
     <Circle {...discStyle(TYPE_COLORS[type], size)}>
-      <Icon as={icon} {...(iconProps ?? {})} boxSize={GLYPH_SIZE} />
+      <Icon as={icon} {...(iconProps ?? {})} boxSize={DISC_GLYPH_SIZE} />
     </Circle>
   );
 }
@@ -54,7 +54,7 @@ export function VideoDisc({
 }) {
   return (
     <Circle {...discStyle(color, size)}>
-      <ShotTypeIcon shotType={shotType} color='white' boxSize={GLYPH_SIZE} />
+      <ShotTypeIcon shotType={shotType} color='white' boxSize={DISC_GLYPH_SIZE} />
     </Circle>
   );
 }

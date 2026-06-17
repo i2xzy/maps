@@ -64,6 +64,10 @@ export default function MapSearch({
 }) {
   const [inputValue, setInputValue] = useState('');
   const { contains } = useFilter({ sensitivity: 'base' });
+  // `items` must be mount-stable: useListCollection captures initialItems once,
+  // and we never call set()/reset(). That holds here — items derives from the
+  // server-fetched (ISR) features/videos, which don't change during the page's
+  // life. If items ever becomes dynamic, sync the collection on change.
   const { collection, filter } = useListCollection<MapSearchItem>({
     initialItems: items,
     itemToString: itemSearch,
