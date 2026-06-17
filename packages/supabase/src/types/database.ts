@@ -17,6 +17,7 @@ export type Database = {
       creators: {
         Row: {
           bio: string | null
+          colour: string | null
           created_at: string | null
           display_name: string
           external_id: string
@@ -27,6 +28,7 @@ export type Database = {
         }
         Insert: {
           bio?: string | null
+          colour?: string | null
           created_at?: string | null
           display_name: string
           external_id: string
@@ -37,6 +39,7 @@ export type Database = {
         }
         Update: {
           bio?: string | null
+          colour?: string | null
           created_at?: string | null
           display_name?: string
           external_id?: string
@@ -129,6 +132,13 @@ export type Database = {
             columns: ["feature_id"]
             isOneToOne: false
             referencedRelation: "features"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grouping_features_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "features_geo"
             referencedColumns: ["id"]
           },
           {
@@ -270,10 +280,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "media_features_feature_id_fkey"
+            columns: ["feature_id"]
+            isOneToOne: false
+            referencedRelation: "features_geo"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "media_features_media_id_fkey"
             columns: ["media_id"]
             isOneToOne: false
             referencedRelation: "media"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_features_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "media_geo"
             referencedColumns: ["id"]
           },
         ]
@@ -318,6 +342,39 @@ export type Database = {
         }
         Relationships: []
       }
+      features_geo: {
+        Row: {
+          chainage: number | null
+          chainage_end: number | null
+          geojson: Json | null
+          id: string | null
+          name: string | null
+          route_element_id: string | null
+          status: Database["public"]["Enums"]["feature_status"] | null
+          type: Database["public"]["Enums"]["feature_type"] | null
+        }
+        Insert: {
+          chainage?: number | null
+          chainage_end?: number | null
+          geojson?: never
+          id?: string | null
+          name?: string | null
+          route_element_id?: string | null
+          status?: Database["public"]["Enums"]["feature_status"] | null
+          type?: Database["public"]["Enums"]["feature_type"] | null
+        }
+        Update: {
+          chainage?: number | null
+          chainage_end?: number | null
+          geojson?: never
+          id?: string | null
+          name?: string | null
+          route_element_id?: string | null
+          status?: Database["public"]["Enums"]["feature_status"] | null
+          type?: Database["public"]["Enums"]["feature_type"] | null
+        }
+        Relationships: []
+      }
       geography_columns: {
         Row: {
           coord_dimension: number | null
@@ -359,6 +416,57 @@ export type Database = {
           type?: string | null
         }
         Relationships: []
+      }
+      media_geo: {
+        Row: {
+          creator_id: string | null
+          geojson: Json | null
+          id: string | null
+          published_at: string | null
+          recorded_date: string | null
+          shot_type: Database["public"]["Enums"]["shot_type"] | null
+          title: string | null
+          type: Database["public"]["Enums"]["media_type"] | null
+          youtube_id: string | null
+        }
+        Insert: {
+          creator_id?: string | null
+          geojson?: never
+          id?: string | null
+          published_at?: string | null
+          recorded_date?: string | null
+          shot_type?: Database["public"]["Enums"]["shot_type"] | null
+          title?: string | null
+          type?: Database["public"]["Enums"]["media_type"] | null
+          youtube_id?: string | null
+        }
+        Update: {
+          creator_id?: string | null
+          geojson?: never
+          id?: string | null
+          published_at?: string | null
+          recorded_date?: string | null
+          shot_type?: Database["public"]["Enums"]["shot_type"] | null
+          title?: string | null
+          type?: Database["public"]["Enums"]["media_type"] | null
+          youtube_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creators_with_video_counts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
@@ -530,6 +638,7 @@ export type Database = {
         | { Args: { table_name: string }; Returns: string }
       enablelongtransactions: { Args: never; Returns: string }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      features_geo_all: { Args: never; Returns: Json }
       geometry: { Args: { "": string }; Returns: unknown }
       geometry_above: {
         Args: { geom1: unknown; geom2: unknown }
@@ -629,26 +738,17 @@ export type Database = {
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
       gettransactionid: { Args: never; Returns: unknown }
-      link_media_span:
-        | {
-            Args: {
-              p_end: string
-              p_media_id: string
-              p_route_prefix?: string
-              p_start: string
-            }
-            Returns: number
-          }
-        | {
-            Args: {
-              p_end: string
-              p_route_prefix?: string
-              p_start: string
-              p_youtube_id: string
-            }
-            Returns: number
-          }
+      link_media_span: {
+        Args: {
+          p_end: string
+          p_media_id: string
+          p_route_prefix?: string
+          p_start: string
+        }
+        Returns: number
+      }
       longtransactionsenabled: { Args: never; Returns: boolean }
+      media_geo_all: { Args: never; Returns: Json }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
         | { Args: { use_typmod?: boolean }; Returns: string }
