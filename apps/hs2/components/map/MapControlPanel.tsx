@@ -14,6 +14,7 @@ import {
   Circle,
   Stack,
   HStack,
+  Separator,
   Text,
   Heading,
   IconButton,
@@ -371,7 +372,14 @@ export default function MapControlPanel(props: Props) {
           <Stack gap={3} minH='0' flex='1'>
             {/* Each year is a checkbox header; its videos nest beneath and
                 collapse (and their markers hide) when unchecked. */}
-            <Stack gap={2} minH='0' flex='1' overflowY='auto' css={thinScrollbar}>
+            <Stack
+              gap={2}
+              minH='0'
+              flex='1'
+              overflowY='auto'
+              css={thinScrollbar}
+              separator={<Separator />}
+            >
               {props.years.length === 0 ? (
                 <Text fontSize='sm' color='fg.muted'>
                   No videos loaded.
