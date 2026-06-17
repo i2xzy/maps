@@ -119,13 +119,16 @@ export function representativePoint(
   if (g.type === 'LineString') {
     const c = g.coordinates as number[][];
     const mid = c[Math.floor(c.length / 2)];
-    return mid && mid.length >= 2 ? [mid[0]!, mid[1]!] : null;
+    return Array.isArray(mid) && mid.length >= 2 ? [mid[0]!, mid[1]!] : null;
   }
   if (g.type === 'MultiLineString') {
-    // First non-empty segment (segment 0 may be empty in malformed data).
-    const line = (g.coordinates as number[][][]).find(l => l.length > 0);
+    // First non-empty segment (segments may be empty/malformed — guard the
+    // .length access so a bad payload returns null instead of throwing).
+    const line = (g.coordinates as number[][][]).find(
+      l => Array.isArray(l) && l.length > 0
+    );
     const mid = line?.[Math.floor(line.length / 2)];
-    return mid && mid.length >= 2 ? [mid[0]!, mid[1]!] : null;
+    return Array.isArray(mid) && mid.length >= 2 ? [mid[0]!, mid[1]!] : null;
   }
   return null;
 }

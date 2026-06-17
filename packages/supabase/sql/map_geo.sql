@@ -18,7 +18,11 @@
 -- (packages/supabase/src/types/database.ts) from the live schema.
 
 -- ----------------------------------------------------------------------------
--- Views
+-- Views. Columns are kept in lockstep with the *_geo_all() RPC payloads below
+-- (the map's only consumer) — only what the map actually reads. NOTE: removing
+-- a column from a view needs DROP VIEW first (CREATE OR REPLACE can only append
+-- columns), so on a re-apply that drops columns, run:
+--   DROP VIEW IF EXISTS public.features_geo;  (then the CREATE below)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW public.features_geo
   WITH (security_invoker = on) AS
@@ -28,8 +32,6 @@ SELECT
   type,
   status,
   chainage,
-  chainage_end,
-  route_element_id,
   ST_AsGeoJSON(geometry, 6)::json AS geojson
 FROM features
 WHERE geometry IS NOT NULL;
