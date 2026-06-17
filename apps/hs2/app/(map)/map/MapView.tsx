@@ -54,6 +54,7 @@ import MapControlPanel, {
   type CreatorGroup,
 } from '@/components/map/MapControlPanel';
 import MapSearch, { type MapSearchItem } from '@/components/map/MapSearch';
+import { shotTypeLabel } from '@/components/map/shot-type-config';
 import FeatureDetailPanel, {
   type SelectedFeature,
 } from '@/components/map/FeatureDetailPanel';
@@ -647,13 +648,31 @@ export default function MapView({ features, media, creators }: Props) {
   }, [features, toResult]);
 
   // Floating search covers both structures and videos (all of them, regardless
-  // of the active layer filters).
+  // of the active layer filters). Videos match on title + creator + YouTube id
+  // + shot type, not just title.
   const searchItems = useMemo<MapSearchItem[]>(
     () => [
-      ...searchIndex.map(result => ({ kind: 'feature' as const, result })),
-      ...allVideos.map(video => ({ kind: 'video' as const, video })),
+      ...searchIndex.map(result => ({
+        kind: 'feature' as const,
+        result,
+        search: result.name,
+      })),
+      ...allVideos.map(video => {
+        const creator = video.creatorId
+          ? (creatorName.get(video.creatorId) ?? null)
+          : null;
+        const shot = video.shotType ? shotTypeLabel(video.shotType) : '';
+        return {
+          kind: 'video' as const,
+          video,
+          creator,
+          search: [video.title, creator, video.youtubeId, shot]
+            .filter(Boolean)
+            .join(' '),
+        };
+      }),
     ],
-    [searchIndex, allVideos]
+    [searchIndex, allVideos, creatorName]
   );
 
   // Route-ordered (by chainage) browse list of the *visible* features for the

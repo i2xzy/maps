@@ -29,17 +29,29 @@ import type { SearchResult, VideoItem } from '@/components/map/MapControlPanel';
 
 const MAX_RESULTS = 12;
 
-/** A searchable map entity: a structure (feature) or a video. */
+/**
+ * A searchable map entity: a structure (feature) or a video. `search` is the
+ * haystack the query matches against — built by the caller (MapView), where
+ * creator names live, so videos are findable by title, creator, YouTube id and
+ * shot type, not just title.
+ */
 export type MapSearchItem =
-  | { kind: 'feature'; result: SearchResult }
-  | { kind: 'video'; video: VideoItem };
+  | { kind: 'feature'; result: SearchResult; search: string }
+  | {
+      kind: 'video';
+      video: VideoItem;
+      search: string;
+      creator: string | null;
+    };
 
-// kind-prefixed so a feature and a video can never collide on value, and the
-// label the user types against.
+// kind-prefixed so a feature and a video can never collide on value.
 const itemId = (it: MapSearchItem) =>
   it.kind === 'feature' ? `feature:${it.result.id}` : `video:${it.video.id}`;
+// Shown in the row.
 const itemLabel = (it: MapSearchItem) =>
   it.kind === 'feature' ? it.result.name : it.video.title;
+// Matched against by the filter (not shown).
+const itemSearch = (it: MapSearchItem) => it.search;
 
 export default function MapSearch({
   items,
@@ -55,7 +67,7 @@ export default function MapSearch({
   const { contains } = useFilter({ sensitivity: 'base' });
   const { collection, filter } = useListCollection<MapSearchItem>({
     initialItems: items,
-    itemToString: itemLabel,
+    itemToString: itemSearch,
     itemToValue: itemId,
     filter: contains,
     limit: MAX_RESULTS,
@@ -109,7 +121,7 @@ export default function MapSearch({
               </Combobox.Empty>
               {collection.items.map(item => (
                 <Combobox.Item item={item} key={itemId(item)}>
-                  <HStack gap={2}>
+                  <HStack gap={2} minW={0}>
                     {item.kind === 'video' ? (
                       <ShotTypeIcon shotType={item.video.shotType} />
                     ) : (
@@ -118,9 +130,16 @@ export default function MapSearch({
                         name={item.result.name}
                       />
                     )}
-                    <Text fontSize='sm' lineClamp={1}>
-                      {itemLabel(item)}
-                    </Text>
+                    <Box minW={0}>
+                      <Text fontSize='sm' lineClamp={1}>
+                        {itemLabel(item)}
+                      </Text>
+                      {item.kind === 'video' && item.creator && (
+                        <Text fontSize='xs' color='fg.muted' lineClamp={1}>
+                          {item.creator}
+                        </Text>
+                      )}
+                    </Box>
                   </HStack>
                 </Combobox.Item>
               ))}
