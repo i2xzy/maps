@@ -35,8 +35,7 @@ import {
 
 import type { FeatureType, FeatureStatus } from '@supabase/types';
 import { featureTypes } from '@/components/feature/config';
-import { FeatureIcon } from '@/components/feature/feature-icon';
-import { ShotTypeIcon } from '@/components/map/shot-type-config';
+import { FeatureDisc, VideoDisc } from '@/components/map/marker-disc';
 import { thinScrollbar } from '@/components/map/panel-styles';
 
 export type SearchResult = {
@@ -55,6 +54,8 @@ export type VideoItem = {
   publishedDate: string | null;
   shotType: string | null;
   creatorId: string | null;
+  /** The video's marker colour (creator colour, or grey default). */
+  color: string;
   year: string;
   center: [number, number];
 };
@@ -346,7 +347,7 @@ export default function MapControlPanel(props: Props) {
                     _hover={{ bg: 'bg.muted' }}
                     onClick={() => props.onSelectResult(r)}
                   >
-                    <FeatureIcon type={r.type} name={r.name} />
+                    <FeatureDisc type={r.type} name={r.name} />
                     <Text fontSize='xs' lineClamp={1}>
                       {r.name}
                     </Text>
@@ -410,7 +411,7 @@ export default function MapControlPanel(props: Props) {
                               _hover={{ bg: 'bg.muted' }}
                               onClick={() => props.onSelectVideo(v)}
                             >
-                              <ShotTypeIcon shotType={v.shotType} />
+                              <VideoDisc shotType={v.shotType} color={v.color} />
                               <Text fontSize='xs' lineClamp={1}>
                                 {v.title}
                               </Text>

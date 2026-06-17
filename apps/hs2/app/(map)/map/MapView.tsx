@@ -406,6 +406,7 @@ export default function MapView({ features, media, creators }: Props) {
       if (byId.has(yt)) continue;
       const center = representativePoint(r.geojson);
       if (!center) continue;
+      const cid = r.creator_id ? String(r.creator_id) : null;
       byId.set(yt, {
         id: String(r.id),
         youtubeId: yt,
@@ -413,14 +414,16 @@ export default function MapView({ features, media, creators }: Props) {
         recordedDate: r.recorded_date ? String(r.recorded_date) : null,
         publishedDate: r.published_at ? String(r.published_at) : null,
         shotType: r.shot_type ? String(r.shot_type) : null,
-        creatorId: r.creator_id ? String(r.creator_id) : null,
+        creatorId: cid,
+        // Marker colour: the creator's colour, else the grey default.
+        color: (cid && creatorColorMap.get(cid)) || DEFAULT_MEDIA_COLOR,
         year: yearOf(r),
         center,
       });
     }
     const eff = (v: VideoItem) => v.recordedDate ?? v.publishedDate ?? '';
     return [...byId.values()].sort((a, b) => eff(b).localeCompare(eff(a)));
-  }, [videoRows]);
+  }, [videoRows, creatorColorMap]);
 
   // Videos shown after the creator filter (the Videos tab handles year visibility).
   const videoList = useMemo(
@@ -662,22 +665,17 @@ export default function MapView({ features, media, creators }: Props) {
           ? (creatorName.get(video.creatorId) ?? null)
           : null;
         const shot = video.shotType ? shotTypeLabel(video.shotType) : '';
-        // Same colour as the video's map marker (creator colour, else grey).
-        const color =
-          (video.creatorId && creatorColorMap.get(video.creatorId)) ||
-          DEFAULT_MEDIA_COLOR;
         return {
           kind: 'video' as const,
           video,
           creator,
-          color,
           search: [video.title, creator, video.youtubeId, shot]
             .filter(Boolean)
             .join(' '),
         };
       }),
     ],
-    [searchIndex, allVideos, creatorName, creatorColorMap]
+    [searchIndex, allVideos, creatorName]
   );
 
   // Route-ordered (by chainage) browse list of the *visible* features for the

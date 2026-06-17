@@ -13,7 +13,6 @@ import { useState } from 'react';
 import {
   Box,
   Card,
-  Circle,
   Combobox,
   HStack,
   InputGroup,
@@ -24,8 +23,7 @@ import {
 } from '@chakra-ui/react';
 import { LuSearch } from 'react-icons/lu';
 
-import { FeatureIcon } from '@/components/feature/feature-icon';
-import { ShotTypeIcon } from '@/components/map/shot-type-config';
+import { FeatureDisc, VideoDisc } from '@/components/map/marker-disc';
 import type { SearchResult, VideoItem } from '@/components/map/MapControlPanel';
 
 const MAX_RESULTS = 12;
@@ -43,8 +41,6 @@ export type MapSearchItem =
       video: VideoItem;
       search: string;
       creator: string | null;
-      /** The video's marker colour (creator colour, or grey default). */
-      color: string;
     };
 
 // kind-prefixed so a feature and a video can never collide on value.
@@ -126,21 +122,12 @@ export default function MapSearch({
                 <Combobox.Item item={item} key={itemId(item)}>
                   <HStack gap={2} minW={0}>
                     {item.kind === 'video' ? (
-                      // Mirror the map marker: white glyph on a creator-colour
-                      // disc, so it stays legible whatever the creator colour.
-                      <Circle
-                        size='20px'
-                        bg={item.color}
-                        fontSize='11px'
-                        flexShrink={0}
-                      >
-                        <ShotTypeIcon
-                          shotType={item.video.shotType}
-                          color='white'
-                        />
-                      </Circle>
+                      <VideoDisc
+                        shotType={item.video.shotType}
+                        color={item.video.color}
+                      />
                     ) : (
-                      <FeatureIcon
+                      <FeatureDisc
                         type={item.result.type}
                         name={item.result.name}
                       />
