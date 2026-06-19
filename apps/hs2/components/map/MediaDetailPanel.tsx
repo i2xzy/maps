@@ -4,7 +4,13 @@
  * Detail panel for a video picked on the map or in the Videos tab. Mirrors
  * FeatureDetailPanel: stay on the map, show the video's thumbnail/title/date,
  * a link to its full page, and the structures it covers (fetched client-side
- * across all of the video's markers via youtube_id).
+ * for THIS media row via its id).
+ *
+ * NB: fetch by media `id`, not `youtube_id`. One YouTube upload is stored as
+ * many per-location "chapter" rows that share a youtube_id, each linked to its
+ * own structures (e.g. the "Delta Junction" chapter covers 23 features, the
+ * "Faraday Avenue Underbridge" chapter covers 1). Keying on youtube_id would
+ * union every chapter's links and show the whole area on every marker.
  */
 import { useEffect, useState } from 'react';
 import {
@@ -48,6 +54,21 @@ export type SelectedVideo = {
 
 type LinkedFeature = { id: string; name: string; type: FeatureType };
 
+// The chapter URL comes from the DB; only trust it as an href if it's a real
+// http(s) YouTube link (guards malformed values and unsafe schemes like
+// javascript:). Anything else falls back to the bare watch?v= URL.
+function isYouTubeUrl(u: string | null | undefined): u is string {
+  if (!u) return false;
+  try {
+    const { protocol, hostname } = new URL(u);
+    if (protocol !== 'https:' && protocol !== 'http:') return false;
+    const host = hostname.replace(/^www\./, '');
+    return host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtu.be';
+  } catch {
+    return false;
+  }
+}
+
 export default function MediaDetailPanel({
   video,
   onClose,
@@ -58,6 +79,9 @@ export default function MediaDetailPanel({
   const [result, setResult] = useState<{
     forId: string;
     features: LinkedFeature[];
+    // This chapter's YouTube URL, which includes the &t= start timestamp so the
+    // button opens the video at the moment this structure appears.
+    url: string | null;
   } | null>(null);
 
   useEffect(() => {
@@ -67,12 +91,13 @@ export default function MediaDetailPanel({
     const supabase = createClient();
     supabase
       .from('media')
-      .select('media_features ( features ( id, name, type ) )')
-      .eq('youtube_id', video.youtubeId)
+      .select('url, media_features ( features ( id, name, type ) )')
+      .eq('id', video.id)
       .then(
         ({ data }) => {
           if (cancelled) return;
           const rows = (data ?? []) as unknown as {
+            url: string | null;
             media_features: { features: LinkedFeature | null }[] | null;
           }[];
           const seen = new Set<string>();
@@ -86,12 +111,12 @@ export default function MediaDetailPanel({
               }
             }
           }
-          setResult({ forId: video.id, features });
+          setResult({ forId: video.id, features, url: rows[0]?.url ?? null });
         },
         // On a network failure the promise rejects; resolve to an empty list so
         // the panel shows "No linked structures" instead of spinning forever.
         () => {
-          if (!cancelled) setResult({ forId: video.id, features: [] });
+          if (!cancelled) setResult({ forId: video.id, features: [], url: null });
         }
       );
 
@@ -105,6 +130,12 @@ export default function MediaDetailPanel({
   const ready = result?.forId === video.id;
   const features = ready ? result.features : [];
   const thumb = `https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`;
+  // Prefer the chapter's stored URL (carries the &t= timestamp); fall back to a
+  // bare watch URL until the fetch resolves or if the row has no stored URL.
+  const storedUrl = ready ? result.url : null;
+  const youtubeHref = isYouTubeUrl(storedUrl)
+    ? storedUrl
+    : `https://www.youtube.com/watch?v=${video.youtubeId}`;
 
   return (
     <Card.Root
@@ -180,7 +211,7 @@ export default function MediaDetailPanel({
             the explicit jump out to YouTube (new tab). */}
         <Button colorPalette='red' size='sm' asChild>
           <a
-            href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
+            href={youtubeHref}
             target='_blank'
             rel='noopener noreferrer'
           >

@@ -32,6 +32,7 @@ import type {
   StyleSpecification,
   ExpressionSpecification,
   CircleLayerSpecification,
+  SymbolLayerSpecification,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Alert, Box, Center, Text } from '@chakra-ui/react';
@@ -41,6 +42,7 @@ import {
   representativePoint,
   type GeoRow,
 } from '@/utils/map-geojson';
+import { dateInRange, earliestDate } from '@/utils/video-filters';
 import { useLocalStorage } from 'react-use';
 import type { FeatureType, FeatureStatus } from '@supabase/types';
 import {
@@ -143,9 +145,32 @@ function saveViewToUrl(v: SavedView) {
   window.history.replaceState(null, '', `${window.location.pathname}?${p}`);
 }
 
+// The active selection lives in the URL too (`sel=f:<id>` for a feature,
+// `sel=v:<id>` for a video), so a selected structure/video is shareable and
+// survives reload — the panel reopens, the list row highlights, and the marker
+// keeps its glow. Same replaceState mechanism as the camera (no navigation).
+type SelectionRef = { kind: 'f' | 'v'; id: string };
+function loadSelFromUrl(): SelectionRef | null {
+  if (typeof window === 'undefined') return null;
+  const raw = new URLSearchParams(window.location.search).get('sel');
+  const m = raw?.match(/^([fv]):(.+)$/);
+  return m ? { kind: m[1] as 'f' | 'v', id: m[2]! } : null;
+}
+function saveSelToUrl(sel: SelectionRef | null) {
+  if (typeof window === 'undefined') return;
+  const p = new URLSearchParams(window.location.search);
+  if (sel) p.set('sel', `${sel.kind}:${sel.id}`);
+  else p.delete('sel');
+  window.history.replaceState(null, '', `${window.location.pathname}?${p}`);
+}
+
 // Videos are dense secondary data — keep them off until the user zooms into an
 // area. Features (the primary content) are always shown, unclustered.
 const VIDEO_MIN_ZOOM = 12;
+
+// Picking an item from a list/search flies IN to at least this zoom — but never
+// zooms out if the user is already closer in (uses max(current, this)).
+const SELECT_ZOOM = 15.5;
 
 const L = {
   featurePoints: 'feature-points-markers',
@@ -186,6 +211,17 @@ const isHovered: ExpressionSpecification = [
   false,
 ];
 
+// The currently-selected marker/line keeps the same glow + casing + lift as a
+// hover, persistently (it doesn't clear when the cursor moves off). Driven by a
+// `selected` feature-state set from the active selection, separate from `hover`
+// so the two never fight. `isActive` = hovered OR selected.
+const isSelected: ExpressionSpecification = [
+  'boolean',
+  ['feature-state', 'selected'],
+  false,
+];
+const isActive: ExpressionSpecification = ['any', isHovered, isSelected];
+
 // Feature pins and video markers render at the same icon-size, so the hover
 // glow is a single solid white halo behind the marker — a filled disc (not a
 // thin ring) for a bolder, more "solid" highlight. circle-opacity is a paint
@@ -193,13 +229,24 @@ const isHovered: ExpressionSpecification = [
 // setFeatureState() call — no React re-render.
 const HOVER_FADE = { duration: 150 };
 
-const hoverGlowPaint: CircleLayerSpecification['paint'] = {
+// Hard-edged opaque white ring with a slightly translucent fill (the Google My
+// Maps highlight): blur 0 = crisp edge, the stroke is the solid ring, the fill
+// lets the basemap show through a touch. Built per state-condition so the hover
+// and selected glows can live on separate layers (hover mounted above) — `cond`
+// gates both opacities so a layer only paints when its state is set.
+const glowPaint = (
+  cond: ExpressionSpecification
+): CircleLayerSpecification['paint'] => ({
   'circle-radius': 20,
+  'circle-blur': 0,
   'circle-color': '#FFFFFF',
-  'circle-blur': 0.25,
-  'circle-opacity': ['case', isHovered, 0.7, 0],
+  'circle-opacity': ['case', cond, 0.8, 0],
   'circle-opacity-transition': HOVER_FADE,
-};
+  'circle-stroke-width': 2,
+  'circle-stroke-color': '#FFFFFF',
+  'circle-stroke-opacity': ['case', cond, 1, 0],
+  'circle-stroke-opacity-transition': HOVER_FADE,
+});
 
 const typeColor = typeColorExpression();
 
@@ -216,12 +263,32 @@ const featurePointLayer: LayerProps = {
   },
 };
 
+// Two glow layers per source: the persistent `selected` ring (mounted lower)
+// and the transient `hover` ring (mounted above), so a hovered marker's
+// highlight always sits on top of the selected one.
+const featureSelectedGlowLayer: LayerProps = {
+  id: 'feature-points-selected',
+  source: 'feature-points',
+  type: 'circle',
+  filter: ['!', ['has', 'point_count']],
+  paint: glowPaint(isSelected),
+};
+
 const featureHoverLayer: LayerProps = {
   id: 'feature-points-hover',
   source: 'feature-points',
   type: 'circle',
   filter: ['!', ['has', 'point_count']],
-  paint: hoverGlowPaint,
+  paint: glowPaint(isHovered),
+};
+
+const mediaSelectedGlowLayer: LayerProps = {
+  id: 'media-points-selected',
+  source: 'media-points',
+  type: 'circle',
+  minzoom: VIDEO_MIN_ZOOM,
+  filter: ['!', ['has', 'point_count']],
+  paint: glowPaint(isSelected),
 };
 
 const mediaHoverLayer: LayerProps = {
@@ -230,7 +297,7 @@ const mediaHoverLayer: LayerProps = {
   type: 'circle',
   minzoom: VIDEO_MIN_ZOOM,
   filter: ['!', ['has', 'point_count']],
-  paint: hoverGlowPaint,
+  paint: glowPaint(isHovered),
 };
 
 const featureLineLayer: LayerProps = {
@@ -253,7 +320,7 @@ const featureLineHoverLayer: LayerProps = {
   paint: {
     'line-color': '#FFFFFF',
     'line-width': 6,
-    'line-opacity': ['case', isHovered, 1, 0],
+    'line-opacity': ['case', isActive, 1, 0],
     'line-opacity-transition': HOVER_FADE,
   },
 };
@@ -267,7 +334,7 @@ const mediaLineHoverLayer: LayerProps = {
   paint: {
     'line-color': '#FFFFFF',
     'line-width': 5,
-    'line-opacity': ['case', isHovered, 1, 0],
+    'line-opacity': ['case', isActive, 1, 0],
     'line-opacity-transition': HOVER_FADE,
   },
 };
@@ -297,21 +364,36 @@ const featureIconLayer: LayerProps = {
 // hovered marker fades in, it lifts above its neighbours — the Google-My-Maps
 // hover lift, without resizing. icon-opacity is a paint property so it can read
 // feature-state.
+const featureRaiseLayout = {
+  'icon-image': ['concat', ICON_PREFIX, ['get', 'type']],
+  'icon-size': MARKER_ICON_SIZE,
+  'icon-allow-overlap': true,
+  'icon-ignore-placement': true,
+} satisfies SymbolLayerSpecification['layout'];
+
+const raisePaint = (
+  cond: ExpressionSpecification
+): SymbolLayerSpecification['paint'] => ({
+  'icon-opacity': ['case', cond, 1, 0],
+  'icon-opacity-transition': HOVER_FADE,
+});
+
+const featureSelectedRaiseLayer: LayerProps = {
+  id: 'feature-points-selected-raise',
+  source: 'feature-points',
+  type: 'symbol',
+  filter: ['!', ['has', 'point_count']],
+  layout: featureRaiseLayout,
+  paint: raisePaint(isSelected),
+};
+
 const featureRaiseLayer: LayerProps = {
   id: 'feature-points-raise',
   source: 'feature-points',
   type: 'symbol',
   filter: ['!', ['has', 'point_count']],
-  layout: {
-    'icon-image': ['concat', ICON_PREFIX, ['get', 'type']],
-    'icon-size': MARKER_ICON_SIZE,
-    'icon-allow-overlap': true,
-    'icon-ignore-placement': true,
-  },
-  paint: {
-    'icon-opacity': ['case', isHovered, 1, 0],
-    'icon-opacity-transition': HOVER_FADE,
-  },
+  layout: featureRaiseLayout,
+  paint: raisePaint(isHovered),
 };
 
 /** Effective date for a video: recorded_date, else published_at. */
@@ -332,6 +414,10 @@ export default function MapView({ features, media, creators, dataError }: Props)
   // The point marker currently showing the hover glow (its source + generated
   // feature id), so we can clear its feature-state when the cursor moves off.
   const hoveredRef = useRef<{ source: string; id: string | number } | null>(null);
+  // The marker(s) currently carrying the persistent `selected` feature-state, so
+  // we can clear them when the selection changes. A feature id may belong to the
+  // point or the line source, so we set/clear both (a no-op on the wrong one).
+  const selectedMarkerRef = useRef<{ source: string; id: string }[]>([]);
   const [failed, setFailed] = useState(false);
   const [iconsReady, setIconsReady] = useState(false);
 
@@ -349,8 +435,44 @@ export default function MapView({ features, media, creators, dataError }: Props)
   const [hiddenStatuses, setHiddenStatuses] = useState<Set<string>>(new Set());
   const [hiddenYears, setHiddenYears] = useState<Set<string>>(new Set());
   const [hiddenCreators, setHiddenCreators] = useState<Set<string>>(new Set());
-  const [selected, setSelected] = useState<SelectedFeature | null>(null);
-  const [selectedVideo, setSelectedVideo] = useState<SelectedVideo | null>(null);
+  // Active video date-range filter, as ISO date strings from the DatePicker:
+  // [] none, [from], or [from, to]. Stacks (AND) with the year/creator filters.
+  const [dateRange, setDateRange] = useState<string[]>([]);
+  // Seed the selection from the URL (sel=f:<id> / sel=v:<id>) on first render so
+  // a shared/bookmarked link reopens the panel, highlights the list row, and
+  // glows the marker — no restore effect (which would be a setState-in-effect).
+  const [selected, setSelected] = useState<SelectedFeature | null>(() => {
+    const sel = loadSelFromUrl();
+    if (sel?.kind !== 'f') return null;
+    const row = features.find(r => String(r.id) === sel.id);
+    if (!row) return null;
+    return {
+      id: String(row.id),
+      name: String(row.name ?? ''),
+      type: row.type as FeatureType,
+      status: (row.status as FeatureStatus) ?? null,
+      chainage: typeof row.chainage === 'number' ? row.chainage : null,
+    };
+  });
+  const [selectedVideo, setSelectedVideo] = useState<SelectedVideo | null>(() => {
+    const sel = loadSelFromUrl();
+    if (sel?.kind !== 'v') return null;
+    const row = media.find(r => !!r.youtube_id && String(r.id) === sel.id);
+    if (!row) return null;
+    const cid = row.creator_id ? String(row.creator_id) : null;
+    const c = cid ? creators.find(x => x.id === cid) : null;
+    return {
+      id: String(row.id),
+      youtubeId: String(row.youtube_id),
+      title: String(row.title ?? ''),
+      recordedDate: row.recorded_date ? String(row.recorded_date) : null,
+      publishedDate: row.published_at ? String(row.published_at) : null,
+      shotType: row.shot_type ? String(row.shot_type) : null,
+      creatorId: cid,
+      creator: c?.name ?? null,
+      creatorImage: c?.imageUrl ?? null,
+    };
+  });
 
   // Whether the combined marker sprites have been built (async, on the map).
   const [combinedReady, setCombinedReady] = useState(false);
@@ -405,19 +527,20 @@ export default function MapView({ features, media, creators, dataError }: Props)
     return m;
   }, [creators]);
 
-  // All videos, deduped by youtube_id (the universe), newest first by effective
-  // date (recorded_date, else published_at).
+  // One entry per media row — NOT deduped by youtube_id. A single YouTube upload
+  // is stored as multiple per-location "chapter" rows sharing a youtube_id, and
+  // each is its own marker on the map, so each gets its own list entry (keeping
+  // the list, the per-year/creator counts, and the markers in lockstep). Newest
+  // first by effective date (recorded_date, else published_at).
   const allVideos = useMemo<VideoItem[]>(() => {
-    const byId = new globalThis.Map<string, VideoItem>();
+    const out: VideoItem[] = [];
     for (const r of videoRows) {
-      const yt = String(r.youtube_id);
-      if (byId.has(yt)) continue;
       const center = representativePoint(r.geojson);
       if (!center) continue;
       const cid = r.creator_id ? String(r.creator_id) : null;
-      byId.set(yt, {
+      out.push({
         id: String(r.id),
-        youtubeId: yt,
+        youtubeId: String(r.youtube_id),
         title: String(r.title ?? ''),
         recordedDate: r.recorded_date ? String(r.recorded_date) : null,
         publishedDate: r.published_at ? String(r.published_at) : null,
@@ -430,16 +553,37 @@ export default function MapView({ features, media, creators, dataError }: Props)
       });
     }
     const eff = (v: VideoItem) => v.recordedDate ?? v.publishedDate ?? '';
-    return [...byId.values()].sort((a, b) => eff(b).localeCompare(eff(a)));
+    return out.sort((a, b) => eff(b).localeCompare(eff(a)));
   }, [videoRows, creatorColorMap]);
 
-  // Videos shown after the creator filter (the Videos tab handles year visibility).
-  const videoList = useMemo(
-    () => allVideos.filter(v => !hiddenCreators.has(v.creatorId ?? '')),
-    [allVideos, hiddenCreators]
+  // Oldest video date (ISO) across the whole universe — the DatePicker's min.
+  // From allVideos (not the filtered list) so the bound doesn't shift as filters
+  // change.
+  const earliestVideoDate = useMemo(
+    () => earliestDate(allVideos.map(v => v.recordedDate ?? v.publishedDate)),
+    [allVideos]
   );
 
-  // Creators with videos (universe counts), most prolific first.
+  // Whether an effective date (recorded_date, else published_at) falls in the
+  // active range. (See utils/video-filters for the rules + tests.)
+  const inDateRange = useCallback(
+    (eff: string | null) => dateInRange(eff, dateRange[0], dateRange[1]),
+    [dateRange]
+  );
+
+  // Videos shown after the creator + date-range filters (the Videos tab handles
+  // year visibility).
+  const videoList = useMemo(
+    () =>
+      allVideos.filter(
+        v =>
+          !hiddenCreators.has(v.creatorId ?? '') &&
+          inDateRange(v.recordedDate ?? v.publishedDate)
+      ),
+    [allVideos, hiddenCreators, inDateRange]
+  );
+
+  // Creators with videos (universe marker counts — one per chapter), most prolific first.
   const creatorList = useMemo<CreatorGroup[]>(() => {
     const counts = new globalThis.Map<string, number>();
     for (const v of allVideos) {
@@ -457,7 +601,7 @@ export default function MapView({ features, media, creators, dataError }: Props)
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [allVideos, creatorName, creatorColorMap]);
 
-  // Year groups (deduped video counts in visible creators), newest first.
+  // Year groups (marker counts in visible creators — one per chapter), newest first.
   const years = useMemo<YearGroup[]>(() => {
     const counts = new globalThis.Map<string, number>();
     for (const v of videoList) counts.set(v.year, (counts.get(v.year) ?? 0) + 1);
@@ -470,17 +614,18 @@ export default function MapView({ features, media, creators, dataError }: Props)
       });
   }, [videoList]);
 
-  // Map markers: videos in the visible years AND visible creators.
+  // Map markers: videos in the visible years AND visible creators AND date range.
   const mediaGeo = useMemo(
     () =>
       rowsToFeatureCollection(
         videoRows.filter(
           r =>
             !hiddenYears.has(yearOf(r)) &&
-            !hiddenCreators.has(r.creator_id ? String(r.creator_id) : '')
+            !hiddenCreators.has(r.creator_id ? String(r.creator_id) : '') &&
+            inDateRange(videoDate(r))
         )
       ),
-    [videoRows, hiddenYears, hiddenCreators]
+    [videoRows, hiddenYears, hiddenCreators, inDateRange]
   );
 
   // --- Creator colouring -----------------------------------------------------
@@ -600,24 +745,34 @@ export default function MapView({ features, media, creators, dataError }: Props)
 
   // Hover lift for video markers — same sprite, same size, on top of all other
   // markers, faded in only when hovered (see featureRaiseLayer for the why).
-  const mediaRaiseLayer = useMemo<LayerProps>(
-    () => ({
-      id: 'media-points-raise',
-      source: 'media-points',
-      type: 'symbol',
-      minzoom: VIDEO_MIN_ZOOM,
-      filter: ['!', ['has', 'point_count']],
-      layout: {
+  const mediaRaiseLayers = useMemo<{ selected: LayerProps; hover: LayerProps }>(
+    () => {
+      const layout = {
         'icon-image': markerImageExpr,
         'icon-size': MARKER_ICON_SIZE,
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
-      },
-      paint: {
-        'icon-opacity': ['case', isHovered, 1, 0],
-        'icon-opacity-transition': HOVER_FADE,
-      },
-    }),
+      } satisfies SymbolLayerSpecification['layout'];
+      const base = {
+        source: 'media-points',
+        type: 'symbol',
+        minzoom: VIDEO_MIN_ZOOM,
+        filter: ['!', ['has', 'point_count']],
+        layout,
+      } satisfies Partial<LayerProps>;
+      return {
+        selected: {
+          ...base,
+          id: 'media-points-selected-raise',
+          paint: raisePaint(isSelected),
+        },
+        hover: {
+          ...base,
+          id: 'media-points-raise',
+          paint: raisePaint(isHovered),
+        },
+      };
+    },
     [markerImageExpr]
   );
 
@@ -734,6 +889,46 @@ export default function MapView({ features, media, creators, dataError }: Props)
     (keys: string[], hidden: boolean) => setKeys(setHiddenStatuses, keys, hidden),
     []
   );
+  const onSetYears = useCallback(
+    (keys: string[], hidden: boolean) => setKeys(setHiddenYears, keys, hidden),
+    []
+  );
+  const onSetCreators = useCallback(
+    (keys: string[], hidden: boolean) => setKeys(setHiddenCreators, keys, hidden),
+    []
+  );
+  // "Only this one": hide every other year/creator in a single update.
+  const onOnlyYear = useCallback(
+    (year: string) =>
+      setHiddenYears(new Set(years.map(y => y.year).filter(y => y !== year))),
+    [years]
+  );
+  const onOnlyCreator = useCallback(
+    (id: string) =>
+      setHiddenCreators(
+        new Set(creatorList.map(c => c.id).filter(c => c !== id))
+      ),
+    [creatorList]
+  );
+  // Picking a date range supersedes the manual year checkboxes — reset them
+  // (show all years) so the range is the sole temporal filter and the toggles
+  // don't silently subtract from it. Clearing the range leaves years all-shown.
+  const onDateRangeChange = useCallback((range: string[]) => {
+    setDateRange(range);
+    if (range.length > 0) setHiddenYears(new Set());
+  }, []);
+
+  // The creators Listbox is multi-select where selected = shown; map its value
+  // back to the hidden set (hidden = every creator not in the shown list).
+  const onSetShownCreators = useCallback(
+    (shownIds: string[]) => {
+      const shown = new Set(shownIds);
+      setHiddenCreators(
+        new Set(creatorList.map(c => c.id).filter(id => !shown.has(id)))
+      );
+    },
+    [creatorList]
+  );
   const onResetFilters = useCallback(() => {
     setHiddenTypes(new Set());
     setHiddenStatuses(new Set());
@@ -751,32 +946,49 @@ export default function MapView({ features, media, creators, dataError }: Props)
     });
   }, []);
 
+  // Fly to a picked point, zooming in to at least SELECT_ZOOM but never zooming
+  // out if the user is already closer in.
+  const flyToPoint = useCallback((center: [number, number]) => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo({
+      center,
+      zoom: Math.max(map.getZoom(), SELECT_ZOOM),
+      duration: 900,
+    });
+  }, []);
+
   const onSelectResult = useCallback(
     (r: SearchResult) => {
-      mapRef.current?.flyTo({ center: r.center, zoom: 13, duration: 900 });
+      flyToPoint(r.center);
       const row = features.find(f => String(f.id) === r.id);
       if (row) selectFeatureProps(row);
     },
-    [features, selectFeatureProps]
+    [features, selectFeatureProps, flyToPoint]
+  );
+
+  const buildSelectedVideo = useCallback(
+    (v: VideoItem): SelectedVideo => ({
+      id: v.id,
+      youtubeId: v.youtubeId,
+      title: v.title,
+      recordedDate: v.recordedDate,
+      publishedDate: v.publishedDate,
+      shotType: v.shotType,
+      creatorId: v.creatorId,
+      creator: v.creatorId ? (creatorName.get(v.creatorId) ?? null) : null,
+      creatorImage: v.creatorId ? (creatorImage.get(v.creatorId) ?? null) : null,
+    }),
+    [creatorName, creatorImage]
   );
 
   const onSelectVideo = useCallback(
     (v: VideoItem) => {
-      mapRef.current?.flyTo({ center: v.center, zoom: 13, duration: 900 });
+      flyToPoint(v.center);
       setSelected(null);
-      setSelectedVideo({
-        id: v.id,
-        youtubeId: v.youtubeId,
-        title: v.title,
-        recordedDate: v.recordedDate,
-        publishedDate: v.publishedDate,
-        shotType: v.shotType,
-        creatorId: v.creatorId,
-        creator: v.creatorId ? (creatorName.get(v.creatorId) ?? null) : null,
-        creatorImage: v.creatorId ? (creatorImage.get(v.creatorId) ?? null) : null,
-      });
+      setSelectedVideo(buildSelectedVideo(v));
     },
-    [creatorName, creatorImage]
+    [buildSelectedVideo, flyToPoint]
   );
 
   // Floating-search pick: dispatch to the feature or video handler by kind.
@@ -868,6 +1080,41 @@ export default function MapView({ features, media, creators, dataError }: Props)
     if (map && prev) map.setFeatureState(prev, { hover: false });
     hoveredRef.current = null;
   }, [featureGeo, mediaGeo]);
+
+  // --- Selection ↔ URL ↔ map highlight --------------------------------------
+  // (Initial restore is seeded in the useState initializers above.)
+  // Mirror the active selection into the URL (shareable, survives reload).
+  useEffect(() => {
+    saveSelToUrl(
+      selected
+        ? { kind: 'f', id: selected.id }
+        : selectedVideo
+          ? { kind: 'v', id: selectedVideo.id }
+          : null
+    );
+  }, [selected, selectedVideo]);
+
+  // Keep the persistent `selected` feature-state in sync with the selection so
+  // the chosen marker/line stays glowing. Re-runs when the sources (re)load or
+  // the filtered data changes (setData can drop feature-state), so the glow
+  // survives filter toggles. A feature id can live in the point OR line source,
+  // so we set both — a no-op on whichever doesn't contain it.
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    for (const m of selectedMarkerRef.current) {
+      map.setFeatureState(m, { selected: false });
+    }
+    selectedMarkerRef.current = [];
+    const id = selected?.id ?? selectedVideo?.id ?? null;
+    if (!id) return;
+    const sources = selected
+      ? ['feature-points', 'feature-lines']
+      : ['media-points', 'media-lines'];
+    const next = sources.map(source => ({ source, id }));
+    for (const m of next) map.setFeatureState(m, { selected: true });
+    selectedMarkerRef.current = next;
+  }, [selected, selectedVideo, combinedReady, iconsReady, featureGeo, mediaGeo]);
 
   const onLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
@@ -966,20 +1213,26 @@ export default function MapView({ features, media, creators, dataError }: Props)
           {combinedReady && <Layer {...mediaMarkerLayer} />}
         </Source>
 
-        {/* Hover overlays. Mounted together — and only once BOTH marker types
-            have loaded — so react-map-gl appends them in one batch on top of
-            every normal marker, in this order: glow discs (behind), then the
-            lifted markers (in front). Gating matters: react-map-gl appends new
-            layers above existing ones rather than re-sorting to match JSX, so
-            an ungated glow would mount first and end up *beneath* the markers
-            (its glow then hidden behind neighbours). Each layer shows only the
-            hovered feature (feature-state); they reference the sources above. */}
+        {/* Highlight overlays. Mounted together — and only once BOTH marker
+            types have loaded — so react-map-gl appends them in one batch on top
+            of every normal marker, as two stacked groups: the SELECTED group
+            (its glow ring + lifted icon), then the HOVER group (glow ring +
+            lifted icon) above it — so the hovered marker AND its highlight always
+            sit above the selected one. Within each group the glow is below its
+            lifted icon. Gating matters: react-map-gl appends new layers above
+            existing ones rather than re-sorting to match JSX, so an ungated glow
+            would mount first and end up *beneath* the markers. Each layer paints
+            only its feature-state (selected / hover). */}
         {iconsReady && combinedReady && (
           <>
+            <Layer {...featureSelectedGlowLayer} />
+            <Layer {...mediaSelectedGlowLayer} />
+            <Layer {...featureSelectedRaiseLayer} />
+            <Layer {...mediaRaiseLayers.selected} />
             <Layer {...featureHoverLayer} />
             <Layer {...mediaHoverLayer} />
             <Layer {...featureRaiseLayer} />
-            <Layer {...mediaRaiseLayer} />
+            <Layer {...mediaRaiseLayers.hover} />
           </>
         )}
       </Map>
@@ -999,11 +1252,21 @@ export default function MapView({ features, media, creators, dataError }: Props)
         years={years}
         hiddenYears={hiddenYears}
         onToggleYear={year => setHiddenYears(s => toggleInSet(s, year))}
+        onSetYears={onSetYears}
+        onOnlyYear={onOnlyYear}
+        dateRange={dateRange}
+        onDateRangeChange={onDateRangeChange}
+        earliestVideoDate={earliestVideoDate}
         videos={videoList}
         onSelectVideo={onSelectVideo}
         creators={creatorList}
         hiddenCreators={hiddenCreators}
         onToggleCreator={id => setHiddenCreators(s => toggleInSet(s, id))}
+        onSetCreators={onSetCreators}
+        onSetShownCreators={onSetShownCreators}
+        onOnlyCreator={onOnlyCreator}
+        selectedId={selected?.id ?? selectedVideo?.id ?? null}
+        selectedKind={selected ? 'feature' : selectedVideo ? 'video' : null}
       />
 
       <MapSearch items={searchItems} onSelect={onSelectSearch} left={topLeftInset} />
