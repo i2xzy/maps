@@ -7,7 +7,7 @@
  *              a list of videos in the visible years.
  * Pure presentational — all state lives in MapView; this emits callbacks.
  */
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Card,
@@ -22,10 +22,14 @@ import {
   Badge,
   Wrap,
   Checkbox,
+  Checkmark,
   Tabs,
   Input,
   InputGroup,
+  Listbox,
+  createListCollection,
 } from '@chakra-ui/react';
+import { thinScrollbar } from '@/components/map/panel-styles';
 import {
   LuPanelLeftClose,
   LuPanelLeftOpen,
@@ -37,7 +41,7 @@ import {
 import type { FeatureType, FeatureStatus } from '@supabase/types';
 import { featureTypes } from '@/components/feature/config';
 import { FeatureDisc, VideoDisc } from '@/components/map/marker-disc';
-import { thinScrollbar } from '@/components/map/panel-styles';
+import DateRangeFilter from '@/components/map/DateRangeFilter';
 
 export type SearchResult = {
   id: string;
@@ -88,6 +92,12 @@ type Props = {
   years: YearGroup[];
   hiddenYears: Set<string>;
   onToggleYear: (year: string) => void;
+  onSetYears: (years: string[], hidden: boolean) => void;
+  onOnlyYear: (year: string) => void;
+  /** Active video date range changed (ISO strings: [], [from], or [from,to]). */
+  onDateRangeChange: (range: string[]) => void;
+  /** Oldest video date (ISO) — the date filter's min bound. */
+  earliestVideoDate?: string | null;
   videos: VideoItem[];
   onSelectVideo: (v: VideoItem) => void;
 
@@ -95,6 +105,62 @@ type Props = {
   creators: CreatorGroup[];
   hiddenCreators: Set<string>;
   onToggleCreator: (id: string) => void;
+  onSetCreators: (ids: string[], hidden: boolean) => void;
+  /** Replace the shown-creator set (from the multi-select listbox value). */
+  onSetShownCreators: (shownIds: string[]) => void;
+  onOnlyCreator: (id: string) => void;
+
+  /** id of the currently-selected feature or video, highlighted in its list. */
+  selectedId: string | null;
+};
+
+// Tri-state "select all" header for a checkbox list: checked = all shown,
+// unchecked = all hidden, indeterminate = some hidden. Clicking shows all
+// unless everything is already shown, in which case it hides all.
+const MasterCheckbox = ({
+  label,
+  shown,
+  total,
+  onSetAll,
+}: {
+  label: string;
+  shown: number;
+  total: number;
+  onSetAll: (hidden: boolean) => void;
+}) => (
+  <Checkbox.Root
+    size='sm'
+    cursor='pointer'
+    checked={shown === total ? true : shown === 0 ? false : 'indeterminate'}
+    onCheckedChange={() => onSetAll(shown === total)}
+  >
+    <Checkbox.HiddenInput />
+    <Checkbox.Control cursor='inherit' />
+    <Checkbox.Label flex='1' fontWeight='semibold'>
+      {label}
+    </Checkbox.Label>
+    <Text fontSize='xs' color='fg.muted'>
+      {shown}/{total}
+    </Text>
+  </Checkbox.Root>
+);
+
+// Reveals a row's trailing "Only" button on hover, or when the button itself is
+// keyboard-focused. Scoped to the button's own :focus-visible (NOT the row's
+// :focus-within) so clicking the row's checkbox doesn't leave the button stuck
+// visible via lingering focus.
+const onlyRevealCss = {
+  '& [data-only]': { opacity: 0, transition: 'opacity 0.12s' },
+  '&:hover [data-only], & [data-only]:focus-visible': { opacity: 1 },
+};
+
+// Creator rows: keep the hover highlight on EVERY row, but drop the *resting*
+// checked-row background (creators are filter toggles, not a selection — the
+// checkmark conveys shown/hidden). `:not(:hover)` lets the recipe's hover bg
+// win when a checked row is hovered.
+const creatorItemCss = {
+  ...onlyRevealCss,
+  '&[data-selected]:not(:hover)': { background: 'transparent' },
 };
 
 // Type chips grouped into one toggle per category (no subtypes).
@@ -135,6 +201,45 @@ export default function MapControlPanel(props: Props) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [creatorQuery, setCreatorQuery] = useState('');
 
+  // When the selection changes (e.g. a marker picked on the map), scroll its
+  // row into view so the highlighted item isn't lost off-screen in a long list.
+  // The matching row (feature or video) attaches this ref; on change the old row
+  // detaches it (→ null), so a no-longer-rendered selection just no-ops.
+  const selectedRowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    selectedRowRef.current?.scrollIntoView({
+      block: 'nearest',
+      behavior: 'smooth',
+    });
+  }, [props.selectedId]);
+
+  // Listbox collections. Structures change with the type/status filters, so the
+  // collection rebuilds when the list changes; creators are mount-stable (the
+  // search filters which rows we render, not the collection — Ark keeps `value`
+  // across the full set, so a creator's selection survives searching).
+  const featureCollection = useMemo(
+    () =>
+      createListCollection({
+        items: props.features,
+        itemToValue: f => f.id,
+        itemToString: f => f.name,
+      }),
+    [props.features]
+  );
+  const creatorCollection = useMemo(
+    () =>
+      createListCollection({
+        items: props.creators,
+        itemToValue: c => c.id,
+        itemToString: c => c.name,
+      }),
+    [props.creators]
+  );
+  // Creators currently shown (= selected in the multi-select listbox).
+  const shownCreatorIds = props.creators
+    .map(c => c.id)
+    .filter(id => !props.hiddenCreators.has(id));
+
   if (props.collapsed) {
     return (
       <IconButton
@@ -167,6 +272,14 @@ export default function MapControlPanel(props: Props) {
   const creatorsFiltered = cq
     ? props.creators.filter(c => c.name.toLowerCase().includes(cq))
     : props.creators;
+
+  // Bulk show/hide universes + how many are currently shown (for the headers).
+  const allYears = props.years.map(y => y.year);
+  const shownYears = allYears.filter(y => !props.hiddenYears.has(y)).length;
+  const allCreatorIds = props.creators.map(c => c.id);
+  const shownCreators = allCreatorIds.filter(
+    id => !props.hiddenCreators.has(id)
+  ).length;
 
   // Number of fully-hidden categories + bands, for the "N hidden" badge.
   const totalHidden =
@@ -330,32 +443,60 @@ export default function MapControlPanel(props: Props) {
 
             {/* Structure list */}
             <SectionLabel>Structures ({props.features.length})</SectionLabel>
-            <Stack gap={0} overflowY='auto' minH='120px' css={thinScrollbar}>
-              {props.features.length === 0 ? (
-                <Text fontSize='sm' color='fg.muted' px={1} py={2}>
+            {/* Single-select Listbox: keyboard nav + typeahead (type a name to
+                jump) + ARIA, controlled by the active selection. */}
+            <Listbox.Root
+              collection={featureCollection}
+              selectionMode='single'
+              // Only feed the value when the selected id is actually a feature in
+              // this collection — a selected *video* shares the selectedId prop
+              // and would otherwise be a phantom (non-existent) active item.
+              value={
+                props.selectedId &&
+                featureCollection.items.some(f => f.id === props.selectedId)
+                  ? [props.selectedId]
+                  : []
+              }
+              onValueChange={e => {
+                const r = props.features.find(f => f.id === e.value[0]);
+                if (r) props.onSelectResult(r);
+              }}
+              display='flex'
+              flexDirection='column'
+              flex='1'
+              minH='120px'
+            >
+              <Listbox.Content
+                flex='1'
+                minH='0'
+                maxH='unset'
+                gap={0}
+                p={0}
+                borderWidth='0'
+                boxShadow='none'
+                bg='transparent'
+                css={thinScrollbar}
+              >
+                <Listbox.Empty fontSize='sm' color='fg.muted' px={1} py={2}>
                   No structures match.
-                </Text>
-              ) : (
-                props.features.map(r => (
-                  <HStack
+                </Listbox.Empty>
+                {featureCollection.items.map(r => (
+                  <Listbox.Item
                     key={r.id}
-                    as='button'
+                    item={r}
+                    ref={r.id === props.selectedId ? selectedRowRef : undefined}
                     gap={2}
                     px={2}
                     py={1}
-                    borderRadius='md'
-                    textAlign='left'
-                    _hover={{ bg: 'bg.muted' }}
-                    onClick={() => props.onSelectResult(r)}
+                    fontSize='xs'
+                    _selected={{ bg: 'bg.emphasized', fontWeight: 'semibold' }}
                   >
                     <FeatureDisc type={r.type} name={r.name} />
-                    <Text fontSize='xs' lineClamp={1}>
-                      {r.name}
-                    </Text>
-                  </HStack>
-                ))
-              )}
-            </Stack>
+                    <Listbox.ItemText lineClamp={1}>{r.name}</Listbox.ItemText>
+                  </Listbox.Item>
+                ))}
+              </Listbox.Content>
+            </Listbox.Root>
           </Stack>
         </Tabs.Content>
 
@@ -370,6 +511,21 @@ export default function MapControlPanel(props: Props) {
           pb={4}
         >
           <Stack gap={3} minH='0' flex='1'>
+            <DateRangeFilter
+              onChange={props.onDateRangeChange}
+              minDate={props.earliestVideoDate}
+            />
+            {props.years.length > 0 && (
+              <>
+                <MasterCheckbox
+                  label='All years'
+                  shown={shownYears}
+                  total={allYears.length}
+                  onSetAll={hidden => props.onSetYears(allYears, hidden)}
+                />
+                <Separator />
+              </>
+            )}
             {/* Each year is a checkbox header; its videos nest beneath and
                 collapse (and their markers hide) when unchecked. */}
             <Stack
@@ -390,32 +546,58 @@ export default function MapControlPanel(props: Props) {
                   const vids = videosByYear.get(year) ?? [];
                   return (
                     <Box key={year}>
-                      <Checkbox.Root
-                        size='sm'
-                        checked={shown}
-                        onCheckedChange={() => props.onToggleYear(year)}
-                      >
-                        <Checkbox.HiddenInput />
-                        <Checkbox.Control />
-                        <Checkbox.Label flex='1' fontWeight='medium'>
-                          {year}
-                        </Checkbox.Label>
-                        <Text fontSize='xs' color='fg.muted'>
-                          {count}
-                        </Text>
-                      </Checkbox.Root>
+                      <HStack position='relative' pe={2} css={onlyRevealCss}>
+                        <Checkbox.Root
+                          size='sm'
+                          flex='1'
+                          minW='0'
+                          cursor='pointer'
+                          checked={shown}
+                          onCheckedChange={() => props.onToggleYear(year)}
+                        >
+                          <Checkbox.HiddenInput />
+                          <Checkbox.Control cursor='inherit' />
+                          <Checkbox.Label flex='1' fontWeight='medium'>
+                            {year}
+                          </Checkbox.Label>
+                          <Text fontSize='xs' color='fg.muted'>
+                            {count}
+                          </Text>
+                        </Checkbox.Root>
+                        {(shownYears > 1 || !shown) && (
+                          <Button
+                            data-only=''
+                            variant='subtle'
+                            size='xs'
+                            minW='0'
+                            h='5'
+                            px={1}
+                            fontSize='2xs'
+                            position='absolute'
+                            insetEnd={0.5}
+                            top='50%'
+                            transform='translateY(-50%)'
+                            onClick={() => props.onOnlyYear(year)}
+                          >
+                            Only
+                          </Button>
+                        )}
+                      </HStack>
 
                       {shown && (
                         <Stack gap={0} pl={2} pt={1}>
                           {vids.map(v => (
                             <HStack
                               key={v.id}
+                              ref={v.id === props.selectedId ? selectedRowRef : undefined}
                               as='button'
                               gap={2}
                               px={2}
                               py={1}
                               borderRadius='md'
                               textAlign='left'
+                              bg={v.id === props.selectedId ? 'bg.emphasized' : undefined}
+                              fontWeight={v.id === props.selectedId ? 'semibold' : undefined}
                               _hover={{ bg: 'bg.muted' }}
                               onClick={() => props.onSelectVideo(v)}
                             >
@@ -454,38 +636,107 @@ export default function MapControlPanel(props: Props) {
                 onChange={e => setCreatorQuery(e.target.value)}
               />
             </InputGroup>
-            <Stack gap={1} minH='0' flex='1' overflowY='auto' css={thinScrollbar}>
-              {creatorsFiltered.length === 0 ? (
-                <Text fontSize='sm' color='fg.muted' px={1} py={2}>
-                  No creators match.
-                </Text>
-              ) : (
-                creatorsFiltered.map(c => (
-                  <Checkbox.Root
-                    key={c.id}
-                    size='sm'
-                    checked={!props.hiddenCreators.has(c.id)}
-                    onCheckedChange={() => props.onToggleCreator(c.id)}
-                  >
-                    <Checkbox.HiddenInput />
-                    <Checkbox.Control />
-                    <Circle
-                      size='10px'
-                      bg={c.color}
-                      borderWidth='1px'
-                      borderColor='whiteAlpha.700'
-                      flexShrink={0}
-                    />
-                    <Checkbox.Label flex='1' fontWeight='normal' lineClamp={1}>
-                      {c.name}
-                    </Checkbox.Label>
-                    <Text fontSize='xs' color='fg.muted'>
-                      {c.count}
-                    </Text>
-                  </Checkbox.Root>
-                ))
-              )}
-            </Stack>
+            {props.creators.length > 0 && (
+              <>
+                <MasterCheckbox
+                  label='All creators'
+                  shown={shownCreators}
+                  total={allCreatorIds.length}
+                  onSetAll={hidden => props.onSetCreators(allCreatorIds, hidden)}
+                />
+                <Separator />
+              </>
+            )}
+            {/* Multi-select Listbox (selected = shown). Plain click toggles a
+                creator; shift-click toggles a range. The collection holds all
+                creators; the search filters which rows render, and Ark keeps the
+                selection across the full set, so a creator stays toggled even
+                while filtered out by the search. */}
+            <Listbox.Root
+              collection={creatorCollection}
+              selectionMode='multiple'
+              value={shownCreatorIds}
+              onValueChange={e => props.onSetShownCreators(e.value)}
+              display='flex'
+              flexDirection='column'
+              flex='1'
+              minH='0'
+            >
+              <Listbox.Content
+                flex='1'
+                minH='0'
+                maxH='unset'
+                gap={0}
+                p={0}
+                borderWidth='0'
+                boxShadow='none'
+                bg='transparent'
+                css={thinScrollbar}
+              >
+                {creatorsFiltered.length === 0 ? (
+                  <Text fontSize='sm' color='fg.muted' px={1} py={2}>
+                    No creators match.
+                  </Text>
+                ) : (
+                  creatorsFiltered.map(c => (
+                    <Listbox.Item
+                      key={c.id}
+                      item={c}
+                      position='relative'
+                      gap={2}
+                      ps={0}
+                      pe={2}
+                      py={0.5}
+                      fontSize='xs'
+                      css={creatorItemCss}
+                    >
+                      <Checkmark
+                        size='sm'
+                        checked={!props.hiddenCreators.has(c.id)}
+                        flexShrink={0}
+                        cursor='inherit'
+                      />
+                      <Circle
+                        size='10px'
+                        bg={c.color}
+                        borderWidth='1px'
+                        borderColor='whiteAlpha.700'
+                        flexShrink={0}
+                      />
+                      <Listbox.ItemText flex='1' lineClamp={1}>
+                        {c.name}
+                      </Listbox.ItemText>
+                      <Text fontSize='xs' color='fg.muted'>
+                        {c.count}
+                      </Text>
+                      {(shownCreators > 1 || props.hiddenCreators.has(c.id)) && (
+                        <Button
+                          data-only=''
+                          variant='subtle'
+                          size='xs'
+                          minW='0'
+                          h='5'
+                          px={1}
+                          fontSize='2xs'
+                          position='absolute'
+                          insetEnd={0.5}
+                          top='50%'
+                          transform='translateY(-50%)'
+                          onPointerDown={e => e.stopPropagation()}
+                          onClick={e => {
+                            e.stopPropagation();
+                            props.onOnlyCreator(c.id);
+                            e.currentTarget.blur();
+                          }}
+                        >
+                          Only
+                        </Button>
+                      )}
+                    </Listbox.Item>
+                  ))
+                )}
+              </Listbox.Content>
+            </Listbox.Root>
           </Stack>
         </Tabs.Content>
       </Tabs.Root>
