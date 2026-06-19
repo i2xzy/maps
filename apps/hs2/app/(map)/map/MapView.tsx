@@ -1254,6 +1254,7 @@ export default function MapView({ features, media, creators, dataError }: Props)
         onToggleYear={year => setHiddenYears(s => toggleInSet(s, year))}
         onSetYears={onSetYears}
         onOnlyYear={onOnlyYear}
+        dateRange={dateRange}
         onDateRangeChange={onDateRangeChange}
         earliestVideoDate={earliestVideoDate}
         videos={videoList}
@@ -1265,6 +1266,7 @@ export default function MapView({ features, media, creators, dataError }: Props)
         onSetShownCreators={onSetShownCreators}
         onOnlyCreator={onOnlyCreator}
         selectedId={selected?.id ?? selectedVideo?.id ?? null}
+        selectedKind={selected ? 'feature' : selectedVideo ? 'video' : null}
       />
 
       <MapSearch items={searchItems} onSelect={onSelectSearch} left={topLeftInset} />

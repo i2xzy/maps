@@ -94,6 +94,9 @@ type Props = {
   onToggleYear: (year: string) => void;
   onSetYears: (years: string[], hidden: boolean) => void;
   onOnlyYear: (year: string) => void;
+  /** Active video date range (ISO strings) — controls the picker so it stays in
+   *  sync with the live filter across panel collapse/remount. */
+  dateRange: string[];
   /** Active video date range changed (ISO strings: [], [from], or [from,to]). */
   onDateRangeChange: (range: string[]) => void;
   /** Oldest video date (ISO) — the date filter's min bound. */
@@ -112,6 +115,9 @@ type Props = {
 
   /** id of the currently-selected feature or video, highlighted in its list. */
   selectedId: string | null;
+  /** Whether the current selection is a feature or a video — disambiguates the
+   *  shared id so a video selection can't activate a feature row (or vice versa). */
+  selectedKind: 'feature' | 'video' | null;
 };
 
 // Tri-state "select all" header for a checkbox list: checked = all shown,
@@ -449,9 +455,10 @@ export default function MapControlPanel(props: Props) {
               collection={featureCollection}
               selectionMode='single'
               // Only feed the value when the selected id is actually a feature in
-              // this collection — a selected *video* shares the selectedId prop
-              // and would otherwise be a phantom (non-existent) active item.
+              // this collection — only when a *feature* is selected (a video
+              // shares the selectedId prop and must not become a phantom item).
               value={
+                props.selectedKind === 'feature' &&
                 props.selectedId &&
                 featureCollection.items.some(f => f.id === props.selectedId)
                   ? [props.selectedId]
@@ -484,7 +491,11 @@ export default function MapControlPanel(props: Props) {
                   <Listbox.Item
                     key={r.id}
                     item={r}
-                    ref={r.id === props.selectedId ? selectedRowRef : undefined}
+                    ref={
+                      props.selectedKind === 'feature' && r.id === props.selectedId
+                        ? selectedRowRef
+                        : undefined
+                    }
                     gap={2}
                     px={2}
                     py={1}
@@ -512,6 +523,7 @@ export default function MapControlPanel(props: Props) {
         >
           <Stack gap={3} minH='0' flex='1'>
             <DateRangeFilter
+              value={props.dateRange}
               onChange={props.onDateRangeChange}
               minDate={props.earliestVideoDate}
             />
@@ -589,15 +601,15 @@ export default function MapControlPanel(props: Props) {
                           {vids.map(v => (
                             <HStack
                               key={v.id}
-                              ref={v.id === props.selectedId ? selectedRowRef : undefined}
+                              ref={props.selectedKind === 'video' && v.id === props.selectedId ? selectedRowRef : undefined}
                               as='button'
                               gap={2}
                               px={2}
                               py={1}
                               borderRadius='md'
                               textAlign='left'
-                              bg={v.id === props.selectedId ? 'bg.emphasized' : undefined}
-                              fontWeight={v.id === props.selectedId ? 'semibold' : undefined}
+                              bg={props.selectedKind === 'video' && v.id === props.selectedId ? 'bg.emphasized' : undefined}
+                              fontWeight={props.selectedKind === 'video' && v.id === props.selectedId ? 'semibold' : undefined}
                               _hover={{ bg: 'bg.muted' }}
                               onClick={() => props.onSelectVideo(v)}
                             >

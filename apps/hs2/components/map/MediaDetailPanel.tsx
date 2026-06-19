@@ -54,6 +54,21 @@ export type SelectedVideo = {
 
 type LinkedFeature = { id: string; name: string; type: FeatureType };
 
+// The chapter URL comes from the DB; only trust it as an href if it's a real
+// http(s) YouTube link (guards malformed values and unsafe schemes like
+// javascript:). Anything else falls back to the bare watch?v= URL.
+function isYouTubeUrl(u: string | null | undefined): u is string {
+  if (!u) return false;
+  try {
+    const { protocol, hostname } = new URL(u);
+    if (protocol !== 'https:' && protocol !== 'http:') return false;
+    const host = hostname.replace(/^www\./, '');
+    return host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtu.be';
+  } catch {
+    return false;
+  }
+}
+
 export default function MediaDetailPanel({
   video,
   onClose,
@@ -117,8 +132,10 @@ export default function MediaDetailPanel({
   const thumb = `https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`;
   // Prefer the chapter's stored URL (carries the &t= timestamp); fall back to a
   // bare watch URL until the fetch resolves or if the row has no stored URL.
-  const youtubeHref =
-    (ready && result.url) || `https://www.youtube.com/watch?v=${video.youtubeId}`;
+  const storedUrl = ready ? result.url : null;
+  const youtubeHref = isYouTubeUrl(storedUrl)
+    ? storedUrl
+    : `https://www.youtube.com/watch?v=${video.youtubeId}`;
 
   return (
     <Card.Root

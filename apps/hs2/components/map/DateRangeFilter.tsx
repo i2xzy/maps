@@ -23,14 +23,21 @@ const DATE_FMT = new Intl.DateTimeFormat('en-GB', {
 const formatBritish = (iso: string) => DATE_FMT.format(new Date(`${iso}T00:00:00Z`));
 
 export default function DateRangeFilter({
+  value,
   onChange,
   minDate,
 }: {
+  /** Active range as ISO date strings: [] none, [from], or [from, to]. Controlled
+   *  by the parent so the picker stays in sync with the live filter across
+   *  panel collapse/remount. */
+  value: string[];
   /** Picked range as ISO date strings: [] none, [from], or [from, to]. */
   onChange: (range: string[]) => void;
   /** Earliest selectable date (ISO yyyy-mm-dd) — the oldest video in the data. */
   minDate?: string | null;
 }) {
+  // Controlled value: the active range (ISO) parsed to the picker's DateValue[].
+  const pickerValue = useMemo(() => value.map(v => parseDate(v)), [value]);
   // Selectable window: oldest video → today. parseDate is re-exported by Chakra
   // (avoids importing the un-hoisted @internationalized/date); today is built as
   // a local ISO string so it doesn't drift a day via UTC.
@@ -51,6 +58,7 @@ export default function DateRangeFilter({
       width='full'
       min={min}
       max={max}
+      value={pickerValue}
       // DateValue.toString() is always ISO yyyy-mm-dd, regardless of locale
       // (valueAsString is localized once a locale is set). Send ISO up so the
       // filter's lexical date compare stays correct.
