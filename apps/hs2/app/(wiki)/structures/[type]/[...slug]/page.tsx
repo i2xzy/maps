@@ -9,7 +9,6 @@ import {
   SimpleGrid,
   Badge,
   Separator,
-  Box,
   Image,
 } from '@chakra-ui/react';
 import Link from 'next/link';
@@ -21,6 +20,7 @@ import { snakeCaseToTitleCase } from '@ui/helpers/text-formatting';
 import { Breadcrumb } from '@ui/components/breadcrumb';
 import { featureTypes } from '@/components/feature/config';
 import { FeatureIcon } from '@/components/feature/feature-icon';
+import { FeatureMapPreview } from '@/components/feature/map-preview';
 import { MediaGallery } from '@/components/media/media-gallery';
 import { FeatureStatusBadge } from '@/components/feature/feature-status-badge';
 import { REGIONS } from '../../../route/config';
@@ -138,11 +138,20 @@ export default async function StructureDetailPage({
 
   const coverMedia = mediaData?.filter(item => item.is_cover)[0]?.media;
 
-  // Fetch related groupings
-  const { data: groupingsData } = await supabase
-    .from('grouping_features')
-    .select('groupings (id, name, type, url, description, chainage_from)')
-    .eq('feature_id', id);
+  // Geometry (as GeoJSON) for the map preview + related groupings, in parallel.
+  // geoRow is null when the feature is unmapped; a query error is logged and
+  // also falls back to the "not mapped" preview rather than failing the page.
+  const [geoRes, { data: groupingsData }] = await Promise.all([
+    supabase.from('features_geo').select('geojson').eq('id', id).maybeSingle(),
+    supabase
+      .from('grouping_features')
+      .select('groupings (id, name, type, url, description, chainage_from)')
+      .eq('feature_id', id),
+  ]);
+  if (geoRes.error) {
+    console.error('[structure] features_geo failed:', geoRes.error.message);
+  }
+  const geoRow = geoRes.data;
 
   const groupings =
     groupingsData?.map(item => item.groupings).filter(Boolean) || [];
@@ -234,27 +243,15 @@ export default async function StructureDetailPage({
           {/* Sidebar */}
 
           <VStack gap={6} align='stretch'>
-            {/* Mini Map */}
-
+            {/* Location — satellite preview linking into the interactive map */}
             <Heading size='md'>Location</Heading>
 
-            <Box height='200px' width='100%' borderRadius='md'>
-              <Box
-                height='100%'
-                width='100%'
-                bg='gray.100'
-                borderRadius='md'
-                display='flex'
-                alignItems='center'
-                justifyContent='center'
-              >
-                <VStack gap={2} p={2}>
-                  <Heading size='md' color='gray.500'>
-                    Interactive Map Coming Soon
-                  </Heading>
-                </VStack>
-              </Box>
-            </Box>
+            <FeatureMapPreview
+              featureId={feature.id}
+              featureName={displayName}
+              featureType={feature.type}
+              geojson={geoRow?.geojson ?? null}
+            />
 
             {/* Related Plans */}
             {plans.length > 0 && (
