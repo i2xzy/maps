@@ -1119,6 +1119,20 @@ export default function MapView({ features, media, creators, dataError }: Props)
   const onLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
     if (!map) return;
+    // Deep link with a selection but no saved camera (e.g. from a feature page's
+    // "View on map" link) — center on the selected item so it opens focused
+    // rather than at the whole-corridor default. jump, not fly: no start point.
+    if (!loadViewFromUrl()) {
+      const sel = loadSelFromUrl();
+      const row =
+        sel?.kind === 'f'
+          ? features.find(r => String(r.id) === sel.id)
+          : sel?.kind === 'v'
+            ? media.find(r => String(r.id) === sel.id)
+            : null;
+      const center = row ? representativePoint(row.geojson) : null;
+      if (center) map.jumpTo({ center, zoom: SELECT_ZOOM });
+    }
     const addCombined = () =>
       loadCombinedMarkerIcons(map, combosRef.current)
         .then(() => setCombinedReady(true))
@@ -1132,7 +1146,7 @@ export default function MapView({ features, media, creators, dataError }: Props)
       loadTypeIcons(map, pointTypesRef.current).catch(() => undefined);
       addCombined();
     });
-  }, []);
+  }, [features, media]);
 
   // Floating controls clear the control panel: offset by the panel width when
   // open, by the collapsed icon when closed (the bottom corner is free when
