@@ -1,16 +1,21 @@
 /**
- * React SVG renderer: draws a RouteDiagram from the pure `computeLayout` model.
+ * React HTML renderer: draws a RouteDiagram as an HTML table, the way Wikipedia
+ * renders {{Routemap}} (table / rows / cells / stacked <img> / text labels).
  *
- * One outer <svg> in px; each icon is an <image> scaled from its native 500-unit
- * canvas into the cell, so overlays stack and lines connect by construction (see
- * the T1 geometry spike). `resolveIcon` maps a code to an SVG URL — the demo uses
- * Commons Special:FilePath; production passes a vendored/inlined resolver so we
- * don't hit Commons at runtime.
+ * Why HTML, not SVG: labels are real text (reflow, selectable, linkable), <img>
+ * loads BSicons reliably cross-origin, and the DOM mirrors wiki output — which
+ * keeps the eventual wiki round-trip honest.
+ *
+ * Layout comes from the pure `computeLayout` core. Each icon cell is a fixed
+ * cellSize box (position:relative); icons stack as absolutely-positioned <img>
+ * (the {{Routemap}} `!~` overlay). A `d`-half icon renders at half width, left-
+ * aligned, which is the left double-track lane position (see the T1 spike).
+ * `resolveIcon` maps a code to an SVG url (Commons for demo; vendored in prod).
  */
 import type { ReactElement } from "react";
 import type { RouteDiagram } from "./types";
 import { FULL_CELL } from "./types";
-import { computeLayout } from "./layout";
+import { computeLayout, type PlacedCell } from "./layout";
 
 export interface RouteMapProps {
   diagram: RouteDiagram;
@@ -20,8 +25,6 @@ export interface RouteMapProps {
   cellSize?: number;
   /** native icon width in SVG units (500 full, 250 half). Default: `d`-prefix heuristic. */
   iconWidth?: (code: string) => number;
-  /** px reserved on each side for row labels. Default 170. */
-  labelGutter?: number;
 }
 
 const commonsUrl = (code: string): string =>
@@ -29,82 +32,92 @@ const commonsUrl = (code: string): string =>
 
 const defaultIconWidth = (code: string): number => (code.startsWith("d") ? 250 : FULL_CELL);
 
+const labelCell: React.CSSProperties = {
+  padding: "0 8px",
+  color: "#333",
+  verticalAlign: "middle",
+  lineHeight: 1.3,
+};
+
+function IconCell({
+  cell,
+  cellSize,
+  resolveIcon,
+}: {
+  cell: PlacedCell | undefined;
+  cellSize: number;
+  resolveIcon: (code: string) => string;
+}): ReactElement {
+  return (
+    <td style={{ padding: 0, verticalAlign: "top" }}>
+      <div style={{ position: "relative", width: cellSize, height: cellSize }}>
+        {cell?.icons.map((icon, i) => {
+          const img = (
+            <img
+              src={resolveIcon(icon.code)}
+              alt={icon.title ?? icon.code}
+              title={icon.title}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: (icon.nativeWidth / FULL_CELL) * cellSize,
+                height: cellSize,
+                display: "block",
+              }}
+            />
+          );
+          return icon.href ? (
+            <a key={i} href={icon.href}>
+              {img}
+            </a>
+          ) : (
+            <span key={i}>{img}</span>
+          );
+        })}
+      </div>
+    </td>
+  );
+}
+
 export function RouteMap({
   diagram,
   resolveIcon = commonsUrl,
   cellSize = 40,
   iconWidth = defaultIconWidth,
-  labelGutter = 170,
 }: RouteMapProps): ReactElement {
   const layout = computeLayout(diagram, iconWidth);
-  const scale = cellSize / FULL_CELL;
-  const gridW = layout.width * scale;
-  const gridH = layout.height * scale;
-  const totalW = gridW + labelGutter * 2;
+  const cols = layout.columns;
 
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={totalW}
-      height={gridH}
-      viewBox={`0 0 ${totalW} ${gridH}`}
-      fontFamily="system-ui, sans-serif"
-      fontSize={12}
-    >
-      {layout.rows.map((row) => {
-        const yMid = (row.y + row.height / 2) * scale;
+    <table style={{ borderCollapse: "collapse", fontFamily: "system-ui, sans-serif", fontSize: 13 }}>
+      <tbody>
+        {layout.rows.map((row) => {
+          if (row.colspan != null) {
+            return (
+              <tr key={row.index}>
+                <td />
+                <td colSpan={cols} style={{ ...labelCell, textAlign: "center", padding: "4px 8px" }}>
+                  {row.colspan}
+                </td>
+                <td />
+              </tr>
+            );
+          }
 
-        if (row.colspan != null) {
+          const byColumn = new Map<number, PlacedCell>(row.cells.map((c) => [c.column, c]));
+
           return (
-            <text key={row.index} x={totalW / 2} y={yMid} textAnchor="middle" dominantBaseline="middle" fill="#333">
-              {row.colspan}
-            </text>
+            <tr key={row.index}>
+              <td style={{ ...labelCell, textAlign: "right" }}>{row.left?.text ?? ""}</td>
+              {Array.from({ length: cols }, (_, col) => (
+                <IconCell key={col} cell={byColumn.get(col)} cellSize={cellSize} resolveIcon={resolveIcon} />
+              ))}
+              <td style={{ ...labelCell, textAlign: "left" }}>{row.right?.text ?? ""}</td>
+            </tr>
           );
-        }
-
-        return (
-          <g key={row.index}>
-            {row.left?.text ? (
-              <text x={labelGutter - 8} y={yMid} textAnchor="end" dominantBaseline="middle" fill="#333">
-                {row.left.text}
-              </text>
-            ) : null}
-            {row.right?.text ? (
-              <text x={labelGutter + gridW + 8} y={yMid} dominantBaseline="middle" fill="#333">
-                {row.right.text}
-              </text>
-            ) : null}
-            {row.cells.flatMap((cell) =>
-              cell.icons.map((icon, i) => {
-                const x = labelGutter + cell.x * scale;
-                const y = row.y * scale;
-                const w = icon.nativeWidth * scale;
-                const h = FULL_CELL * scale;
-                const img = (
-                  <image
-                    href={resolveIcon(icon.code)}
-                    x={x}
-                    y={y}
-                    width={w}
-                    height={h}
-                    preserveAspectRatio="xMinYMin meet"
-                  >
-                    {icon.title ? <title>{icon.title}</title> : null}
-                  </image>
-                );
-                const key = `${cell.column}-${i}-${icon.code}`;
-                return icon.href ? (
-                  <a key={key} href={icon.href}>
-                    {img}
-                  </a>
-                ) : (
-                  <g key={key}>{img}</g>
-                );
-              }),
-            )}
-          </g>
-        );
-      })}
-    </svg>
+        })}
+      </tbody>
+    </table>
   );
 }

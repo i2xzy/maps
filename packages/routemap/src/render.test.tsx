@@ -16,28 +16,36 @@ const html = renderToStaticMarkup(
   <RouteMap diagram={diagram} resolveIcon={(c) => `/icons/${c}.svg`} cellSize={40} />,
 );
 
-describe("RouteMap", () => {
-  it("emits an <image> per icon with the resolved href", () => {
-    expect(html).toContain('href="/icons/STR.svg"');
-    expect(html).toContain('href="/icons/ABZrg.svg"');
-    expect(html).toContain('href="/icons/STRc3.svg"');
+describe("RouteMap (HTML table)", () => {
+  it("renders an HTML table with <img> icons (not SVG)", () => {
+    expect(html).toContain("<table");
+    expect(html).not.toContain("<svg");
+    expect(html).toContain('src="/icons/STR.svg"');
+    expect(html).toContain('src="/icons/ABZrg.svg"');
+    expect(html).toContain('src="/icons/STRc3.svg"');
   });
 
-  it("renders row labels and colspan text", () => {
+  it("renders row labels and a spanning colspan row", () => {
     expect(html).toContain("Delta Junction");
     expect(html).toContain("interchange with National Rail");
+    expect(html).toMatch(/colspan="2"/i); // spans the two icon columns
   });
 
-  it("wraps a linked icon in an anchor and adds a title", () => {
-    expect(html).toContain('href="/f/1"'); // the feature link
-    expect(html).toContain("<title>a station</title>");
+  it("wraps a linked icon in an anchor with alt/title", () => {
+    expect(html).toContain('href="/f/1"');
+    expect(html).toContain('alt="a station"');
+    expect(html).toContain('title="a station"');
   });
 
-  it("scales the half-width d-icon narrower than a full icon", () => {
+  it("sizes a full icon to the cell and a half (d) icon to half width", () => {
+    const full = renderToStaticMarkup(
+      <RouteMap diagram={{ rows: [{ cells: ["STR"] }] }} resolveIcon={(c) => c} cellSize={40} />,
+    );
+    expect(full).toContain("width:40px");
+
     const half = renderToStaticMarkup(
       <RouteMap diagram={{ rows: [{ cells: ["dSTR"] }] }} resolveIcon={(c) => c} cellSize={40} />,
     );
-    // dSTR native width 250 -> 250 * (40/500) = 20px, vs a full icon's 40px.
-    expect(half).toContain('width="20"');
+    expect(half).toContain("width:20px"); // dSTR native 250 -> 250/500 * 40
   });
 });
