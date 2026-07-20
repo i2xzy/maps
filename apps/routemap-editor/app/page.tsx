@@ -6,7 +6,7 @@ import { RouteMap, type RouteDiagram } from "@repo/routemap";
 
 const STORAGE_KEY = "routemap-editor:config";
 const SIZE_KEY = "routemap-editor:size";
-const DEFAULT_SIZE = [38, 62];
+const DEFAULT_SIZE = [60, 40]; // editor gets the majority; preview is a narrow strip
 
 const SAMPLE = `{
   "rows": [
