@@ -6,7 +6,8 @@
     "moduleResolution": "Bundler",
     "skipLibCheck": true,
     "paths": {
-      "@/*": ["./app/*"]
+      "@/*": ["./app/*"],
+      "@ui/*": ["../../packages/ui/src/*"]
     },
     "plugins": [{ "name": "next" }]
   },

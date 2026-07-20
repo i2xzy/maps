@@ -1,6 +1,7 @@
 "use client";
 
 import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Box, Button, Flex, Heading, Splitter, Textarea } from "@chakra-ui/react";
 import { RouteMap, type RouteDiagram } from "@repo/routemap";
 
 const STORAGE_KEY = "routemap-editor:config";
@@ -16,14 +17,6 @@ const SAMPLE = `{
   ]
 }`;
 
-const errorBox: React.CSSProperties = {
-  padding: "8px 14px",
-  background: "#fdecea",
-  color: "#b3261e",
-  font: "12px/1.4 ui-monospace, monospace",
-  whiteSpace: "pre-wrap",
-};
-
 /** Catches render throws from a malformed-but-valid diagram so the editor survives. */
 class PreviewBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
@@ -32,7 +25,11 @@ class PreviewBoundary extends Component<{ children: ReactNode }, { error: Error 
   }
   render() {
     if (this.state.error) {
-      return <div style={errorBox}>Render error: {this.state.error.message}</div>;
+      return (
+        <Box bg="red.subtle" color="red.fg" p="3" fontFamily="mono" fontSize="sm" whiteSpace="pre-wrap">
+          Render error: {this.state.error.message}
+        </Box>
+      );
     }
     return this.props.children;
   }
@@ -40,9 +37,8 @@ class PreviewBoundary extends Component<{ children: ReactNode }, { error: Error 
 
 export default function EditorPage() {
   const [text, setText] = useState(SAMPLE);
-  // Load persisted config after mount (avoids SSR/hydration mismatch), then
-  // persist on every change. `hydrated` gates the save so the initial mount
-  // doesn't overwrite storage with SAMPLE before the load runs.
+  // Load persisted config after mount (no SSR/hydration mismatch); `hydrated`
+  // gates the save so the initial mount can't overwrite storage with SAMPLE.
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -64,41 +60,52 @@ export default function EditorPage() {
   }, [text]);
 
   return (
-    <main style={{ display: "grid", gridTemplateColumns: "minmax(320px, 38%) 1fr", height: "100vh" }}>
-      <section style={{ display: "flex", flexDirection: "column", borderRight: "1px solid #ddd", minWidth: 0 }}>
-        <header style={{ padding: "10px 14px", borderBottom: "1px solid #eee", fontWeight: 600, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span>RouteMap config (grid-JSON)</span>
-          <button
-            type="button"
-            onClick={() => setText(SAMPLE)}
-            style={{ font: "12px system-ui", cursor: "pointer", padding: "2px 8px" }}
-          >
-            Reset to sample
-          </button>
-        </header>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          spellCheck={false}
-          aria-label="grid-JSON config"
-          style={{
-            flex: 1,
-            border: 0,
-            padding: 14,
-            font: "13px/1.5 ui-monospace, SFMono-Regular, monospace",
-            resize: "none",
-            outline: "none",
-          }}
-        />
-        {parsed.error ? <div style={errorBox}>Invalid JSON: {parsed.error}</div> : null}
-      </section>
-      <section style={{ overflow: "auto", padding: 24 }}>
+    <Splitter.Root
+      height="100vh"
+      panels={[
+        { id: "editor", minSize: 20 },
+        { id: "preview", minSize: 20 },
+      ]}
+      defaultSize={[38, 62]}
+    >
+      <Splitter.Panel id="editor" p="0">
+        <Flex direction="column" height="100%" minW="0" width="100%">
+          <Flex align="center" justify="space-between" px="3" py="2" borderBottomWidth="1px" borderColor="border">
+            <Heading size="sm">RouteMap config (grid-JSON)</Heading>
+            <Button size="xs" variant="outline" onClick={() => setText(SAMPLE)}>
+              Reset to sample
+            </Button>
+          </Flex>
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            spellCheck={false}
+            aria-label="grid-JSON config"
+            flex="1"
+            resize="none"
+            border="0"
+            borderRadius="0"
+            fontFamily="mono"
+            fontSize="sm"
+            _focusVisible={{ outline: "none", boxShadow: "none" }}
+          />
+          {parsed.error ? (
+            <Box bg="red.subtle" color="red.fg" px="3" py="2" fontFamily="mono" fontSize="xs">
+              Invalid JSON: {parsed.error}
+            </Box>
+          ) : null}
+        </Flex>
+      </Splitter.Panel>
+
+      <Splitter.ResizeTrigger id="editor:preview" />
+
+      <Splitter.Panel id="preview" overflow="auto" p="6">
         {parsed.diagram ? (
           <PreviewBoundary key={text}>
             <RouteMap diagram={parsed.diagram} />
           </PreviewBoundary>
         ) : null}
-      </section>
-    </main>
+      </Splitter.Panel>
+    </Splitter.Root>
   );
 }
