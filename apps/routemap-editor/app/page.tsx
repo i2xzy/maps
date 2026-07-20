@@ -1,7 +1,10 @@
 "use client";
 
 import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Box, Button, Flex, Heading, Splitter, Textarea } from "@chakra-ui/react";
+import { Box, Button, Flex, Heading, HStack, Splitter } from "@chakra-ui/react";
+import CodeMirror from "@uiw/react-codemirror";
+import { json, jsonParseLinter } from "@codemirror/lang-json";
+import { linter, lintGutter } from "@codemirror/lint";
 import { RouteMap, type RouteDiagram } from "@repo/routemap";
 
 const STORAGE_KEY = "routemap-editor:config";
@@ -75,6 +78,17 @@ export default function EditorPage() {
     }
   }, [text]);
 
+  // JSON syntax highlighting + inline parse-error markers (gutter + squiggles).
+  const extensions = useMemo(() => [json(), lintGutter(), linter(jsonParseLinter())], []);
+
+  const format = () => {
+    try {
+      setText(JSON.stringify(JSON.parse(text), null, 2));
+    } catch {
+      // invalid JSON: nothing to format
+    }
+  };
+
   return (
     <Splitter.Root
       height="100dvh"
@@ -90,28 +104,25 @@ export default function EditorPage() {
         <Flex direction="column" height="100%" minW="0" width="100%">
           <Flex align="center" justify="space-between" px="3" py="2" borderBottomWidth="1px" borderColor="border">
             <Heading size="sm">RouteMap config (grid-JSON)</Heading>
-            <Button size="xs" variant="outline" onClick={() => setText(SAMPLE)}>
-              Reset to sample
-            </Button>
+            <HStack gap="2">
+              <Button size="xs" variant="outline" onClick={format} disabled={parsed.error != null}>
+                Format
+              </Button>
+              <Button size="xs" variant="outline" onClick={() => setText(SAMPLE)}>
+                Reset to sample
+              </Button>
+            </HStack>
           </Flex>
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            spellCheck={false}
-            aria-label="grid-JSON config"
-            flex="1"
-            resize="none"
-            border="0"
-            borderRadius="0"
-            fontFamily="mono"
-            fontSize="sm"
-            _focusVisible={{ outline: "none", boxShadow: "none" }}
-          />
-          {parsed.error ? (
-            <Box bg="red.subtle" color="red.fg" px="3" py="2" fontFamily="mono" fontSize="xs">
-              Invalid JSON: {parsed.error}
-            </Box>
-          ) : null}
+          <Box flex="1" minH="0" overflow="hidden">
+            <CodeMirror
+              value={text}
+              onChange={setText}
+              extensions={extensions}
+              height="100%"
+              style={{ height: "100%", fontSize: 13 }}
+              basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: true }}
+            />
+          </Box>
         </Flex>
       </Splitter.Panel>
 
