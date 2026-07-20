@@ -61,14 +61,15 @@ export default function EditorPage() {
 
   return (
     <Splitter.Root
-      height="100vh"
+      height="100dvh"
+      width="100%"
       panels={[
         { id: "editor", minSize: 20 },
         { id: "preview", minSize: 20 },
       ]}
       defaultSize={[38, 62]}
     >
-      <Splitter.Panel id="editor" p="0">
+      <Splitter.Panel id="editor" p="0" height="100%">
         <Flex direction="column" height="100%" minW="0" width="100%">
           <Flex align="center" justify="space-between" px="3" py="2" borderBottomWidth="1px" borderColor="border">
             <Heading size="sm">RouteMap config (grid-JSON)</Heading>
@@ -99,7 +100,7 @@ export default function EditorPage() {
 
       <Splitter.ResizeTrigger id="editor:preview" />
 
-      <Splitter.Panel id="preview" overflow="auto" p="6">
+      <Splitter.Panel id="preview" overflow="auto" p="6" height="100%">
         {parsed.diagram ? (
           <PreviewBoundary key={text}>
             <RouteMap diagram={parsed.diagram} />
