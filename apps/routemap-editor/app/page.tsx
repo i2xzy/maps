@@ -5,6 +5,8 @@ import { Box, Button, Flex, Heading, Splitter, Textarea } from "@chakra-ui/react
 import { RouteMap, type RouteDiagram } from "@repo/routemap";
 
 const STORAGE_KEY = "routemap-editor:config";
+const SIZE_KEY = "routemap-editor:size";
+const DEFAULT_SIZE = [38, 62];
 
 const SAMPLE = `{
   "rows": [
@@ -37,19 +39,33 @@ class PreviewBoundary extends Component<{ children: ReactNode }, { error: Error 
 
 export default function EditorPage() {
   const [text, setText] = useState(SAMPLE);
-  // Load persisted config after mount (no SSR/hydration mismatch); `hydrated`
-  // gates the save so the initial mount can't overwrite storage with SAMPLE.
+  const [size, setSize] = useState<number[]>(DEFAULT_SIZE);
+  // Load persisted config + panel size after mount (no SSR/hydration mismatch);
+  // `hydrated` gates the saves so the initial mount can't overwrite storage.
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved != null) setText(saved);
+    const savedText = localStorage.getItem(STORAGE_KEY);
+    if (savedText != null) setText(savedText);
+    const savedSize = localStorage.getItem(SIZE_KEY);
+    if (savedSize) {
+      try {
+        const parsedSize = JSON.parse(savedSize);
+        if (Array.isArray(parsedSize) && parsedSize.length === 2) setSize(parsedSize);
+      } catch {
+        // ignore malformed stored size
+      }
+    }
     setHydrated(true);
   }, []);
 
   useEffect(() => {
     if (hydrated) localStorage.setItem(STORAGE_KEY, text);
   }, [text, hydrated]);
+
+  useEffect(() => {
+    if (hydrated) localStorage.setItem(SIZE_KEY, JSON.stringify(size));
+  }, [size, hydrated]);
 
   const parsed = useMemo<{ diagram: RouteDiagram | null; error: string | null }>(() => {
     try {
@@ -67,7 +83,8 @@ export default function EditorPage() {
         { id: "editor", minSize: 20 },
         { id: "preview", minSize: 20 },
       ]}
-      defaultSize={[38, 62]}
+      size={size}
+      onResize={(details) => setSize(details.size)}
     >
       <Splitter.Panel id="editor" p="0" height="100%">
         <Flex direction="column" height="100%" minW="0" width="100%">
