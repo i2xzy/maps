@@ -12,7 +12,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <Provider>{children}</Provider>
+        {/* Light mode only for now (ignores system preference). */}
+        <Provider forcedTheme="light">{children}</Provider>
       </body>
     </html>
   );
