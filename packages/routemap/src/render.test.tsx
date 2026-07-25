@@ -129,7 +129,57 @@ describe("RouteMap (HTML table)", () => {
     );
     expect(out).toMatch(/font-style:\s*italic/i);
     expect(out).toMatch(/font-weight:\s*bold/i);
-    expect(out).toMatch(/font-size:\s*90%/i); // italic labels render smaller (wiki)
+    // Italic is ONLY italic. We used to shrink italic labels to 90% and blame
+    // Wikipedia for it, but Template:Routemap/styles.css never ties font-size to
+    // italic — the 90% belongs to `.RMsplit` and `.RMsi`. The wrong trigger also
+    // made the editor lossy, because it folds label-level italic onto runs and the
+    // size went with it.
+    expect(out).not.toMatch(/font-size:\s*90%/i);
+  });
+
+  it("renders a label-level italic exactly like the same italic on its runs", () => {
+    // The editor folds label-level `italic`/`bold` onto the runs, because a TipTap
+    // document only has per-run marks. That fold is only lossless if the two render
+    // identically — which they didn't while label-level italic also meant 90%, so
+    // touching an italic annotation label in the GUI visibly resized it.
+    const cell = (diagram: RouteDiagram) =>
+      /text-align:right">(.*?)<\/td>/s.exec(
+        renderToStaticMarkup(<RouteMap diagram={diagram} resolveIcon={(c) => c} />),
+      )?.[1] ?? "";
+    const atLabel = cell({ rows: [{ left: { text: "note", italic: true }, cells: ["STR"] }] });
+    const atRun = cell({ rows: [{ left: [{ text: "note", italic: true }], cells: ["STR"] }] });
+
+    for (const html of [atLabel, atRun]) {
+      expect(html).toMatch(/font-style:\s*italic/i);
+      expect(html).not.toMatch(/font-size/i);
+    }
+    // Same for bold, the other field the fold moves.
+    for (const d of [
+      { rows: [{ left: { text: "note", bold: true }, cells: ["STR"] }] },
+      { rows: [{ left: [{ text: "note", bold: true }], cells: ["STR"] }] },
+    ] as RouteDiagram[]) {
+      expect(cell(d)).toMatch(/font-weight:\s*bold/i);
+      expect(cell(d)).not.toMatch(/font-size/i);
+    }
+  });
+
+  it("shrinks a multi-line side label, like .RMsplit — and only in a side cell", () => {
+    // `table.routemap .RMl > .RMsplit, .RMr > .RMsplit { font-size: 90% }`, with no
+    // condition on italic. The rule is scoped to the main side cells, so a colspan
+    // row's split is full size.
+    const render = (diagram: RouteDiagram) =>
+      renderToStaticMarkup(<RouteMap diagram={diagram} resolveIcon={(c) => c} />);
+    const split = /display:inline-table[^"]*/;
+
+    expect(split.exec(render({ rows: [{ left: "foo|bar", cells: ["STR"] }] }))?.[0]).toContain("font-size:90%");
+    expect(split.exec(render({ rows: [{ right: "foo|bar", cells: ["STR"] }] }))?.[0]).toContain("font-size:90%");
+    // Not conditional on italic any more — plain multi-line gets it too (above), and
+    // a single-line italic label does not.
+    expect(render({ rows: [{ left: { text: "x", italic: true }, cells: ["STR"] }] })).not.toContain("font-size:90%");
+    // Colspan row: a split, but not a side cell.
+    expect(
+      split.exec(render({ rows: [{ type: "colspan", text: "foo|bar" }] }))?.[0],
+    ).not.toContain("font-size");
   });
 
   it("renders inline label logos via resolveLogo(icon): string code + { file }", () => {

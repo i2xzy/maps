@@ -179,6 +179,13 @@ function renderLogos(
 }
 
 /**
+ * Where a label sits. A colspan row is neither side: it leads with its logos like a
+ * left label, but it is NOT one of the main side cells, which matters because the
+ * wiki rule that shrinks a {{BSsplit}} is scoped to those.
+ */
+type LabelSide = "left" | "right" | "colspan";
+
+/**
  * Place logos on the OUTER edge of text: before it for a left label, after for right.
  *
  * Plain inline flow, NOT a flex container. Wrapping a label in `inline-flex` makes
@@ -188,9 +195,9 @@ function renderLogos(
  * space between every item; take the gap away and the crushing shows. Logos align
  * themselves via `vertical-align`, which is what inline content is supposed to use.
  */
-function withLogos(text: ReactNode, logos: ReactNode[], side: "left" | "right"): ReactNode {
+function withLogos(text: ReactNode, logos: ReactNode[], side: LabelSide): ReactNode {
   if (logos.length === 0) return text;
-  return <>{side === "left" ? spaced(logos, text) : spaced(text, logos)}</>;
+  return <>{side === "right" ? spaced(text, logos) : spaced(logos, text)}</>;
 }
 
 interface Fragment {
@@ -305,7 +312,7 @@ function Label({
   resolveLogo,
 }: {
   label?: NormalizedSide | null;
-  side: "left" | "right";
+  side: LabelSide;
   resolveHref: (ref: string) => string | undefined;
   resolveRws: (args: string) => RwsEntry | undefined;
   resolveLogo: (icon: LabelIcon) => ResolvedLogo;
@@ -318,7 +325,6 @@ function Label({
   const style: TextStyle = {
     fontStyle: label?.italic ? "italic" : undefined,
     fontWeight: label?.bold ? "bold" : undefined,
-    fontSize: label?.italic ? "90%" : undefined,
   };
 
   let textNode: ReactNode = null;
@@ -333,7 +339,18 @@ function Label({
     } else {
       // Multi-line -> BSsplit inline-table (tight rows so the track stays connected).
       textNode = (
-        <span style={{ display: "inline-table", verticalAlign: "middle", margin: "-3px 0", ...style }}>
+        <span
+          style={{
+            display: "inline-table",
+            verticalAlign: "middle",
+            margin: "-3px 0",
+            // `table.routemap .RMl > .RMsplit, .RMr > .RMsplit { font-size: 90% }`
+            // — a {{BSsplit}} in a main side cell is smaller, unconditionally. The
+            // rule is scoped to those cells, so a colspan row's split is not.
+            fontSize: side === "colspan" ? undefined : "90%",
+            ...style,
+          }}
+        >
           {lines.map((line, i) => (
             <span key={i} style={{ display: "table-row" }}>
               <span style={{ display: "table-cell", textAlign: "inherit", lineHeight: 1.05 }}>
@@ -505,7 +522,7 @@ export function RouteMap({
             return (
               <tr key={row.index} {...rowProps(row.index)} style={{ ...cursor, ...ring(rowSel) }}>
                 <td colSpan={3} style={{ ...labelCell, textAlign: "center", padding: "4px 8px" }}>
-                  <Label label={row.colspan} side="left" resolveHref={resolveHref} resolveRws={resolveRws} resolveLogo={resolveLogo} />
+                  <Label label={row.colspan} side="colspan" resolveHref={resolveHref} resolveRws={resolveRws} resolveLogo={resolveLogo} />
                 </td>
               </tr>
             );
