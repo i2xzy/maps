@@ -1,0 +1,713 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Box,
+  Button,
+  CheckboxCard,
+  Flex,
+  HStack,
+  IconButton,
+  Image,
+  Input,
+  Portal,
+  Select,
+  Stack,
+  Text,
+  createListCollection,
+} from "@chakra-ui/react";
+import {
+  ArrowDown,
+  ArrowDownToLine,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpToLine,
+  Copy,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import {
+  commonsUrl,
+  fieldsFor,
+  iconSubtypes,
+  isColspanRow,
+  isFieldVisible,
+  previewOptions,
+  safeIconCode,
+  type Cell,
+  type ColspanRow,
+  type DiagramRow,
+  type FieldSpec,
+  type GridRow,
+  type IconKind,
+  type IconObject,
+  type LabelIcon,
+  type RouteDiagram,
+  type Selection,
+  type SideLabel,
+} from "@repo/routemap";
+import { LabelRichEditor } from "./label-editor";
+import { labelIcons, labelIsMultiLine, labelIsRteEditable, setLabelIcons } from "./label-doc";
+import { RintPickerPopover } from "./rint-picker";
+import { iconLabel, type LogoResolver } from "./rint-node";
+import type { RwsResolver } from "./rws-node";
+
+const KINDS: IconKind[] = [
+  "track",
+  "station",
+  "junction",
+  "crossing",
+  "crossover",
+  "shift",
+  "hub",
+  "end",
+  "symbol",
+  "spacer",
+];
+const NONE = "__none__";
+
+/** Sentence-case a field caption for display (e.g. "kind" → "Kind"). */
+const capitalize = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+const kindSample = (k: IconKind): IconObject =>
+  k === "symbol"
+    ? { kind: "symbol", subtype: "ferry" }
+    : k === "spacer"
+      ? { kind: "spacer", width: "half" }
+      : ({ kind: k } as IconObject);
+
+// ── immutable list helpers ────────────────────────────────────────────────
+const replaceAt = <T,>(a: T[], i: number, v: T): T[] => a.map((x, j) => (j === i ? v : x));
+const removeAt = <T,>(a: T[], i: number): T[] => a.filter((_, j) => j !== i);
+const insertAt = <T,>(a: T[], i: number, v: T): T[] => [...a.slice(0, i), v, ...a.slice(i)];
+const moveAt = <T,>(a: T[], i: number, dir: -1 | 1): T[] => {
+  const j = i + dir;
+  if (j < 0 || j >= a.length) return a;
+  const c = [...a];
+  [c[i], c[j]] = [c[j] as T, c[i] as T];
+  return c;
+};
+
+const newCell = (): Cell => ({ kind: "track" });
+const newRow = (): DiagramRow => ({ cells: [newCell()] });
+
+/**
+ * A local text buffer for the label / colspan inputs. Every edit round-trips
+ * through the JSON pane (model → formatJson → parse), which re-creates the value
+ * on each keystroke; driving the input straight off that can jitter the cursor.
+ * This keeps typing instant and only re-syncs when the external value actually
+ * changes from something other than our own last edit (e.g. a direct JSON edit).
+ */
+function useTextBuffer(external: string, commit: (v: string) => void): [string, (v: string) => void] {
+  const [local, setLocal] = useState(external);
+  const lastExternal = useRef(external);
+  useEffect(() => {
+    if (external !== lastExternal.current) {
+      lastExternal.current = external;
+      setLocal(external);
+    }
+  }, [external]);
+  const onChange = (v: string): void => {
+    lastExternal.current = v; // our own change — don't let the sync effect clobber it
+    setLocal(v);
+    commit(v);
+  };
+  return [local, onChange];
+}
+
+// ── shared bits ────────────────────────────────────────────────────────────
+function Thumb({ code, size = 16 }: { code: string | null; size?: number }): ReactNode {
+  // null → no valid icon (red). "" → a valid full-width blank spacer (neutral,
+  // dashed — there's no BSicon file for it). Otherwise the Commons thumbnail.
+  if (code == null) return <Box boxSize={`${size}px`} bg="red.subtle" borderRadius="xs" flexShrink="0" />;
+  if (code === "") {
+    return <Box boxSize={`${size}px`} borderWidth="1px" borderStyle="dashed" borderColor="border" borderRadius="xs" flexShrink="0" />;
+  }
+  return <Image src={commonsUrl(code)} alt={code} h={`${size}px`} w="auto" maxW="none" flexShrink="0" />;
+}
+
+// Icon size (px) for the toolbar MiniBtn glyphs — tuned to the "2xs" button.
+const ICON = 14;
+
+function MiniBtn({
+  onClick,
+  title,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  disabled?: boolean;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <IconButton size="2xs" variant="ghost" onClick={onClick} disabled={disabled} aria-label={title} title={title}>
+      {children}
+    </IconButton>
+  );
+}
+
+// ── enum field → Select with a preview per option ───────────────────────────
+type EnumOpt = { value: string | number; code: string | null };
+
+function EnumSelect({
+  label,
+  value,
+  options,
+  onPick,
+  allowNone,
+  disabled,
+}: {
+  label: string;
+  value: string | number | undefined;
+  options: EnumOpt[];
+  onPick: (raw: string | number | undefined) => void;
+  allowNone: boolean;
+  disabled?: boolean;
+}): ReactNode {
+  const items = useMemo(
+    () => [
+      ...(allowNone ? [{ label: "—", value: NONE, code: null as string | null, raw: undefined as string | number | undefined }] : []),
+      ...options.map((o) => ({ label: String(o.value), value: String(o.value), code: o.code, raw: o.value })),
+    ],
+    [options, allowNone],
+  );
+  const collection = useMemo(() => createListCollection({ items }), [items]);
+  const cur = value == null ? NONE : String(value);
+  return (
+    <Select.Root
+      collection={collection}
+      size="sm"
+      value={[cur]}
+      disabled={disabled}
+      onValueChange={(e) => onPick(items.find((i) => i.value === e.value[0])?.raw)}
+    >
+      <Select.HiddenSelect />
+      <Select.Label fontSize="xs" color="fg.muted">
+        {capitalize(label)}
+      </Select.Label>
+      <Select.Control>
+        <Select.Trigger>
+          <Select.ValueText placeholder="—" />
+        </Select.Trigger>
+        <Select.IndicatorGroup>
+          <Select.Indicator />
+        </Select.IndicatorGroup>
+      </Select.Control>
+      <Portal>
+        <Select.Positioner>
+          <Select.Content>
+            {collection.items.map((item) => (
+              <Select.Item item={item} key={item.value}>
+                <HStack gap="1">
+                  <Thumb code={item.code} />
+                  <Select.ItemText>{item.label}</Select.ItemText>
+                </HStack>
+                <Select.ItemIndicator />
+              </Select.Item>
+            ))}
+          </Select.Content>
+        </Select.Positioner>
+      </Portal>
+    </Select.Root>
+  );
+}
+
+// ── boolean field → CheckboxCard with the on-state preview ───────────────────
+function BoolCard({
+  spec,
+  icon,
+  set,
+}: {
+  spec: FieldSpec;
+  icon: IconObject;
+  set: (patch: Partial<IconObject>) => void;
+}): ReactNode {
+  const field = spec.field;
+  const onValue = spec.sample?.[field] ?? true; // true, or false for `through`
+  const on = icon[field] === onValue;
+  const disabled = spec.disabledWhen?.(icon) ?? false;
+  return (
+    <CheckboxCard.Root
+      size="sm"
+      checked={on}
+      disabled={disabled}
+      onCheckedChange={(e) => set({ [field]: e.checked === true ? onValue : undefined } as Partial<IconObject>)}
+    >
+      <CheckboxCard.HiddenInput />
+      <CheckboxCard.Control>
+        <HStack gap="1" flex="1">
+          <Thumb code={safeIconCode({ ...icon, [field]: onValue } as IconObject)} />
+          <CheckboxCard.Label fontSize="xs">{capitalize(spec.label ?? String(field))}</CheckboxCard.Label>
+        </HStack>
+        <CheckboxCard.Indicator />
+      </CheckboxCard.Control>
+    </CheckboxCard.Root>
+  );
+}
+
+// ── one icon's controls (kind → subtype → contextual fields) ─────────────────
+function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: IconObject) => void }): ReactNode {
+  const set = (patch: Partial<IconObject>) => {
+    const next: IconObject = { ...icon, ...patch };
+    for (const k of Object.keys(next) as (keyof IconObject)[]) {
+      if (next[k] === undefined) delete next[k];
+    }
+    onChange(next);
+  };
+  const pickKind = (k: IconKind) => {
+    const first = iconSubtypes(k)[0];
+    onChange(first ? { kind: k, subtype: first } : ({ kind: k } as IconObject));
+  };
+
+  const code = safeIconCode(icon);
+  const subtypes = iconSubtypes(icon.kind);
+  const fields = fieldsFor(icon.kind).filter((f) => isFieldVisible(f, icon));
+  // Keep the current kind selectable even if it's not in the standard list (e.g.
+  // an unmodelled `bridge`/`water` cell from JSON), so switching kinds isn't lossy.
+  const kindOptions = KINDS.includes(icon.kind) ? KINDS : [...KINDS, icon.kind];
+
+  return (
+    <Stack gap="1.5">
+      <HStack gap="1">
+        <Thumb code={code} size={20} />
+        <Text fontFamily="mono" fontSize="xs" truncate>
+          {code ?? "(No icon)"}
+        </Text>
+      </HStack>
+      <EnumSelect
+        label="kind"
+        value={icon.kind}
+        allowNone={false}
+        options={kindOptions.map((k) => ({ value: k, code: safeIconCode(kindSample(k)) }))}
+        onPick={(v) => v != null && pickKind(v as IconKind)}
+      />
+      {subtypes.length > 0 && (
+        <EnumSelect
+          label="subtype"
+          value={icon.subtype}
+          allowNone={false}
+          options={subtypes.map((s) => ({ value: s, code: safeIconCode({ ...icon, subtype: s }) }))}
+          onPick={(v) => v != null && set({ subtype: String(v) })}
+        />
+      )}
+      {fields.map((f) =>
+        f.control === "toggle" ? (
+          <BoolCard key={String(f.field)} spec={f} icon={icon} set={set} />
+        ) : (
+          <EnumSelect
+            key={String(f.field)}
+            label={f.label ?? String(f.field)}
+            value={icon[f.field] as string | number | undefined}
+            allowNone
+            disabled={f.disabledWhen?.(icon)}
+            options={previewOptions(icon, f.field).map((o) => ({ value: o.value, code: o.code }))}
+            onPick={(v) => set({ [f.field]: v } as Partial<IconObject>)}
+          />
+        ),
+      )}
+    </Stack>
+  );
+}
+
+// ── one cell (object-with-kind cells are visually editable in v1) ────────────
+function CellEditor({ cell, onChange }: { cell: Cell; onChange: (cell: Cell) => void }): ReactNode {
+  if (cell != null && typeof cell === "object" && !Array.isArray(cell) && "kind" in cell) {
+    return <IconFields icon={cell} onChange={(icon) => onChange(icon)} />;
+  }
+  // An empty column: offer to turn it into an icon.
+  if (cell == null) {
+    return (
+      <Stack gap="2">
+        <Text fontSize="xs" color="fg.muted">
+          Empty column.
+        </Text>
+        <Button size="xs" variant="outline" alignSelf="flex-start" onClick={() => onChange(newCell())}>
+          <Plus size={ICON} /> Add icon
+        </Button>
+      </Stack>
+    );
+  }
+  // A plain string cell, or a raw `{ code }` escape-hatch cell (no `kind`): show
+  // its thumbnail. Arrays (stacks) / other overlays stay JSON-only.
+  const codeCell =
+    typeof cell === "object" && !Array.isArray(cell) && typeof (cell as { code?: unknown }).code === "string"
+      ? (cell as { code: string }).code
+      : null;
+  const raw = typeof cell === "string" ? cell : codeCell;
+  return (
+    <Stack gap="1">
+      <Thumb code={raw} size={20} />
+      <Text fontSize="xs" color="fg.muted" truncate>
+        {raw ?? "(Overlay / raw cell — edit in JSON)"}
+      </Text>
+    </Stack>
+  );
+}
+
+/** A label slot with nothing worth editing (so we offer "Add …" instead of an
+ *  empty editor). */
+function labelIsEmpty(v: SideLabel | null | undefined): boolean {
+  if (v == null) return true;
+  if (typeof v === "string") return v === "";
+  if (Array.isArray(v)) return v.length === 0;
+  const hasText = typeof v.text === "string" ? v.text !== "" : Array.isArray(v.text) && v.text.length > 0;
+  const hasIcons = Array.isArray(v.icons) ? v.icons.length > 0 : v.icons != null;
+  return !hasText && !hasIcons && v.rws == null;
+}
+
+/**
+ * The whole-label logo strip: the `icons` that render on the label's outer edge.
+ * Separate from the rich-text editor because their position isn't a position in
+ * the text (see the note in label-doc.ts) — inline logos go in the editor itself.
+ */
+function LabelIconStrip({
+  icons,
+  onChange,
+  resolveLogo,
+}: {
+  icons: LabelIcon[];
+  onChange: (icons: LabelIcon[]) => void;
+  resolveLogo?: LogoResolver;
+}): ReactNode {
+  return (
+    <HStack gap="1" wrap="wrap">
+      {icons.map((icon, i) => {
+        const name = iconLabel(icon);
+        const url = resolveLogo?.(icon)?.url;
+        return (
+          <HStack
+            key={`${name}-${i}`}
+            gap="1"
+            px="1"
+            py="0.5"
+            borderWidth="1px"
+            borderColor="border"
+            borderRadius="sm"
+            title={name}
+          >
+            {url ? (
+              <Image src={url} alt={name} height="12px" width="auto" maxWidth="none" />
+            ) : (
+              <Text fontSize="2xs" color="fg.muted" truncate maxWidth="20">
+                {name}
+              </Text>
+            )}
+            <MiniBtn title={`Remove ${name}`} onClick={() => onChange(icons.filter((_, j) => j !== i))}>
+              <Trash2 size={10} />
+            </MiniBtn>
+          </HStack>
+        );
+      })}
+      <RintPickerPopover
+        trigger={
+          <Button size="2xs" variant="outline">
+            <Plus size={10} /> Logo
+          </Button>
+        }
+        onPick={(code) => onChange([...icons, code])}
+      />
+    </HStack>
+  );
+}
+
+// ── labels: an "Add …" button until there's something to edit; then a rich-text
+//    editor (text/bold/italic/link/logos) with a remove button, plus the strip for
+//    outer-edge logos. Labels carrying `title` stay JSON-only — the RTE has no
+//    representation for it, so editing one would silently drop it. ───────────────
+function LabelSlot({
+  side,
+  value,
+  onChange,
+  resolveRws,
+  resolveLogo,
+}: {
+  side: "left" | "right";
+  value: SideLabel | null | undefined;
+  onChange: (v: SideLabel | undefined) => void;
+  resolveRws?: RwsResolver;
+  resolveLogo?: LogoResolver;
+}): ReactNode {
+  const empty = labelIsEmpty(value);
+  const icons = labelIcons(value);
+  // Reveal the editor once there's content, or when the user clicks "Add". Keyed
+  // by row in the parent, so switching rows re-derives this from the new value.
+  const [open, setOpen] = useState(!empty);
+  useEffect(() => {
+    if (!empty) setOpen(true);
+  }, [empty]);
+
+  if (!open) {
+    return (
+      <Button size="xs" variant="outline" alignSelf="flex-start" onClick={() => setOpen(true)}>
+        <Plus size={ICON} /> Add {side} label
+      </Button>
+    );
+  }
+
+  return (
+    <Stack gap="1">
+      <Flex align="center" justify="space-between">
+        <Text fontSize="xs" color="fg.muted">
+          {capitalize(side)} label
+        </Text>
+        <MiniBtn
+          title={`remove ${side} label`}
+          onClick={() => {
+            onChange(undefined);
+            setOpen(false);
+          }}
+        >
+          <Trash2 size={ICON} />
+        </MiniBtn>
+      </Flex>
+      {labelIsRteEditable(value) ? (
+        <>
+          <LabelRichEditor
+            // Whole-label icons live outside the document, so re-attach them to
+            // every text edit or the first keystroke would drop them.
+            value={value}
+            onChange={(v) => onChange(setLabelIcons(v, icons))}
+            ariaLabel={`${side} label`}
+            resolveRws={resolveRws}
+            resolveLogo={resolveLogo}
+          />
+          {/* Only shown when it can do something the toolbar's logo button can't:
+              hold logos the label already has, or place them OUTSIDE a {{BSsplit}}
+              on a multi-line label. On a single-line label the two are the same
+              wikitext, so the strip would be a second control for one result. */}
+          {(icons.length > 0 || labelIsMultiLine(value)) && (
+            <LabelIconStrip
+              icons={icons}
+              onChange={(next) => onChange(setLabelIcons(value, next))}
+              resolveLogo={resolveLogo}
+            />
+          )}
+        </>
+      ) : (
+        <Text fontSize="xs" color="fg.muted">
+          (Rich label — edit in JSON)
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
+function ColspanBody({ row, onChange }: { row: ColspanRow; onChange: (r: DiagramRow) => void }): ReactNode {
+  const isRich = row.text != null && typeof row.text !== "string";
+  const [text, setText] = useTextBuffer(typeof row.text === "string" ? row.text : "", (v) => onChange({ ...row, text: v }));
+  if (isRich) {
+    return (
+      <Text fontSize="xs" color="fg.muted">
+        (Rich colspan — edit in JSON)
+      </Text>
+    );
+  }
+  return <Input size="xs" value={text} placeholder="Colspan text" onChange={(e) => setText(e.target.value)} autoFocus />;
+}
+
+// ── panel section header ─────────────────────────────────────────────────────
+// `actions` (a toolbar) sits inline with the title on the same line; body below.
+function Section({ title, actions, children }: { title: string; actions?: ReactNode; children?: ReactNode }): ReactNode {
+  return (
+    <Stack gap="1.5">
+      <Flex align="center" justify="space-between" gap="2" minH="6">
+        <Text fontSize="2xs" fontWeight="semibold" color="fg.muted" textTransform="uppercase" letterSpacing="wide" whiteSpace="nowrap">
+          {title}
+        </Text>
+        {actions}
+      </Flex>
+      {children}
+    </Stack>
+  );
+}
+
+/**
+ * Contextual editor for whatever is clicked in the preview. Given the parsed
+ * diagram and the current `selection`, it renders:
+ *   - a `row` selection → the row's actions plus its label(s): both side labels
+ *     for a grid row, or the text for a colspan row.
+ *   - a `cell` selection → the row actions, cell actions (move within the row,
+ *     move up/down to an adjacent row, duplicate, add, delete), and the icon's
+ *     descriptor-driven controls.
+ * It emits a new diagram on every edit. Selection is lifted to the page so clicks
+ * in the preview and edits here stay in sync; this component nudges it
+ * (`onSelect`) when an edit shifts indices so the highlight keeps tracking.
+ */
+export function Inspector({
+  diagram,
+  selection,
+  onChange,
+  onSelect,
+  resolveRws,
+  resolveLogo,
+}: {
+  diagram: RouteDiagram;
+  selection: Selection | null;
+  onChange: (d: RouteDiagram) => void;
+  onSelect: (selection: Selection | null) => void;
+  resolveRws?: RwsResolver;
+  resolveLogo?: LogoResolver;
+}): ReactNode {
+  const rows = diagram.rows ?? [];
+  const setRows = (r: DiagramRow[]) => onChange({ ...diagram, rows: r });
+  const addRow = () => {
+    setRows([...rows, newRow()]);
+    onSelect({ kind: "row", row: rows.length });
+  };
+
+  const empty = (
+    <Stack gap="3" p="4">
+      <Text fontSize="sm" color="fg.muted">
+        Click a cell or a row in the preview to edit it here.
+      </Text>
+      <Button size="xs" colorPalette="blue" alignSelf="flex-start" onClick={addRow}>
+        <Plus size={ICON} /> Row
+      </Button>
+    </Stack>
+  );
+
+  if (!selection) return empty;
+  const row = rows[selection.row];
+  if (!row) return empty; // stale selection (row was deleted) — show the hint
+
+  const setRow = (r: DiagramRow) => setRows(replaceAt(rows, selection.row, r));
+  const i = selection.row;
+
+  // Insert a blank / duplicate row at `at`, then select it. `at === i` lands the
+  // new row above the current one (pushing it down); `at === i + 1`, below it.
+  const insertRow = (at: number) => { setRows(insertAt(rows, at, newRow())); onSelect({ kind: "row", row: at }); };
+  const duplicateRow = (at: number) => { setRows(insertAt(rows, at, structuredClone(row))); onSelect({ kind: "row", row: at }); };
+
+  // Header keeps just the row's identity + delete; everything positional (move /
+  // insert / duplicate) lives in the two icon bars around the labels below.
+  const rowToolbar = (
+    <Section
+      title={isColspanRow(row) ? `Colspan row ${i + 1}` : `Row ${i + 1}`}
+      actions={
+        <MiniBtn title="delete row" onClick={() => { setRows(removeAt(rows, i)); onSelect(null); }}><Trash2 size={ICON} /></MiniBtn>
+      }
+    />
+  );
+
+  // A compact icon bar hugging the labels: its position carries the direction, so
+  // the top bar moves/inserts/duplicates ABOVE and the bottom bar BELOW — no text,
+  // just tooltips. `at` is where a new row lands; `dir` picks the move arrow.
+  const RowBar = ({ dir }: { dir: "above" | "below" }): ReactNode => {
+    const at = dir === "above" ? i : i + 1;
+    const step: -1 | 1 = dir === "above" ? -1 : 1;
+    const canMove = dir === "above" ? i > 0 : i < rows.length - 1;
+    return (
+      <HStack gap="0.5">
+        <MiniBtn title={`move row ${dir === "above" ? "up" : "down"}`} disabled={!canMove} onClick={() => { setRows(moveAt(rows, i, step)); onSelect({ ...selection, row: i + step }); }}>
+          {dir === "above" ? <ArrowUp size={ICON} /> : <ArrowDown size={ICON} />}
+        </MiniBtn>
+        <MiniBtn title={`insert row ${dir}`} onClick={() => insertRow(at)}><Plus size={ICON} /></MiniBtn>
+        <MiniBtn title={`duplicate row ${dir}`} onClick={() => duplicateRow(at)}><Copy size={ICON} /></MiniBtn>
+      </HStack>
+    );
+  };
+
+  let body: ReactNode = null;
+
+  if (selection.kind === "row" && isColspanRow(row)) {
+    body = (
+      <Section title="Text">
+        <ColspanBody row={row} onChange={setRow} />
+      </Section>
+    );
+  } else if (selection.kind === "row") {
+    const grid = row as GridRow;
+    body = (
+      <Section title="Labels">
+        <Stack gap="3">
+          <LabelSlot
+            key={`left-${i}`}
+            side="left"
+            value={grid.left}
+            onChange={(v) => setRow({ ...grid, left: v })}
+            resolveRws={resolveRws}
+            resolveLogo={resolveLogo}
+          />
+          <LabelSlot
+            key={`right-${i}`}
+            side="right"
+            value={grid.right}
+            onChange={(v) => setRow({ ...grid, right: v })}
+            resolveRws={resolveRws}
+            resolveLogo={resolveLogo}
+          />
+        </Stack>
+      </Section>
+    );
+  } else if (isColspanRow(row)) {
+    // A cell selection landed on a colspan row (e.g. the row type changed under a
+    // JSON edit) — there are no cells to edit; fall back to the text.
+    body = (
+      <Section title="Text">
+        <ColspanBody row={row} onChange={setRow} />
+      </Section>
+    );
+  } else {
+    const grid = row as GridRow;
+    const cells = grid.cells ?? [];
+    const j = selection.col;
+    const cell = cells[j];
+    const setCells = (c: Cell[]) => setRow({ ...grid, cells: c });
+    // A grid row directly above/below to move the cell into (colspan rows can't
+    // hold cells, so they're not valid targets).
+    const canMoveTo = (dir: -1 | 1): boolean => {
+      const t = i + dir;
+      return t >= 0 && t < rows.length && !isColspanRow(rows[t]!);
+    };
+    const moveToRow = (dir: -1 | 1) => {
+      const t = i + dir;
+      const target = rows[t] as GridRow;
+      const targetCells = target.cells ?? [];
+      const at = Math.min(j, targetCells.length); // keep the column where possible
+      let next = replaceAt(rows, i, { ...grid, cells: removeAt(cells, j) });
+      next = replaceAt(next, t, { ...target, cells: insertAt(targetCells, at, cell ?? null) });
+      setRows(next);
+      onSelect({ kind: "cell", row: t, col: at });
+    };
+    body = (
+      <Section
+        title={`Cell ${j + 1} of ${cells.length}`}
+        actions={
+          <HStack gap="0.5">
+            <MiniBtn title="move left" disabled={j === 0} onClick={() => { setCells(moveAt(cells, j, -1)); onSelect({ ...selection, col: j - 1 }); }}><ArrowLeft size={ICON} /></MiniBtn>
+            <MiniBtn title="move right" disabled={j === cells.length - 1} onClick={() => { setCells(moveAt(cells, j, 1)); onSelect({ ...selection, col: j + 1 }); }}><ArrowRight size={ICON} /></MiniBtn>
+            <MiniBtn title="move to row above" disabled={!canMoveTo(-1)} onClick={() => moveToRow(-1)}><ArrowUpToLine size={ICON} /></MiniBtn>
+            <MiniBtn title="move to row below" disabled={!canMoveTo(1)} onClick={() => moveToRow(1)}><ArrowDownToLine size={ICON} /></MiniBtn>
+            <MiniBtn title="duplicate cell" onClick={() => { setCells(insertAt(cells, j + 1, structuredClone(cell ?? null))); onSelect({ ...selection, col: j + 1 }); }}><Copy size={ICON} /></MiniBtn>
+            <MiniBtn title="add cell" onClick={() => { setCells(insertAt(cells, j + 1, newCell())); onSelect({ ...selection, col: j + 1 }); }}><Plus size={ICON} /></MiniBtn>
+            <MiniBtn title="delete cell" onClick={() => { const next = removeAt(cells, j); setCells(next); onSelect(next.length ? { ...selection, col: Math.min(j, next.length - 1) } : { kind: "row", row: i }); }}><Trash2 size={ICON} /></MiniBtn>
+          </HStack>
+        }
+      >
+        <CellEditor cell={cell ?? null} onChange={(c) => setCells(replaceAt(cells, j, c))} />
+      </Section>
+    );
+  }
+
+  // Cell panel: just the cell's own tools + editor, no row-level chrome.
+  if (selection.kind === "cell") {
+    return (
+      <Stack gap="4" p="3">
+        {body}
+      </Stack>
+    );
+  }
+
+  // Row panel: header (title + delete), then a compact icon bar ABOVE the labels,
+  // the labels, and a mirrored bar BELOW — each bar acts in its own direction.
+  return (
+    <Stack gap="2" p="3">
+      {rowToolbar}
+      <RowBar dir="above" />
+      {body}
+      <RowBar dir="below" />
+    </Stack>
+  );
+}

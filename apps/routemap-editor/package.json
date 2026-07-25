@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint --max-warnings 0",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@chakra-ui/react": "^3.36.0",
@@ -17,19 +18,28 @@
     "@emotion/react": "^11.14.0",
     "@repo/routemap": "workspace:*",
     "@repo/ui": "workspace:*",
+    "@tiptap/core": "^3.29.0",
+    "@tiptap/pm": "^3.29.0",
+    "@tiptap/react": "^3.29.0",
+    "@tiptap/starter-kit": "^3.29.0",
     "@uiw/react-codemirror": "^4.25.2",
+    "lucide-react": "^1.26.0",
     "next": "15.3.8",
     "next-themes": "^0.4.6",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "react-icons": "^5.5.0"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.15.3",
     "@types/react": "19.1.0",
     "@types/react-dom": "19.1.1",
     "eslint": "^9.26.0",
-    "typescript": "5.8.2"
+    "jsdom": "^29.1.1",
+    "typescript": "5.8.2",
+    "vitest": "^3.2.4"
   }
 }
