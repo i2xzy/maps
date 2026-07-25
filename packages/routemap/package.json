@@ -3,9 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./rint-catalog": "./src/rint-catalog.ts"
   },
   "scripts": {
+    "build-rint-catalog": "node scripts/build-rint-catalog.mjs",
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
     "test": "vitest run"
