@@ -37,6 +37,7 @@ import {
   previewOptions,
   safeIconCode,
   type Cell,
+  type CellIcon,
   type ColspanRow,
   type DiagramRow,
   type FieldSpec,
@@ -90,7 +91,10 @@ const moveAt = <T,>(a: T[], i: number, dir: -1 | 1): T[] => {
   return c;
 };
 
-const newCell = (): Cell => ({ kind: "track" });
+const newIcon = (): CellIcon => ({ kind: "track" });
+/** A fresh overlay layer, as a CODE — a stack of codes shouldn't grow one object. */
+const newLayer = (): CellIcon => safeIconCode(newIcon() as IconObject) ?? newIcon();
+const newCell = (): Cell => newIcon();
 const newRow = (): DiagramRow => ({ cells: [newCell()] });
 
 /**
@@ -340,24 +344,109 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
 }
 
 // ── one cell (object-with-kind cells are visually editable in v1) ────────────
-function CellEditor({ cell, onChange }: { cell: Cell; onChange: (cell: Cell) => void }): ReactNode {
-  if (cell != null && typeof cell === "object" && !Array.isArray(cell) && "kind" in cell) {
-    return <IconFields icon={cell} onChange={(icon) => onChange(icon)} />;
+/**
+ * One icon in a cell — a bare code, an `{ code, title }` ref, or a semantic object.
+ *
+ * Shared by the single-icon cell and by every layer of an overlay stack, which is
+ * the same editing problem: get to an `IconObject` the controls understand, then
+ * write back in whatever shape the cell was already using.
+ */
+function IconLayerEditor({ icon, onChange }: { icon: CellIcon; onChange: (icon: CellIcon) => void }): ReactNode {
+  if (typeof icon === "object" && "kind" in icon) {
+    return <IconFields icon={icon} onChange={(next) => onChange(next)} />;
   }
-  // A bare BSicon code (`"STR"`) is what hand-written and pasted diagrams are made
-  // of, so decode it and edit it with the same controls as an icon object —
-  // otherwise the form only ever edits cells the form itself created.
-  //
-  // Written back AS A CODE, not as an object, so editing one cell doesn't blow a
-  // terse `["STR", "STR"]` row up into JSON nobody wants to read. `codeToIcon` and
-  // `safeIconCode` round-trip exactly for the codes real diagrams use; if an edit
-  // reaches a state with no valid code, the object is kept so the work isn't lost.
-  if (typeof cell === "string") {
-    const decoded = codeToIcon(cell);
+  // A bare code, written back as a code so a terse row stays terse.
+  if (typeof icon === "string") {
+    const decoded = codeToIcon(icon);
     if ("kind" in decoded) {
-      return <IconFields icon={decoded} onChange={(icon) => onChange(safeIconCode(icon) ?? icon)} />;
+      return <IconFields icon={decoded} onChange={(next) => onChange(safeIconCode(next) ?? next)} />;
     }
   }
+  // An `{ code, title, href }` ref: edit the code semantically but keep the metadata,
+  // which the icon controls know nothing about. The sample's `hKRZW` cell carries a
+  // title, and losing it on the first edit would be worse than not editing at all.
+  if (typeof icon === "object" && "code" in icon) {
+    const decoded = codeToIcon(icon.code);
+    if ("kind" in decoded) {
+      return (
+        <IconFields
+          icon={decoded}
+          onChange={(next) => {
+            const code = safeIconCode(next);
+            onChange(code == null ? icon : { ...icon, code });
+          }}
+        />
+      );
+    }
+  }
+  // Nothing semantic to edit: a code we don't model (`WASSERq`, `SKRZ-Bo`, a bare
+  // width prefix like `d`). Show the thumbnail so the layer is still identifiable.
+  const code = typeof icon === "string" ? icon : "code" in icon ? icon.code : null;
+  return (
+    <Stack gap="1">
+      <Thumb code={code} size={20} />
+      <Text fontSize="xs" color="fg.muted" truncate>
+        {code ?? "(Raw cell — edit in JSON)"}
+      </Text>
+    </Stack>
+  );
+}
+
+/**
+ * An overlay stack (Routemap `!~`): icons composited in one column slot, first in
+ * flow and the rest layered over it. Over half the rows of a real diagram use one.
+ *
+ * Collapses back to a plain single cell at one layer, so removing an overlay leaves
+ * the JSON as terse as it started rather than a one-element array.
+ */
+function StackEditor({
+  stack,
+  onChange,
+}: {
+  stack: CellIcon[];
+  onChange: (cell: Cell) => void;
+}): ReactNode {
+  const set = (next: CellIcon[]) => onChange(next.length === 1 ? (next[0] as Cell) : next);
+  return (
+    <Stack gap="2">
+      {stack.map((layer, i) => (
+        <Box key={i} borderWidth="1px" borderColor="border" borderRadius="sm" p="1.5">
+          <Flex align="center" justify="space-between" mb="1">
+            <Text fontSize="2xs" color="fg.muted" textTransform="uppercase" letterSpacing="wide">
+              {i === 0 ? "Base" : `Overlay ${i}`}
+            </Text>
+            <HStack gap="0">
+              {/* The list is in model order — base first, then each overlay on top,
+                  matching both the JSON and the wikitext `a!~b!~c`. So the arrows
+                  move a layer within that list, and the Base/Overlay captions
+                  renumber to show what ended up on top. */}
+              <MiniBtn title="Move layer up" disabled={i === 0} onClick={() => set(moveAt(stack, i, -1))}>
+                <ArrowUp size={ICON} />
+              </MiniBtn>
+              <MiniBtn
+                title="Move layer down"
+                disabled={i === stack.length - 1}
+                onClick={() => set(moveAt(stack, i, 1))}
+              >
+                <ArrowDown size={ICON} />
+              </MiniBtn>
+              <MiniBtn title="Remove layer" disabled={stack.length <= 1} onClick={() => set(removeAt(stack, i))}>
+                <Trash2 size={ICON} />
+              </MiniBtn>
+            </HStack>
+          </Flex>
+          <IconLayerEditor icon={layer} onChange={(next) => set(replaceAt(stack, i, next))} />
+        </Box>
+      ))}
+      <Button size="xs" variant="outline" alignSelf="flex-start" onClick={() => set([...stack, newLayer()])}>
+        <Plus size={ICON} /> Overlay
+      </Button>
+    </Stack>
+  );
+}
+
+// ── one cell: empty, a single icon, or an overlay stack ───────────────────────
+function CellEditor({ cell, onChange }: { cell: Cell; onChange: (cell: Cell) => void }): ReactNode {
   // An empty column: offer to turn it into an icon.
   if (cell == null) {
     return (
@@ -371,20 +460,18 @@ function CellEditor({ cell, onChange }: { cell: Cell; onChange: (cell: Cell) => 
       </Stack>
     );
   }
-  // What's left: a code we can't model semantically (`WASSERq`, `SKRZ-Bo`, a bare
-  // width prefix like `d`), a raw `{ code }` cell, or an overlay stack. Show the
-  // thumbnail so the cell is still identifiable, and leave editing to the JSON.
-  const codeCell =
-    typeof cell === "object" && !Array.isArray(cell) && typeof (cell as { code?: unknown }).code === "string"
-      ? (cell as { code: string }).code
-      : null;
-  const raw = typeof cell === "string" ? cell : codeCell;
+  if (Array.isArray(cell)) return <StackEditor stack={cell} onChange={onChange} />;
+  // `{ stack, note }`: edit the stack, leave `note` alone — it is deferred in the
+  // serializer, so a control for it would edit a field nothing renders.
+  if (typeof cell === "object" && "stack" in cell) {
+    return <StackEditor stack={cell.stack} onChange={(next) => onChange({ ...cell, stack: Array.isArray(next) ? next : [next as CellIcon] })} />;
+  }
   return (
-    <Stack gap="1">
-      <Thumb code={raw} size={20} />
-      <Text fontSize="xs" color="fg.muted" truncate>
-        {raw ?? "(Overlay / raw cell — edit in JSON)"}
-      </Text>
+    <Stack gap="2">
+      <IconLayerEditor icon={cell} onChange={(next) => onChange(next)} />
+      <Button size="xs" variant="outline" alignSelf="flex-start" onClick={() => onChange([cell, newLayer()])}>
+        <Plus size={ICON} /> Overlay
+      </Button>
     </Stack>
   );
 }

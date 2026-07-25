@@ -159,6 +159,68 @@ describe("Inspector: cell selection", () => {
     expect(img.isConnected).toBe(false);
   });
 
+  it("promotes a single cell to an overlay stack and collapses it back", () => {
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: ["BHF"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Overlay/ }));
+    // The existing icon becomes the base; the new one layers over it.
+    // The new layer is a code too, so a stack of codes doesn't grow a lone object.
+    expect((model().rows![0] as { cells: unknown[] }).cells[0]).toEqual(["BHF", "STR"]);
+    expect(screen.getByText("Base")).toBeTruthy();
+    expect(screen.getByText("Overlay 1")).toBeTruthy();
+
+    // Removing a layer collapses back to a plain cell, not a one-element array.
+    fireEvent.click(screen.getAllByLabelText("Remove layer")[1]!);
+    expect((model().rows![0] as { cells: unknown[] }).cells[0]).toBe("BHF");
+  });
+
+  it("edits each layer of an existing stack independently", () => {
+    // Over half the rows of a real diagram are `!~` stacks; they used to be JSON-only.
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ cells: [["STR", "BHF"]] }] }}
+        select={{ kind: "cell", row: 0, col: 0 }}
+      />,
+    );
+    // One set of controls per layer, each decoded from its code.
+    expect(screen.getAllByText("Kind")).toHaveLength(2);
+    expect(screen.getByText("STR")).toBeTruthy();
+    expect(screen.getByText("BHF")).toBeTruthy();
+  });
+
+  it("reorders stack layers, and the arrows match the list", () => {
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ cells: [["STR", "BHF"]] }] }}
+        select={{ kind: "cell", row: 0, col: 0 }}
+      />,
+    );
+    // "Move layer down" on the base sends it below the overlay in the list, which is
+    // the model order the JSON and the wikitext `a!~b` both use.
+    fireEvent.click(screen.getAllByLabelText("Move layer down")[0]!);
+    expect((model().rows![0] as { cells: unknown[] }).cells[0]).toEqual(["BHF", "STR"]);
+    // Ends are disabled rather than wrapping.
+    expect(screen.getAllByLabelText("Move layer up")[0]).toHaveProperty("disabled", true);
+    expect(screen.getAllByLabelText("Move layer down")[1]).toHaveProperty("disabled", true);
+  });
+
+  it("keeps an icon ref's title when its code is edited", () => {
+    // The sample's `hKRZW` cell carries a tooltip. The icon controls know nothing
+    // about `title`, so losing it on the first edit would be worse than not editing.
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ cells: [{ code: "hKRZW", title: "bridge over water" } as never] }] }}
+        select={{ kind: "cell", row: 0, col: 0 }}
+      />,
+    );
+    expect(screen.getByText("Kind")).toBeTruthy(); // decoded, not read-only
+    expect(screen.getByText("hKRZW")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Overlay/ }));
+    const base = (model().rows![0] as { cells: unknown[][] }).cells[0]![0];
+    expect(base).toEqual({ code: "hKRZW", title: "bridge over water" });
+  });
+
   it("turns an empty column into an icon", () => {
     renderWithChakra(<Controlled initial={{ rows: [{ cells: [null] }] }} select={{ kind: "cell", row: 0, col: 0 }} />);
     expect(screen.getByText(/Empty column/)).toBeTruthy();
