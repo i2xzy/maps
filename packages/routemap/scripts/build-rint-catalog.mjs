@@ -32,6 +32,11 @@
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+// The same parser the renderer uses at runtime, so the catalog can't record a
+// different file name than a live lookup would. Needs `--experimental-strip-types`
+// (see the `build-rint-catalog` script in package.json); rint-expansion.ts is a
+// leaf module precisely so node can load it without resolving package imports.
+import { parseRintExpansion } from "../src/rint-expansion.ts";
 
 const API = "https://en.wikipedia.org/w/api.php";
 const TEMPLATE = "Template:Rail-interchange";
@@ -383,17 +388,6 @@ async function harvestRegionCountries() {
   return { regionCountry, countries: countries.length };
 }
 
-/** The File / size / link / alt an expansion produced, or null if it made no image. */
-function parseExpansion(wikitext) {
-  const file = /\[\[\s*File:\s*([^|\]]+)/i.exec(wikitext)?.[1]?.trim();
-  if (!file) return null;
-  return {
-    file: file.replace(/_/g, " "),
-    size: Number(/\|\s*(\d+)(?:x\d+)?px/.exec(wikitext)?.[1]) || undefined,
-    link: /\|\s*link\s*=\s*([^|\]]+)/.exec(wikitext)?.[1]?.trim() || undefined,
-    alt: /\|\s*alt\s*=\s*([^|\]]+)/.exec(wikitext)?.[1]?.trim() || undefined,
-  };
-}
 
 /* --------------------------------------------------------------------- main -- */
 
@@ -426,7 +420,7 @@ async function main() {
     const batch = codes.slice(i, i + CHUNK);
     const expanded = await expandBatch(batch);
     for (const code of batch) {
-      const parsed = parseExpansion(expanded[code] ?? "");
+      const parsed = parseRintExpansion(expanded[code] ?? "");
       if (parsed) entries.push({ code, ...parsed });
       else noImage++;
     }

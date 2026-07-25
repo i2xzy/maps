@@ -13,6 +13,7 @@
  */
 import type { LabelIcon, RouteDiagram } from "./types";
 import { normalizeSide } from "./normalize";
+import { parseRintExpansion, type RintEntry } from "./rint-expansion";
 
 const DEFAULT_API = "https://en.wikipedia.org/w/api.php";
 
@@ -36,16 +37,7 @@ export function logoUrl(file: string): string {
   return `https://en.wikipedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}`;
 }
 
-/** A resolved rint logo: file, size, and the operator article it links to. */
-export interface RintEntry {
-  file: string;
-  /** Width rint emits in its File link (e.g. 10 for `|10px|`), if any. */
-  size?: number;
-  /** Link target (the operator's article), from rint's `link=`. */
-  link?: string;
-  /** Descriptive alt text, from rint's `alt=`. */
-  alt?: string;
-}
+export type { RintEntry } from "./rint-expansion";
 
 /** What `resolveLogo` returns: the image url, rint's size, and its link/alt. */
 export interface ResolvedLogo {
@@ -88,13 +80,8 @@ export async function expandRint(
         const res = await fetch(url);
         const json = await res.json();
         const text: string = json?.expandtemplates?.wikitext ?? "";
-        const file = text.match(/File:([^|\]]+)/)?.[1]?.trim();
-        if (file) {
-          // rint sizes the icon in the File link, e.g. `|10px|` (or `|10x10px|`).
-          const size = Number(text.match(/\|\s*(\d+)(?:x\d+)?px/)?.[1]) || undefined;
-          const link = text.match(/\|\s*link\s*=\s*([^|\]]+)/)?.[1]?.trim() || undefined;
-          const alt = text.match(/\|\s*alt\s*=\s*([^|\]]+)/)?.[1]?.trim() || undefined;
-          const entry: RintEntry = { file, size, link, alt };
+        const entry = parseRintExpansion(text);
+        if (entry) {
           cache.set(code, entry);
           out[code] = entry;
         }
