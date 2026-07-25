@@ -28,6 +28,7 @@ import {
   Trash2,
 } from "lucide-react";
 import {
+  codeToIcon,
   commonsUrl,
   fieldsFor,
   iconSubtypes,
@@ -118,13 +119,40 @@ function useTextBuffer(external: string, commit: (v: string) => void): [string, 
 
 // ── shared bits ────────────────────────────────────────────────────────────
 function Thumb({ code, size = 16 }: { code: string | null; size?: number }): ReactNode {
+  // A code can be well-formed and still have no file on Commons — the option
+  // previews combine fields freely (`legend` + a junction, say), and plenty of those
+  // combinations were never drawn. Remember which code failed rather than a bare
+  // boolean, so the state clears itself the moment the code changes.
+  const [failed, setFailed] = useState<string | null>(null);
+
+  const blank = (
+    <Box
+      boxSize={`${size}px`}
+      borderWidth="1px"
+      borderStyle="dashed"
+      borderColor="border"
+      borderRadius="xs"
+      flexShrink="0"
+    />
+  );
   // null → no valid icon (red). "" → a valid full-width blank spacer (neutral,
   // dashed — there's no BSicon file for it). Otherwise the Commons thumbnail.
   if (code == null) return <Box boxSize={`${size}px`} bg="red.subtle" borderRadius="xs" flexShrink="0" />;
-  if (code === "") {
-    return <Box boxSize={`${size}px`} borderWidth="1px" borderStyle="dashed" borderColor="border" borderRadius="xs" flexShrink="0" />;
-  }
-  return <Image src={commonsUrl(code)} alt={code} h={`${size}px`} w="auto" maxW="none" flexShrink="0" />;
+  if (code === "") return blank;
+  // A broken-image glyph in a form reads as "this control is broken"; the dashed
+  // placeholder reads as "no picture for this one", which is what it means.
+  if (failed === code) return blank;
+  return (
+    <Image
+      src={commonsUrl(code)}
+      alt={code}
+      h={`${size}px`}
+      w="auto"
+      maxW="none"
+      flexShrink="0"
+      onError={() => setFailed(code)}
+    />
+  );
 }
 
 // Icon size (px) for the toolbar MiniBtn glyphs — tuned to the "2xs" button.
@@ -316,6 +344,20 @@ function CellEditor({ cell, onChange }: { cell: Cell; onChange: (cell: Cell) => 
   if (cell != null && typeof cell === "object" && !Array.isArray(cell) && "kind" in cell) {
     return <IconFields icon={cell} onChange={(icon) => onChange(icon)} />;
   }
+  // A bare BSicon code (`"STR"`) is what hand-written and pasted diagrams are made
+  // of, so decode it and edit it with the same controls as an icon object —
+  // otherwise the form only ever edits cells the form itself created.
+  //
+  // Written back AS A CODE, not as an object, so editing one cell doesn't blow a
+  // terse `["STR", "STR"]` row up into JSON nobody wants to read. `codeToIcon` and
+  // `safeIconCode` round-trip exactly for the codes real diagrams use; if an edit
+  // reaches a state with no valid code, the object is kept so the work isn't lost.
+  if (typeof cell === "string") {
+    const decoded = codeToIcon(cell);
+    if ("kind" in decoded) {
+      return <IconFields icon={decoded} onChange={(icon) => onChange(safeIconCode(icon) ?? icon)} />;
+    }
+  }
   // An empty column: offer to turn it into an icon.
   if (cell == null) {
     return (
@@ -329,8 +371,9 @@ function CellEditor({ cell, onChange }: { cell: Cell; onChange: (cell: Cell) => 
       </Stack>
     );
   }
-  // A plain string cell, or a raw `{ code }` escape-hatch cell (no `kind`): show
-  // its thumbnail. Arrays (stacks) / other overlays stay JSON-only.
+  // What's left: a code we can't model semantically (`WASSERq`, `SKRZ-Bo`, a bare
+  // width prefix like `d`), a raw `{ code }` cell, or an overlay stack. Show the
+  // thumbnail so the cell is still identifiable, and leave editing to the JSON.
   const codeCell =
     typeof cell === "object" && !Array.isArray(cell) && typeof (cell as { code?: unknown }).code === "string"
       ? (cell as { code: string }).code

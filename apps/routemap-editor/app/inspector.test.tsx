@@ -120,6 +120,45 @@ describe("Inspector: cell selection", () => {
     expect(screen.getByLabelText("move to row above")).toHaveProperty("disabled", true);
   });
 
+  it("edits a plain BSicon code cell, and writes it back as a code", () => {
+    // Hand-written and pasted diagrams are made of bare codes (`["STR","STR"]`).
+    // Before this they showed a thumbnail and nothing else, so the form only ever
+    // edited cells the form itself had created.
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: ["BHF"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    // Decoded into the semantic controls: BHF is a station.
+    expect(screen.getByText("Kind")).toBeTruthy();
+    expect(screen.getByText("BHF")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("add cell"));
+    // Still a terse string, not an object — the row must not blow up into JSON
+    // nobody wants to read just because a cell was selected.
+    expect((model().rows![0] as { cells: unknown[] }).cells[0]).toBe("BHF");
+  });
+
+  it("leaves a code it cannot model semantically alone", () => {
+    // `WASSERq` decodes to the raw `{ code }` escape hatch, so there is nothing for
+    // the controls to edit — it keeps the read-only fallback rather than being
+    // coerced into a shape that would lose it.
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: ["WASSERq"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    expect(screen.queryByText("Kind")).toBeNull();
+    expect(screen.getByText("WASSERq")).toBeTruthy();
+  });
+
+  it("shows a placeholder, not a broken image, when a preview has no file", () => {
+    // Option previews combine fields freely and plenty of the results were never
+    // drawn on Commons. A broken-image glyph reads as "this control is broken".
+    renderWithChakra(<Controlled initial={CELL("station")} select={{ kind: "cell", row: 0, col: 0 }} />);
+    const img = screen.getAllByRole("img")[0]!;
+    expect(img.isConnected).toBe(true);
+    fireEvent.error(img);
+    // That specific <img> is replaced by the dashed placeholder. Asserting on the
+    // element rather than its alt text, because several previews share a code.
+    expect(img.isConnected).toBe(false);
+  });
+
   it("turns an empty column into an icon", () => {
     renderWithChakra(<Controlled initial={{ rows: [{ cells: [null] }] }} select={{ kind: "cell", row: 0, col: 0 }} />);
     expect(screen.getByText(/Empty column/)).toBeTruthy();
