@@ -71,14 +71,14 @@ describe("Inspector: cell selection", () => {
 
   it("adds a cell after the selected one and selects it", () => {
     renderWithChakra(<Controlled initial={CELL("track")} select={{ kind: "cell", row: 0, col: 0 }} />);
-    fireEvent.click(screen.getByLabelText("add cell"));
+    fireEvent.click(screen.getByLabelText("Add cell"));
     expect((model().rows![0] as { cells: unknown[] }).cells).toHaveLength(2);
     expect(sel()).toEqual({ kind: "cell", row: 0, col: 1 });
   });
 
   it("deletes the selected cell and falls back to the row when it was the last", () => {
     renderWithChakra(<Controlled initial={CELL("track")} select={{ kind: "cell", row: 0, col: 0 }} />);
-    fireEvent.click(screen.getByLabelText("delete cell"));
+    fireEvent.click(screen.getByLabelText("Delete cell"));
     expect((model().rows![0] as { cells: unknown[] }).cells).toHaveLength(0);
     expect(sel()).toEqual({ kind: "row", row: 0 });
   });
@@ -90,7 +90,7 @@ describe("Inspector: cell selection", () => {
         select={{ kind: "cell", row: 0, col: 0 }}
       />,
     );
-    fireEvent.click(screen.getByLabelText("move right"));
+    fireEvent.click(screen.getByLabelText("Move right"));
     expect((model().rows![0] as { cells: unknown[] }).cells).toEqual([{ kind: "station" }, { kind: "track" }]);
     expect(sel()).toEqual({ kind: "cell", row: 0, col: 1 });
   });
@@ -107,7 +107,7 @@ describe("Inspector: cell selection", () => {
         select={{ kind: "cell", row: 0, col: 1 }}
       />,
     );
-    fireEvent.click(screen.getByLabelText("move to row below"));
+    fireEvent.click(screen.getByLabelText("Move to row below"));
     const rows = model().rows! as { cells: unknown[] }[];
     expect(rows[0]!.cells).toEqual([{ kind: "track" }]);
     // col 1 clamps to the shorter target row's end (index 1).
@@ -117,7 +117,7 @@ describe("Inspector: cell selection", () => {
 
   it("disables 'move to row above' for the top row", () => {
     renderWithChakra(<Controlled initial={CELL("track")} select={{ kind: "cell", row: 0, col: 0 }} />);
-    expect(screen.getByLabelText("move to row above")).toHaveProperty("disabled", true);
+    expect(screen.getByLabelText("Move to row above")).toHaveProperty("disabled", true);
   });
 
   it("edits a plain BSicon code cell, and writes it back as a code", () => {
@@ -130,7 +130,7 @@ describe("Inspector: cell selection", () => {
     // Decoded into the semantic controls: BHF is a station.
     expect(screen.getByText("Kind")).toBeTruthy();
     expect(screen.getByText("BHF")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("add cell"));
+    fireEvent.click(screen.getByLabelText("Add cell"));
     // Still a terse string, not an object — the row must not blow up into JSON
     // nobody wants to read just because a cell was selected.
     expect((model().rows![0] as { cells: unknown[] }).cells[0]).toBe("BHF");
@@ -233,20 +233,20 @@ describe("Inspector: row selection (labels & colspan)", () => {
   it("reveals an editor via 'Add … label' and edits both sides", () => {
     renderWithChakra(<Controlled initial={{ rows: [{ cells: [] }] }} select={{ kind: "row", row: 0 }} />);
     // Empty labels start as add-buttons, not editors.
-    expect(screen.queryByLabelText("left label")).toBeNull();
+    expect(screen.queryByLabelText("Left label")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Add left label" }));
-    fireEvent.change(screen.getByLabelText("left label"), { target: { value: "Euston" } });
+    fireEvent.change(screen.getByLabelText("Left label"), { target: { value: "Euston" } });
     expect(model().rows![0]).toEqual({ cells: [], left: "Euston" });
     fireEvent.click(screen.getByRole("button", { name: "Add right label" }));
-    fireEvent.change(screen.getByLabelText("right label"), { target: { value: "note" } });
+    fireEvent.change(screen.getByLabelText("Right label"), { target: { value: "note" } });
     expect(model().rows![0]).toEqual({ cells: [], left: "Euston", right: "note" });
   });
 
   it("shows the editor (not an add-button) when a label already has text, and removes it", () => {
     renderWithChakra(<Controlled initial={{ rows: [{ left: "Euston", cells: [] }] }} select={{ kind: "row", row: 0 }} />);
     expect(screen.queryByRole("button", { name: "Add left label" })).toBeNull();
-    expect(screen.getByLabelText("left label")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("remove left label"));
+    expect(screen.getByLabelText("Left label")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Remove left label"));
     expect(model().rows![0]).toEqual({ cells: [] });
     expect(screen.getByRole("button", { name: "Add left label" })).toBeTruthy();
   });
@@ -304,7 +304,7 @@ describe("Inspector: row selection (labels & colspan)", () => {
     );
     // Icons are a strip beside the editor, not a JSON fallback.
     expect(screen.queryByText(/Rich label — edit in JSON/)).toBeNull();
-    expect(screen.getByLabelText("left label")).toBeTruthy();
+    expect(screen.getByLabelText("Left label")).toBeTruthy();
 
     // An uncatalogued code has no name, so the chip falls back to showing it raw.
     fireEvent.click(screen.getByLabelText("Remove not|acode"));
@@ -324,7 +324,7 @@ describe("Inspector: row selection (labels & colspan)", () => {
       />,
     );
     // The icons live outside the document, so a text edit has to re-attach them.
-    fireEvent.change(screen.getByLabelText("left label"), { target: { value: "Euston station" } });
+    fireEvent.change(screen.getByLabelText("Left label"), { target: { value: "Euston station" } });
     expect((model().rows![0] as { left?: unknown }).left).toEqual({ text: "Euston station", icons: ["gb|rail"] });
   });
 
@@ -345,16 +345,16 @@ describe("Inspector: row actions", () => {
         select={{ kind: "row", row: 0 }}
       />,
     );
-    fireEvent.click(screen.getByLabelText("delete row"));
+    fireEvent.click(screen.getByLabelText("Delete row"));
     expect(model().rows).toEqual([{ cells: [{ kind: "station" }] }]);
     expect(sel()).toBeNull();
   });
 
   it("does not show row tools or + row on a cell panel", () => {
     renderWithChakra(<Controlled initial={CELL("track")} select={{ kind: "cell", row: 0, col: 0 }} />);
-    expect(screen.queryByLabelText("delete row")).toBeNull();
+    expect(screen.queryByLabelText("Delete row")).toBeNull();
     expect(screen.queryByRole("button", { name: "Row" })).toBeNull();
-    expect(screen.getByLabelText("delete cell")).toBeTruthy();
+    expect(screen.getByLabelText("Delete cell")).toBeTruthy();
   });
 
   it("moves the selected row down and follows it", () => {
@@ -364,7 +364,7 @@ describe("Inspector: row actions", () => {
         select={{ kind: "row", row: 0 }}
       />,
     );
-    fireEvent.click(screen.getByLabelText("move row down"));
+    fireEvent.click(screen.getByLabelText("Move row down"));
     expect(model().rows!.map((r) => (r as { left: string }).left)).toEqual(["second", "first"]);
     expect(sel()).toEqual({ kind: "row", row: 1 });
   });
@@ -376,7 +376,7 @@ describe("Inspector: row actions", () => {
         select={{ kind: "row", row: 0 }}
       />,
     );
-    fireEvent.click(screen.getByLabelText("insert row below"));
+    fireEvent.click(screen.getByLabelText("Insert row below"));
     expect(model().rows!.map((r) => (r as { left?: string }).left)).toEqual(["first", undefined, "second"]);
     expect(sel()).toEqual({ kind: "row", row: 1 });
   });
@@ -388,7 +388,7 @@ describe("Inspector: row actions", () => {
         select={{ kind: "row", row: 1 }}
       />,
     );
-    fireEvent.click(screen.getByLabelText("insert row above"));
+    fireEvent.click(screen.getByLabelText("Insert row above"));
     expect(model().rows!.map((r) => (r as { left?: string }).left)).toEqual(["first", undefined, "second"]);
     expect(sel()).toEqual({ kind: "row", row: 1 });
   });
@@ -397,7 +397,7 @@ describe("Inspector: row actions", () => {
     renderWithChakra(
       <Controlled initial={{ rows: [{ left: "A", cells: [{ kind: "track" } as never] }] }} select={{ kind: "row", row: 0 }} />,
     );
-    fireEvent.click(screen.getByLabelText("duplicate row below"));
+    fireEvent.click(screen.getByLabelText("Duplicate row below"));
     const rows = model().rows!;
     expect(rows).toHaveLength(2);
     expect(rows[1]).toEqual({ left: "A", cells: [{ kind: "track" }] });
@@ -411,7 +411,7 @@ describe("Inspector: row actions", () => {
         select={{ kind: "row", row: 1 }}
       />,
     );
-    fireEvent.click(screen.getByLabelText("duplicate row above"));
+    fireEvent.click(screen.getByLabelText("Duplicate row above"));
     expect(model().rows!.map((r) => (r as { left?: string }).left)).toEqual(["first", "second", "second"]);
     expect(sel()).toEqual({ kind: "row", row: 1 });
   });
@@ -421,13 +421,13 @@ describe("Inspector: row actions", () => {
       <Controlled initial={{ rows: [{ cells: [] }, { cells: [] }] }} select={{ kind: "row", row: 0 }} />,
     );
     for (const label of [
-      "move row up",
-      "move row down",
-      "insert row above",
-      "insert row below",
-      "duplicate row above",
-      "duplicate row below",
-      "delete row",
+      "Move row up",
+      "Move row down",
+      "Insert row above",
+      "Insert row below",
+      "Duplicate row above",
+      "Duplicate row below",
+      "Delete row",
     ]) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }

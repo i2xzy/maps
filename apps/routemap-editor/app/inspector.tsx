@@ -583,7 +583,7 @@ function LabelSlot({
           {capitalize(side)} label
         </Text>
         <MiniBtn
-          title={`remove ${side} label`}
+          title={`Remove ${side} label`}
           onClick={() => {
             onChange(undefined);
             setOpen(false);
@@ -599,7 +599,7 @@ function LabelSlot({
             // every text edit or the first keystroke would drop them.
             value={value}
             onChange={(v) => onChange(setLabelIcons(v, icons))}
-            ariaLabel={`${side} label`}
+            ariaLabel={`${capitalize(side)} label`}
             resolveRws={resolveRws}
             resolveLogo={resolveLogo}
           />
@@ -716,7 +716,7 @@ export function Inspector({
     <Section
       title={isColspanRow(row) ? `Colspan row ${i + 1}` : `Row ${i + 1}`}
       actions={
-        <MiniBtn title="delete row" onClick={() => { setRows(removeAt(rows, i)); onSelect(null); }}><Trash2 size={ICON} /></MiniBtn>
+        <MiniBtn title="Delete row" onClick={() => { setRows(removeAt(rows, i)); onSelect(null); }}><Trash2 size={ICON} /></MiniBtn>
       }
     />
   );
@@ -730,11 +730,11 @@ export function Inspector({
     const canMove = dir === "above" ? i > 0 : i < rows.length - 1;
     return (
       <HStack gap="0.5">
-        <MiniBtn title={`move row ${dir === "above" ? "up" : "down"}`} disabled={!canMove} onClick={() => { setRows(moveAt(rows, i, step)); onSelect({ ...selection, row: i + step }); }}>
+        <MiniBtn title={`Move row ${dir === "above" ? "up" : "down"}`} disabled={!canMove} onClick={() => { setRows(moveAt(rows, i, step)); onSelect({ ...selection, row: i + step }); }}>
           {dir === "above" ? <ArrowUp size={ICON} /> : <ArrowDown size={ICON} />}
         </MiniBtn>
-        <MiniBtn title={`insert row ${dir}`} onClick={() => insertRow(at)}><Plus size={ICON} /></MiniBtn>
-        <MiniBtn title={`duplicate row ${dir}`} onClick={() => duplicateRow(at)}><Copy size={ICON} /></MiniBtn>
+        <MiniBtn title={`Insert row ${dir}`} onClick={() => insertRow(at)}><Plus size={ICON} /></MiniBtn>
+        <MiniBtn title={`Duplicate row ${dir}`} onClick={() => duplicateRow(at)}><Copy size={ICON} /></MiniBtn>
       </HStack>
     );
   };
@@ -806,13 +806,13 @@ export function Inspector({
         title={`Cell ${j + 1} of ${cells.length}`}
         actions={
           <HStack gap="0.5">
-            <MiniBtn title="move left" disabled={j === 0} onClick={() => { setCells(moveAt(cells, j, -1)); onSelect({ ...selection, col: j - 1 }); }}><ArrowLeft size={ICON} /></MiniBtn>
-            <MiniBtn title="move right" disabled={j === cells.length - 1} onClick={() => { setCells(moveAt(cells, j, 1)); onSelect({ ...selection, col: j + 1 }); }}><ArrowRight size={ICON} /></MiniBtn>
-            <MiniBtn title="move to row above" disabled={!canMoveTo(-1)} onClick={() => moveToRow(-1)}><ArrowUpToLine size={ICON} /></MiniBtn>
-            <MiniBtn title="move to row below" disabled={!canMoveTo(1)} onClick={() => moveToRow(1)}><ArrowDownToLine size={ICON} /></MiniBtn>
-            <MiniBtn title="duplicate cell" onClick={() => { setCells(insertAt(cells, j + 1, structuredClone(cell ?? null))); onSelect({ ...selection, col: j + 1 }); }}><Copy size={ICON} /></MiniBtn>
-            <MiniBtn title="add cell" onClick={() => { setCells(insertAt(cells, j + 1, newCell())); onSelect({ ...selection, col: j + 1 }); }}><Plus size={ICON} /></MiniBtn>
-            <MiniBtn title="delete cell" onClick={() => { const next = removeAt(cells, j); setCells(next); onSelect(next.length ? { ...selection, col: Math.min(j, next.length - 1) } : { kind: "row", row: i }); }}><Trash2 size={ICON} /></MiniBtn>
+            <MiniBtn title="Move left" disabled={j === 0} onClick={() => { setCells(moveAt(cells, j, -1)); onSelect({ ...selection, col: j - 1 }); }}><ArrowLeft size={ICON} /></MiniBtn>
+            <MiniBtn title="Move right" disabled={j === cells.length - 1} onClick={() => { setCells(moveAt(cells, j, 1)); onSelect({ ...selection, col: j + 1 }); }}><ArrowRight size={ICON} /></MiniBtn>
+            <MiniBtn title="Move to row above" disabled={!canMoveTo(-1)} onClick={() => moveToRow(-1)}><ArrowUpToLine size={ICON} /></MiniBtn>
+            <MiniBtn title="Move to row below" disabled={!canMoveTo(1)} onClick={() => moveToRow(1)}><ArrowDownToLine size={ICON} /></MiniBtn>
+            <MiniBtn title="Duplicate cell" onClick={() => { setCells(insertAt(cells, j + 1, structuredClone(cell ?? null))); onSelect({ ...selection, col: j + 1 }); }}><Copy size={ICON} /></MiniBtn>
+            <MiniBtn title="Add cell" onClick={() => { setCells(insertAt(cells, j + 1, newCell())); onSelect({ ...selection, col: j + 1 }); }}><Plus size={ICON} /></MiniBtn>
+            <MiniBtn title="Delete cell" onClick={() => { const next = removeAt(cells, j); setCells(next); onSelect(next.length ? { ...selection, col: Math.min(j, next.length - 1) } : { kind: "row", row: i }); }}><Trash2 size={ICON} /></MiniBtn>
           </HStack>
         }
       >
