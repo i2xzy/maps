@@ -70,6 +70,50 @@ const SAMPLE = `{
 // storage, so first paint shows the sample without a hydration mismatch.
 const SEED: Diagram = { id: "seed", name: "HS2 (sample)", text: SAMPLE };
 
+/**
+ * A list whose IDENTITY only changes when its contents do.
+ *
+ * Every keystroke in the JSON pane re-parses the diagram, so anything derived from
+ * `parsed.diagram` is a fresh object each time even when nothing relevant moved.
+ * Round-tripping through a joined string makes the identity depend on the VALUES, so
+ * memos and effects downstream stop firing on every character.
+ */
+function useStableList(list: string[]): string[] {
+  const key = list.join("\u0000");
+  return useMemo(() => (key === "" ? [] : key.split("\u0000")), [key]);
+}
+
+/**
+ * Resolve a set of wiki references, keeping the result's identity stable.
+ *
+ * Two separate stabilisations, both needed. The effect is keyed on the reference LIST,
+ * so typing that doesn't change which codes appear doesn't re-fetch. And the merge
+ * returns the previous map unchanged when the expansion added nothing new — the
+ * package caches, and a cache hit hands back the very same entry object, so a repeat
+ * is detectable by reference. Without that, every resolve produced a new map, a new
+ * resolver, and a re-render of every logo and station chip on screen.
+ */
+function useExpanded<T>(
+  refs: string[],
+  expand: (refs: string[]) => Promise<Record<string, T>>,
+): Record<string, T> {
+  const [resolved, setResolved] = useState<Record<string, T>>({});
+  useEffect(() => {
+    if (refs.length === 0) return;
+    let cancelled = false;
+    expand(refs).then((next) => {
+      if (cancelled) return;
+      setResolved((prev) =>
+        Object.keys(next).some((k) => prev[k] !== next[k]) ? { ...prev, ...next } : prev,
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [refs, expand]);
+  return resolved;
+}
+
 /** Catches render throws from a malformed-but-valid diagram so the editor survives. */
 class PreviewBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
@@ -208,47 +252,26 @@ export default function EditorPage() {
     }
   }, [text]);
 
-  // Resolve {{rint}} logos ({ region, name }) to files via the wiki API, live, so
-  // labels stay in sync with wiki. Cached in the package; merged as they resolve.
-  const [rintFiles, setRintFiles] = useState<Awaited<ReturnType<typeof expandRint>>>({});
-  useEffect(() => {
-    if (!parsed.diagram) return;
-    const codes = collectRintCodes(parsed.diagram);
-    if (codes.length === 0) return;
-    let cancelled = false;
-    expandRint(codes).then((m) => {
-      if (!cancelled) setRintFiles((prev) => ({ ...prev, ...m }));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [parsed.diagram]);
+  // Resolve {{rint}} logos and {{rws}} station links against the live wiki, so labels
+  // stay in sync with it. Both are keyed on the stable reference list, so typing only
+  // re-resolves when the set of references actually changes.
+  const rintCodes = useStableList(
+    useMemo(() => (parsed.diagram ? collectRintCodes(parsed.diagram) : []), [parsed.diagram]),
+  );
+  const rintFiles = useExpanded(rintCodes, expandRint);
   // Seed from the catalog snapshot so a logo you just picked draws immediately
   // instead of blinking in a round-trip later; the live API result then wins,
   // which is what keeps a stale snapshot from being authoritative.
-  const rintSeed = useMemo(
-    () => (parsed.diagram ? rintCatalogSeed(collectRintCodes(parsed.diagram)) : {}),
-    [parsed.diagram],
-  );
+  const rintSeed = useMemo(() => rintCatalogSeed(rintCodes), [rintCodes]);
   const resolveLogo = useMemo(
     () => createLogoResolver({ ...rintSeed, ...rintFiles }),
     [rintSeed, rintFiles],
   );
 
-  // Resolve {{rws}} station links ({ rws: "args" }) via the wiki API, live.
-  const [rwsMap, setRwsMap] = useState<Awaited<ReturnType<typeof expandRws>>>({});
-  useEffect(() => {
-    if (!parsed.diagram) return;
-    const args = collectRwsArgs(parsed.diagram);
-    if (args.length === 0) return;
-    let cancelled = false;
-    expandRws(args).then((m) => {
-      if (!cancelled) setRwsMap((prev) => ({ ...prev, ...m }));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [parsed.diagram]);
+  const rwsArgs = useStableList(
+    useMemo(() => (parsed.diagram ? collectRwsArgs(parsed.diagram) : []), [parsed.diagram]),
+  );
+  const rwsMap = useExpanded(rwsArgs, expandRws);
   const resolveRws = useMemo(() => createRwsResolver(rwsMap), [rwsMap]);
   // Editor: link references resolve to Wikipedia articles. (The HS2 app would map
   // the same references to its own internal urls instead.)
