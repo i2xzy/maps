@@ -1,0 +1,379 @@
+/**
+ * Field descriptor — the metadata that drives the visual editor's controls.
+ *
+ * For each editable field of an `IconObject` it records: the control type, the
+ * kinds it applies to, the enum values (sourced from the const maps / unions so
+ * they never drift), any mutual-exclusion constraint, and a `sample`/`requires`
+ * pair used by the differential drift test in `descriptor.test.ts`.
+ *
+ * Source-of-truth note: field *applicability* is not derivable from `ROOTS`
+ * (which only knows roots/subtypes) — it lives in `iconToCode`'s branches. So
+ * this table is hand-authored and GUARDED behaviourally: the differential test
+ * asserts that every (field, kind) marked applicable actually changes the code,
+ * and that every kind-`gated` field is a no-op on the kinds it doesn't apply to.
+ * That catches drift the moment `iconToCode` and this table disagree.
+ */
+import {
+  ICON_FORMATIONS,
+  ICON_STATES,
+  ICON_SYSTEMS,
+  ICON_WIDTHS,
+  iconToCode,
+  type IconKind,
+  type IconObject,
+} from "./icon";
+
+/** How the GUI renders a field. */
+export type FieldControl = "enum" | "toggle" | "number" | "end" | "corner";
+
+export interface FieldSpec {
+  /** The `IconObject` key this controls. */
+  field: keyof IconObject;
+  /** How to render it. */
+  control: FieldControl;
+  /** Kinds the field is offered for (semantic applicability). */
+  kinds: readonly IconKind[];
+  /** Enum options (for `control: "enum"`), or `1|2|4`-style for numbers. */
+  values?: readonly (string | number)[];
+  /** Human label for the control. */
+  label?: string;
+  /** `true` when the field is only emitted for its `kinds` (a kind-gated branch
+   *  in `iconToCode`) — the differential test then also asserts it's a no-op on
+   *  every other kind. `false`/absent for prefixes that emit regardless of kind
+   *  (we only assert applies-changes for those). */
+  gated?: boolean;
+  /** Organizational only — the serializer ignores it (e.g. `category`). Excluded
+   *  from the differential output test. */
+  organizational?: boolean;
+  /** A value that must change the code when applied to an applicable kind — the
+   *  differential test's toggle. Omitted for `subtype`/`code` (handled apart). */
+  sample?: Partial<IconObject>;
+  /** Companion fields the `sample` needs to take effect (applied to both sides
+   *  of the differential comparison), e.g. `length` needs an enclosed tunnel. */
+  requires?: Partial<IconObject>;
+  /** Mutual-exclusion for the GUI: disable this control when it returns true. */
+  disabledWhen?: (icon: IconObject) => boolean;
+  /** Contextual visibility: only offer the field when this returns true. Defaults
+   *  to "`requires` are satisfied" (or always, if no `requires`). */
+  showWhen?: (icon: IconObject) => boolean;
+}
+
+/** Whether the GUI should offer a field given the icon's current other values. */
+export function isFieldVisible(spec: FieldSpec, icon: IconObject): boolean {
+  if (spec.showWhen) return spec.showWhen(icon);
+  if (!spec.requires) return true;
+  return Object.entries(spec.requires).every(
+    ([k, v]) => icon[k as keyof IconObject] === v,
+  );
+}
+
+const LINE_KINDS: readonly IconKind[] = [
+  "track",
+  "station",
+  "junction",
+  "crossing",
+  "crossover",
+  "end",
+];
+
+/**
+ * The editable fields. `kind`, `subtype` and `code` are handled outside this
+ * table (kind is the primary selector; subtype comes from `iconSubtypes(kind)`;
+ * code is the raw escape hatch).
+ */
+export const FIELDS: readonly FieldSpec[] = [
+  // ── prefixes (colour / state / line-type / width) ────────────────────
+  {
+    field: "system",
+    control: "enum",
+    values: ICON_SYSTEMS,
+    kinds: [...LINE_KINDS, "shift"],
+    sample: { system: "metro" },
+  },
+  {
+    field: "state",
+    control: "enum",
+    values: ICON_STATES,
+    kinds: ["track", "station", "junction", "crossing", "crossover", "shift", "symbol", "hub", "end"],
+    sample: { state: "disused" },
+  },
+  {
+    field: "formation",
+    control: "enum",
+    values: ICON_FORMATIONS,
+    kinds: LINE_KINDS,
+    sample: { formation: "tunnel" },
+  },
+  {
+    field: "legend",
+    control: "toggle",
+    kinds: LINE_KINDS,
+    sample: { legend: true },
+  },
+  {
+    field: "width",
+    control: "enum",
+    values: ICON_WIDTHS,
+    kinds: [...LINE_KINDS, "shift", "symbol", "spacer"],
+    sample: { width: "half" },
+  },
+  // ── root-adjacent line-form modifiers ────────────────────────────────
+  {
+    field: "stub",
+    control: "toggle",
+    kinds: ["track", "station"],
+    sample: { stub: true },
+  },
+  {
+    field: "continuation",
+    control: "toggle",
+    kinds: ["track"],
+    gated: true,
+    sample: { continuation: true },
+  },
+  {
+    field: "interrupted",
+    control: "toggle",
+    kinds: ["track"],
+    sample: { interrupted: true },
+  },
+  {
+    field: "interruptedCorners",
+    control: "toggle",
+    kinds: ["track"],
+    sample: { interruptedCorners: true },
+  },
+  {
+    field: "curve",
+    control: "enum",
+    values: ["wide", "sBend"],
+    kinds: ["track"],
+    sample: { curve: "wide" },
+  },
+  {
+    field: "length",
+    control: "enum",
+    values: ["long", "short"],
+    kinds: ["track"],
+    gated: true,
+    requires: { formation: "tunnel", entry: "both" }, // enclosed tunnel
+    sample: { length: "short" },
+  },
+  // ── parallel double track ────────────────────────────────────────────
+  {
+    field: "parallel",
+    control: "toggle",
+    kinds: ["track", "station", "junction", "crossing", "crossover", "shift"],
+    sample: { parallel: true },
+  },
+  {
+    field: "lane",
+    control: "enum",
+    values: ["left", "right"],
+    kinds: ["track", "station", "junction", "crossing", "crossover", "shift"],
+    sample: { lane: "left" },
+  },
+  // ── geometry ─────────────────────────────────────────────────────────
+  {
+    field: "to",
+    control: "end",
+    // IconEnd = "left" | "right" | 1–4 (a single end; arrays like KRZlr stay JSON-only).
+    values: ["left", "right", 1, 2, 3, 4],
+    kinds: ["track", "station", "junction", "crossing", "crossover", "shift", "end"],
+    sample: { to: "left" },
+  },
+  {
+    field: "from",
+    control: "end",
+    values: ["left", "right", 1, 2, 3, 4],
+    kinds: ["track", "station", "junction", "crossing", "crossover", "shift", "end"],
+    sample: { from: "left" },
+  },
+  {
+    field: "direction",
+    control: "enum",
+    values: ["forward", "back"],
+    kinds: ["track", "shift"],
+    sample: { direction: "back" },
+  },
+  {
+    field: "corner",
+    control: "corner",
+    // A single corner 1–4 (pairs like SHI2c14 stay JSON-only).
+    values: [1, 2, 3, 4],
+    kinds: ["track", "junction", "shift"],
+    sample: { corner: 2 },
+  },
+  {
+    field: "cornerAdd",
+    control: "toggle",
+    kinds: ["track", "junction", "shift"],
+    requires: { corner: 2 },
+    sample: { cornerAdd: true },
+  },
+  {
+    field: "entry",
+    control: "enum",
+    values: ["start", "end", "both"],
+    kinds: ["track", "station", "crossing", "crossover", "hub", "symbol", "end"],
+    sample: { entry: "start" },
+  },
+  {
+    field: "transverse",
+    control: "toggle",
+    kinds: ["track", "station", "junction", "crossing", "crossover", "hub", "symbol", "shift", "end"],
+    sample: { transverse: true },
+  },
+  {
+    field: "through",
+    control: "toggle",
+    // Checking it emits `through: false` (drops the straight leg, ABZg -> ABZ), so
+    // the box reads as "branch only" — the field name "through" would be backwards.
+    label: "branch only (no through line)",
+    kinds: ["junction"],
+    gated: true,
+    sample: { through: false }, // ABZg -> ABZ
+  },
+  // ── connectors / positioning ─────────────────────────────────────────
+  {
+    field: "connect",
+    control: "enum",
+    values: ["left", "right", "both"],
+    kinds: ["station"],
+    sample: { connect: "left" },
+  },
+  {
+    field: "offset",
+    control: "enum",
+    values: ["forward", "back"],
+    kinds: ["track", "station", "symbol", "junction", "crossing", "crossover"],
+    sample: { offset: "forward" },
+  },
+  {
+    field: "offsetTarget",
+    control: "enum",
+    values: ["secondary", "auxiliary"],
+    kinds: ["track", "station", "symbol", "junction", "crossing", "crossover"],
+    requires: { offset: "forward" },
+    sample: { offsetTarget: "auxiliary" }, // @F -> @f
+  },
+  // ── crossing / crossover ─────────────────────────────────────────────
+  {
+    field: "level",
+    control: "enum",
+    values: ["over", "under"],
+    kinds: ["crossing", "crossover"],
+    gated: true,
+    sample: { level: "over" },
+    disabledWhen: (i) => i.formation === "elevated", // an elevated line is already over
+  },
+  {
+    field: "crosses",
+    control: "enum",
+    values: ["water"],
+    kinds: ["crossing"],
+    gated: true,
+    sample: { crosses: "water" },
+  },
+  {
+    field: "roadClass",
+    control: "enum",
+    values: ["generic", "dirt", "minor", "major", "motorway", "autobahn", "white"],
+    kinds: ["crossing"],
+    gated: true,
+    sample: { roadClass: "motorway" },
+  },
+  {
+    field: "roadLanes",
+    control: "number",
+    values: [1, 2, 4],
+    kinds: ["crossing"],
+    gated: true,
+    requires: { roadClass: "generic" }, // test companion
+    showWhen: (i) => i.roadClass === "generic" || i.roadClass === "major", // lane-bearing classes
+    sample: { roadLanes: 2 },
+  },
+  {
+    field: "region",
+    control: "enum",
+    values: ["uk", "gb"],
+    kinds: ["crossing"],
+    gated: true,
+    requires: { roadClass: "motorway" },
+    sample: { region: "uk" }, // SKRZ-M -> SKRZ-B
+  },
+  // ── shift ────────────────────────────────────────────────────────────
+  {
+    field: "by",
+    control: "number",
+    values: [1, 2, 3, 4, 5, 6, 8],
+    kinds: ["shift"],
+    gated: true,
+    sample: { by: 1 }, // SHI2 -> SHI1
+  },
+  {
+    field: "doubleRow",
+    control: "toggle",
+    kinds: ["shift"],
+    sample: { doubleRow: true },
+  },
+  // ── station / symbol ─────────────────────────────────────────────────
+  {
+    field: "accessible",
+    control: "toggle",
+    kinds: ["station"],
+    gated: true,
+    sample: { accessible: true },
+  },
+  {
+    field: "variant",
+    control: "number",
+    values: [1, 2, 3], // LOCK1 / LOCK2 / LOCK3
+    kinds: ["track"],
+    gated: true,
+    requires: { subtype: "lock" }, // canal lock
+    sample: { variant: 2 }, // LOCK -> LOCK2
+  },
+  {
+    field: "category",
+    control: "enum",
+    values: ["transport", "building", "scenic", "infrastructure"],
+    kinds: ["symbol"],
+    organizational: true, // serializer ignores it; picker grouping only
+  },
+];
+
+/** The fields the GUI should offer for a given kind (in table order). */
+export function fieldsFor(kind: IconKind): FieldSpec[] {
+  return FIELDS.filter((f) => f.kinds.includes(kind));
+}
+
+/** The descriptor entry for a field, if it has one. */
+export function fieldSpec(field: keyof IconObject): FieldSpec | undefined {
+  return FIELDS.find((f) => f.field === field);
+}
+
+/** Serialize an icon, returning `null` instead of throwing on an unmodelled
+ *  kind / bad combo — so a GUI can render a "no icon" state, not crash. */
+export function safeIconCode(icon: IconObject): string | null {
+  try {
+    return iconToCode(icon);
+  } catch {
+    return null;
+  }
+}
+
+/** One option for an enum/number field: the value, and the code the current
+ *  icon would produce if that value were chosen (for a per-option preview). */
+export interface FieldOption {
+  value: string | number;
+  code: string | null;
+}
+
+/** The options for a field on the given icon, each with the code it would yield
+ *  (so the GUI can show a preview per option). Empty for non-enum fields. */
+export function previewOptions(icon: IconObject, field: keyof IconObject): FieldOption[] {
+  const spec = fieldSpec(field);
+  if (!spec?.values) return [];
+  return spec.values.map((value) => ({ value, code: safeIconCode({ ...icon, [field]: value }) }));
+}

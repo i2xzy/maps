@@ -28,13 +28,19 @@
  *   `-colspan-` full-width row    -> ColspanRow
  *
  * Geometry (from the T1 spike — deterministic, see .context/rdt-spike/FINDINGS.md):
- *   full icon = 500x500 SVG units, centre line at x=250
+ *   full icon  = 500x500 SVG units, centre line at x=250
  *   v (double) = 500x500, lanes at x=125 / x=375
- *   d (half)   = 250x500, line at x=125 (== v left lane)
- * So one full cell = FULL_CELL units and a `d`-prefixed icon is a HALF_CELL-wide
- * cell. Lines connect across cells because every glyph meets the cell edge at
- * y=0 / y=FULL_CELL; half-cells align with double-track lanes by construction.
+ *   d (half)   = 250x500, line at x=125 (== v left lane); c (quarter) = 125x500
+ * An icon's width is intrinsic to its SVG file, so the renderer sizes every icon
+ * purely by aspect ratio at a fixed height — exactly how {{Routemap}} does it
+ * (`[[File:…|x20px]]`, width auto). No width prefix is parsed from icon codes, so
+ * stacked prefixes like `etdKRZ` (ex+tunnel+half) just work. The o/c/d/b/s/w
+ * prefixes only get an explicit width when a cell is a bare spacer (empty column
+ * or a lone prefix token); see `prefixWidthFraction` in normalize.ts. FULL_CELL /
+ * HALF_CELL remain the unit reference for the (deferred) wiki serializer.
  */
+
+import type { IconContext, IconObject } from "./icon";
 
 /** SVG canvas width/height of a full-size BSicon; one full grid cell. */
 export const FULL_CELL = 500;
@@ -57,8 +63,13 @@ export interface IconRef {
   href?: string;
 }
 
-/** One icon in a cell: a bare code string, or an IconRef for metadata. */
-export type CellIcon = IconCode | IconRef;
+/**
+ * One icon in a cell:
+ *   "STR"                    a bare BSicon code
+ *   { code, title?, href? }  an IconRef (metadata)
+ *   { kind: "track", … }     a semantic IconObject (see icon.ts), resolved to a code
+ */
+export type CellIcon = IconCode | IconRef | IconObject;
 
 /** A cell's overlay stack + optional right-side annotation (Routemap `~~`). */
 export interface CellObject {
@@ -77,8 +88,82 @@ export interface CellObject {
  */
 export type Cell = null | CellIcon | CellIcon[] | CellObject;
 
-/** Left/right row label: bare string is shorthand for `{ text }`. */
-export type SideLabel = string | { text?: string; icons?: IconCode[] };
+/**
+ * A small logo shown inline in a label — the wiki {{rint}} / {{rail-interchange}}
+ * transit icons (National Rail arrow, Underground roundel, etc.).
+ *
+ * Forms, cheapest first (all mirror {{rint}}'s own args, so config stays in sync;
+ * the file is resolved from the live template via the MediaWiki API, see rint.ts):
+ *   - `"air"` / `"london|underground"` — a bare string IS the rint code: the
+ *     positional args exactly as `{{rint|...}}` takes them (single arg needs no
+ *     key; join multiple with `|`).
+ *   - `{ rint: "eurostar", size: 10 }` — same, when you also need `size`/`alt`.
+ *   - `{ region, name }` — the structured equivalent (region = first arg).
+ *   - `{ file }` — an explicit Commons/Wikipedia file name, an escape hatch.
+ *
+ * `size` is a WIDTH in px (matching MediaWiki `|Npx|`); height auto-scales. It
+ * defaults to rint's own size, so you rarely set it.
+ *
+ * Heads up: unlike BSicons (all PD-shape), these are trademarked transit logos
+ * and some are non-free — using them off-Wikipedia is a licensing decision.
+ */
+export type LabelIcon =
+  | string
+  | { rint: string; size?: number; alt?: string }
+  | { region: string; name?: string; size?: number; alt?: string }
+  | { file: string; size?: number; alt?: string };
+
+/**
+ * An inline run of label text. A bare string is plain text; the object form adds:
+ *   - `link` — a generic wikilink target ({{[[ ]]}}), resolved by `resolveHref`;
+ *     our `text` is the display.
+ *   - `rws` — a station link, given as {{rws}}'s own args (e.g. "Liverpool|Lime
+ *     Street"). Both the display AND the target are resolved from the wiki
+ *     (`resolveRws`), since rws builds them non-trivially; `text` is ignored.
+ *   - `title` — hover text; `icons` — inline logos after the text.
+ * Runs concatenate inline.
+ *
+ * A `|` anywhere in a run's text is a LINE BREAK (the wiki {{BSsplit}} separator);
+ * keep linked/iconed runs atomic and put breaks in plain runs (usually a lone
+ * `"|"` element). `\|` is a literal pipe.
+ */
+export type TextRun =
+  | string
+  | {
+      text?: string;
+      link?: string | true;
+      rws?: string;
+      title?: string;
+      icons?: LabelIcon[];
+      /** Bold/italic just this run (the wiki `'''`/`''` marks). Label-level
+       *  `bold`/`italic` on SideLabel still style the whole label. */
+      bold?: boolean;
+      italic?: boolean;
+    };
+
+/**
+ * Left/right row label. A bare string is shorthand for `{ text }`; a bare array
+ * is shorthand for `{ text: [...] }` (inline runs). The object form adds:
+ *   - `icons` — whole-label logos on the outer edge (before the text for a left
+ *     label, after for a right), like {{rint}} beside a station name.
+ *   - `link` / `title` — link/hover the whole label (a run's own link wins).
+ *   - `italic` / `bold` — the wiki `i` / `b` cell params.
+ * Multiple links/partial links come from run objects in `text`; multi-line comes
+ * from `|` in the text.
+ */
+export type SideLabel =
+  | string
+  | TextRun[]
+  | {
+      text?: string | TextRun[];
+      /** Whole-label station link (sugar for a single `{ rws }` run). */
+      rws?: string;
+      icons?: LabelIcon[];
+      link?: string | true;
+      title?: string;
+      italic?: boolean;
+      bold?: boolean;
+    };
 
 /** A normal grid row: side labels + one cell per column. */
 export interface GridRow {
@@ -88,10 +173,19 @@ export interface GridRow {
   cells: Cell[];
 }
 
-/** A full-width text/legend row (Routemap `-colspan-`). */
+/** A full-width text/legend row (Routemap `-colspan-`). Its text supports the
+ *  same inline runs as a label (links, `|` breaks, inline logos) plus whole-row
+ *  `icons`/italic/bold — e.g. `["interchange with ", { text: "National Rail",
+ *  link: true }, " at all stations"]`. */
 export interface ColspanRow {
   type: "colspan";
-  text: string;
+  text?: string | TextRun[];
+  rws?: string;
+  icons?: LabelIcon[];
+  link?: string | true;
+  title?: string;
+  italic?: boolean;
+  bold?: boolean;
 }
 
 export type DiagramRow = GridRow | ColspanRow;
@@ -110,6 +204,9 @@ export interface RouteDiagram {
   map?: MapMeta;
   /** Max column count. Derived from the widest row when omitted. */
   columns?: number;
+  /** Diagram-wide icon defaults (the "global config") — e.g. mark the whole
+   *  diagram `disused`, or set a `region`. A per-icon value overrides these. */
+  defaults?: IconContext;
   rows: DiagramRow[];
 }
 

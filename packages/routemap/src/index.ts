@@ -2,3 +2,8 @@ export * from "./types";
 export * from "./normalize";
 export * from "./layout";
 export * from "./render";
+export * from "./rint";
+export * from "./serialize";
+export * from "./icon";
+export * from "./parse";
+export * from "./descriptor";
