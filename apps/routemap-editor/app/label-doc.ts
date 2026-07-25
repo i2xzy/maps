@@ -233,3 +233,30 @@ export function docToLabel(doc: JSONContent): SideLabel | undefined {
   if (merged.length === 1 && typeof merged[0] === "string") return merged[0];
   return merged;
 }
+
+/**
+ * What to insert when a logo is picked: the logo node, and a trailing space when text
+ * follows it. `after` is the character just past the caret.
+ *
+ * Spacing around a logo is AUTHORED, not styled — Wikipedia gives label logos no
+ * margin, and our renderer matches, so `{{rint|x}}Euston` really does draw crushed
+ * together. A wiki author types the space; a picker has to type it for them.
+ *
+ * Only a TRAILING space, never a leading one, which is not the symmetry you'd guess:
+ *
+ *   - A logo dropped straight after text joins that run's `icons`, and `serialize.ts`
+ *     writes the boundary space itself (`${s}${s ? " " : ""}${icons}`). Adding one
+ *     here too produced `Euston  {{rint|gb|rail}}` — two spaces.
+ *   - A logo dropped before text has no run to join, so it becomes its own
+ *     `{ icons: [...] }` run, which the serializer writes with no space at all. That
+ *     space has to exist as real document content or the words touch.
+ *
+ * Empty `after` means a boundary or an atom node (another logo, a station link) and
+ * needs nothing: consecutive logo nodes merge into one run's `icons`, which the
+ * renderer spaces itself.
+ */
+export function logoInsertContent(icon: LabelIcon, after: string): JSONContent[] {
+  const node: JSONContent = { type: "rint", attrs: { icon } };
+  const followedByText = after !== "" && !/\s/.test(after);
+  return followedByText ? [node, { type: "text", text: " " }] : [node];
+}

@@ -9,7 +9,7 @@ import { Button, HStack, IconButton, Input, Popover, Portal, Stack, Text } from 
 import { LuLink2, LuLink2Off, LuTrainFront } from "react-icons/lu";
 import { Control, RichTextEditor } from "@ui/components/rich-text-editor";
 import type { SideLabel } from "@repo/routemap";
-import { docToLabel, labelToDoc } from "./label-doc";
+import { docToLabel, labelToDoc, logoInsertContent } from "./label-doc";
 import { RwsNode, RwsResolverProvider, type RwsResolver } from "./rws-node";
 import { RintNode, LogoResolverProvider, type LogoResolver } from "./rint-node";
 import { RintPickerPopover } from "./rint-picker";
@@ -132,7 +132,15 @@ function LogoControl({ editor }: { editor: Editor }): ReactNode {
           <LuTrainFront />
         </IconButton>
       }
-      onPick={(code) => editor.chain().focus().insertContent({ type: "rint", attrs: { icon: code } }).run()}
+      onPick={(code) => {
+        // Spacing around a logo is authored, not styled, so the picker has to type
+        // the space a wiki author would. Only what FOLLOWS the caret matters — see
+        // `logoInsertContent` for why a leading space would double up.
+        const { state } = editor;
+        const { to } = state.selection;
+        const after = state.doc.textBetween(to, Math.min(state.doc.content.size, to + 1));
+        editor.chain().focus().insertContent(logoInsertContent(code, after)).run();
+      }}
     />
   );
 }

@@ -6,6 +6,7 @@ import {
   labelIsMultiLine,
   labelIsRteEditable,
   labelToDoc,
+  logoInsertContent,
   setLabelIcons,
 } from "./label-doc";
 
@@ -208,5 +209,40 @@ describe("labelToDoc → docToLabel round-trips", () => {
 
   it("puts an icon on its own line when the line starts with one", () => {
     expect(round(["a", "|", { icons: ["air"] }])).toEqual(["a", "|", { icons: ["air"] }]);
+  });
+});
+
+describe("logoInsertContent", () => {
+  const shape = (after: string) =>
+    logoInsertContent("gb|rail", after)
+      .map((n) => (n.type === "rint" ? "@" : JSON.stringify(n.text)))
+      .join("");
+
+  it("adds a trailing space when text follows the logo", () => {
+    // Spacing is authored, not styled: `{{rint|x}}Euston` really does draw crushed.
+    expect(shape("E")).toBe('@" "');
+  });
+
+  it("adds nothing when a space, a boundary, or another node follows", () => {
+    expect(shape(" ")).toBe("@");
+    expect(shape("")).toBe("@"); // end of line, or an adjacent logo / station node
+  });
+
+  it("never adds a LEADING space, because the serializer writes that one", () => {
+    // A logo dropped after text joins that run's `icons`, and serialize.ts emits the
+    // boundary space itself. Inserting one here too gave `Euston  {{rint|gb|rail}}`.
+    const doc = labelToDoc("Euston");
+    const para = doc.content![0]!;
+    para.content = [...(para.content ?? []), ...logoInsertContent("gb|rail", "")];
+    expect(docToLabel(doc)).toEqual([{ text: "Euston", icons: ["gb|rail"] }]);
+  });
+
+  it("puts the space in the document when the logo leads, since nothing else will", () => {
+    // A leading logo becomes its own `{ icons }` run, which the serializer writes
+    // with no space — so the space has to be real content.
+    const doc = labelToDoc("Euston");
+    const para = doc.content![0]!;
+    para.content = [...logoInsertContent("gb|rail", "E"), ...(para.content ?? [])];
+    expect(docToLabel(doc)).toEqual([{ icons: ["gb|rail"] }, " Euston"]);
   });
 });
