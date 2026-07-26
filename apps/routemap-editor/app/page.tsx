@@ -252,22 +252,36 @@ export default function EditorPage() {
     }
   }, [text]);
 
-  // Resolve {{rint}} logos and {{rws}} station links against the live wiki, so labels
-  // stay in sync with it. Both are keyed on the stable reference list, so typing only
-  // re-resolves when the set of references actually changes.
+  // Resolve {{rint}} logos and {{rws}} station links, keyed on the stable reference
+  // list so typing only re-resolves when the set of references actually changes.
   const rintCodes = useStableList(
     useMemo(() => (parsed.diagram ? collectRintCodes(parsed.diagram) : []), [parsed.diagram]),
   );
-  const rintFiles = useExpanded(rintCodes, expandRint);
-  // Seed from the catalog snapshot so a logo you just picked draws immediately
-  // instead of blinking in a round-trip later; the live API result then wins,
-  // which is what keeps a stale snapshot from being authoritative.
+
+  // The catalog already holds the file, size and link for every code it knows —
+  // the generator asked the wiki for exactly this, and verified it. So a catalogued
+  // code needs no network at all, and only the ones it doesn't know are looked up.
+  //
+  // This is a deliberate change of stance. Asking the wiki as well meant a stale
+  // snapshot could never be authoritative, which was the right trade for one
+  // developer. For a public tool it means an API call per logo per visitor, aimed at
+  // servers that rate-limit by answering with an error page rather than failing
+  // cleanly — so a busy day would make logos quietly disappear. The catalog is
+  // regenerated with one command; a logo changing on Commons is rare.
   const rintSeed = useMemo(() => rintCatalogSeed(rintCodes), [rintCodes]);
+  const uncataloguedCodes = useStableList(
+    useMemo(() => rintCodes.filter((code) => !(code in rintSeed)), [rintCodes, rintSeed]),
+  );
+  const rintFiles = useExpanded(uncataloguedCodes, expandRint);
   const resolveLogo = useMemo(
+    // Disjoint sets now — the seed covers what the catalog knows, `rintFiles` the
+    // rest — so the spread order no longer decides a winner.
     () => createLogoResolver({ ...rintSeed, ...rintFiles }),
     [rintSeed, rintFiles],
   );
 
+  // Station links stay live: {{rws}} turns "Liverpool|Lime Street" into a display
+  // name and a link target, and there is no catalog of every station to pre-bake.
   const rwsArgs = useStableList(
     useMemo(() => (parsed.diagram ? collectRwsArgs(parsed.diagram) : []), [parsed.diagram]),
   );

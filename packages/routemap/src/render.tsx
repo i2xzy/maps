@@ -18,7 +18,13 @@
  * also carry {{rint}}-style transit logos, resolved by `resolveLogo` (raw file
  * names, not BSicons).
  */
-import { useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import {
+  Fragment as Part,
+  useState,
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import type { LabelIcon, RouteDiagram, TextRun } from "./types";
 import { computeLayout, type PlacedCell } from "./layout";
 import { isWidthPrefix, prefixWidthFraction, type NormalizedSide } from "./normalize";
@@ -143,8 +149,11 @@ function spaced(...parts: ReactNode[]): ReactNode[] {
   const out: ReactNode[] = [];
   for (const part of parts) {
     if (part == null || part === "") continue;
-    if (out.length) out.push(" ");
-    out.push(part);
+    // Keyed, because the result is rendered as an ARRAY of children. Without keys React
+    // warns, and — the part that actually bites — it reconciles by position, so a logo
+    // resolving and shifting the text along remounts the text instead of moving it.
+    if (out.length) out.push(<Part key={out.length}>{" "}</Part>);
+    out.push(<Part key={out.length}>{part}</Part>);
   }
   return out;
 }

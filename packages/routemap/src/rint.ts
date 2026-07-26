@@ -47,50 +47,79 @@ export interface ResolvedLogo {
   alt?: string;
 }
 
+/**
+ * Resolve wiki references through a cache of IN-FLIGHT requests.
+ *
+ * The cache holds the promise rather than the result, so callers asking for the same
+ * uncached reference at the same time share one request instead of racing to make
+ * two. React's dev-mode double-invoke of effects makes that race the norm rather
+ * than an edge case — it was fetching every reference exactly twice.
+ *
+ * A reference that doesn't resolve is evicted, so a transient network error stays
+ * retryable instead of being remembered as "no such thing".
+ *
+ * Awaiting a cached promise hands back the very same entry object each time, which is
+ * what lets a caller spot a repeat by reference and skip re-rendering.
+ */
+async function expandCached<T>(
+  refs: string[],
+  cache: Map<string, Promise<T | null>>,
+  fetchOne: (ref: string) => Promise<T | null>,
+): Promise<Record<string, T>> {
+  const out: Record<string, T> = {};
+  await Promise.all(
+    [...new Set(refs)].map(async (ref) => {
+      let pending = cache.get(ref);
+      if (!pending) {
+        pending = fetchOne(ref);
+        cache.set(ref, pending);
+      }
+      const entry = await pending;
+      if (entry) out[ref] = entry;
+      else cache.delete(ref);
+    }),
+  );
+  return out;
+}
+
+/** Expand wikitext via `expandtemplates` (CORS-enabled with origin=*, so it works
+ *  client-side). Returns "" if the request fails, which the callers read as
+ *  unresolved — and unresolved stays retryable. */
+async function expandTemplate(api: string, wikitext: string): Promise<string> {
+  const url =
+    `${api}?action=expandtemplates&format=json&prop=wikitext&origin=*` +
+    `&text=${encodeURIComponent(wikitext)}`;
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    return json?.expandtemplates?.wikitext ?? "";
+  } catch {
+    return "";
+  }
+}
+
 // rint code -> resolved entry. Module-level so repeat lookups never re-fetch.
-const cache = new Map<string, RintEntry>();
+const cache = new Map<string, Promise<RintEntry | null>>();
 
 /**
  * Resolve rint codes to files (and rint's own size) via the MediaWiki
- * `expandtemplates` API (CORS-enabled with origin=*, so it works client-side).
- * Returns a map of code -> { file, size }; unresolved codes are simply absent.
+ * `expandtemplates` API. Returns a map of code -> { file, size }; unresolved codes
+ * are simply absent.
+ *
+ * Most codes never reach here: the generated catalog already holds the file, size and
+ * link for the 2,130 codes the template defines, so callers seed from it and only ask
+ * the wiki about codes it doesn't cover.
  */
 export async function expandRint(
   codes: string[],
   opts: { apiBase?: string } = {},
 ): Promise<Record<string, RintEntry>> {
   const api = opts.apiBase ?? DEFAULT_API;
-  const out: Record<string, RintEntry> = {};
-  const todo: string[] = [];
-  for (const code of codes) {
-    const hit = cache.get(code);
-    if (hit) out[code] = hit;
-    else todo.push(code);
-  }
-
-  await Promise.all(
-    todo.map(async (code) => {
-      // No `link=no`: rint emits `[[File:X|Npx|link=Article|alt=Alt]]`, and we
-      // want the link/alt so the logo renders as a link with a tooltip, like wiki.
-      const wt = `{{rint|${code}}}`;
-      const url =
-        `${api}?action=expandtemplates&format=json&prop=wikitext&origin=*` +
-        `&text=${encodeURIComponent(wt)}`;
-      try {
-        const res = await fetch(url);
-        const json = await res.json();
-        const text: string = json?.expandtemplates?.wikitext ?? "";
-        const entry = parseRintExpansion(text);
-        if (entry) {
-          cache.set(code, entry);
-          out[code] = entry;
-        }
-      } catch {
-        // leave unresolved; caller can retry later
-      }
-    }),
+  return expandCached(codes, cache, async (code) =>
+    // No `link=no`: rint emits `[[File:X|Npx|link=Article|alt=Alt]]`, and we
+    // want the link/alt so the logo renders as a link with a tooltip, like wiki.
+    parseRintExpansion(await expandTemplate(api, `{{rint|${code}}}`)),
   );
-  return out;
 }
 
 /**
@@ -122,49 +151,27 @@ export interface RwsEntry {
   display: string;
 }
 
-const rwsCache = new Map<string, RwsEntry>();
+const rwsCache = new Map<string, Promise<RwsEntry | null>>();
 
 /**
  * Resolve {{rws|args}} station links via the API. rws builds both the article
  * name (parentheses, disambiguators) and the display text non-trivially, so we
  * expand it and parse the resulting `[[target|display]]`. Returns args -> entry.
+ *
+ * Unlike rint logos these can't be pre-baked: the args name any station on any
+ * network, so there is no finite set to generate a catalog from.
  */
 export async function expandRws(
   argsList: string[],
   opts: { apiBase?: string } = {},
 ): Promise<Record<string, RwsEntry>> {
   const api = opts.apiBase ?? DEFAULT_API;
-  const out: Record<string, RwsEntry> = {};
-  const todo: string[] = [];
-  for (const args of argsList) {
-    const hit = rwsCache.get(args);
-    if (hit) out[args] = hit;
-    else todo.push(args);
-  }
-
-  await Promise.all(
-    todo.map(async (args) => {
-      const wt = `{{rws|${args}}}`;
-      const url =
-        `${api}?action=expandtemplates&format=json&prop=wikitext&origin=*` +
-        `&text=${encodeURIComponent(wt)}`;
-      try {
-        const res = await fetch(url);
-        const json = await res.json();
-        const text: string = json?.expandtemplates?.wikitext ?? "";
-        const m = text.match(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/); // [[target|display]]
-        const target = m?.[1]?.trim();
-        if (target) {
-          const entry: RwsEntry = { target, display: (m?.[2] ?? target).trim() };
-          rwsCache.set(args, entry);
-          out[args] = entry;
-        }
-      } catch {
-        // leave unresolved
-      }
-    }),
-  );
-  return out;
+  return expandCached(argsList, rwsCache, async (args) => {
+    const text = await expandTemplate(api, `{{rws|${args}}}`);
+    const m = text.match(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/); // [[target|display]]
+    const target = m?.[1]?.trim();
+    return target ? { target, display: (m?.[2] ?? target).trim() } : null;
+  });
 }
 
 /** Build a `resolveRws(args)` for RouteMap from an expandRws result map. */
