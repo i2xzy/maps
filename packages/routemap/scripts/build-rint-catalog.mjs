@@ -276,6 +276,11 @@ async function expandBatch(codes) {
  * nonexistent `Bg-voz--sup.svg`. Only asking the wiki catches that, and it catches
  * every other cause of a dead name too.
  *
+ * Also collects each file's LICENCE, since the same request can answer both. A public
+ * tool has to say where a logo came from and under what terms — 23% of the catalog is
+ * CC BY-SA or CC BY, which carries an attribution requirement that public domain and
+ * CC0 do not.
+ *
  * The existence test is `imagerepository`, NOT `missing`. Practically every one of
  * these files lives on Commons, so en.wikipedia has no local File page and reports
  * `missing: true` for all of them — trusting that flag throws the whole catalog
@@ -284,17 +289,21 @@ async function expandBatch(codes) {
  *
  * `titles` takes 50 per query, so this is ~20 calls for the whole catalog.
  */
-async function existingFiles(files) {
-  const found = new Set();
+async function fileFacts(files) {
+  const facts = new Map();
   const list = [...new Set(files)];
-  for (let i = 0; i < list.length; i += 50) {
-    const batch = list.slice(i, i + 50);
+  // 25, not 50: `extmetadata` makes the responses much larger, and Wikimedia starts
+  // returning 429 well before this pass finishes as it is.
+  const STEP = 25;
+  for (let i = 0; i < list.length; i += STEP) {
+    const batch = list.slice(i, i + STEP);
     const json = await postWithRetry(
       new URLSearchParams({
         action: "query",
         format: "json",
         formatversion: "2",
         prop: "imageinfo",
+        iiprop: "extmetadata",
         titles: batch.map((f) => `File:${f}`).join("|"),
       }),
     );
@@ -308,12 +317,18 @@ async function existingFiles(files) {
       if (original != null) asked.set(to, original);
     }
     for (const page of json?.query?.pages ?? []) {
-      if (page.imagerepository) found.add(asked.get(page.title) ?? page.title.replace(/^File:/, ""));
+      if (!page.imagerepository) continue; // exists nowhere — dropped by the caller
+      const md = page?.imageinfo?.[0]?.extmetadata ?? {};
+      // `LicenseShortName` arrives with markup in it often enough to strip.
+      const licence = (md.LicenseShortName?.value ?? "").replace(/<[^>]*>/g, "").trim();
+      facts.set(asked.get(page.title) ?? page.title.replace(/^File:/, ""), {
+        licence: licence || "Unknown",
+      });
     }
-    process.stderr.write(`  verified ${Math.min(i + 50, list.length)}/${list.length}\r`);
-    if (i + 50 < list.length) await sleep(PAUSE_MS);
+    process.stderr.write(`  verified ${Math.min(i + STEP, list.length)}/${list.length}\r`);
+    if (i + STEP < list.length) await sleep(PAUSE_MS);
   }
-  return found;
+  return facts;
 }
 
 /* ------------------------------------------------------------------ countries -- */
@@ -433,9 +448,11 @@ async function main() {
       `Verifying those files exist…\n`,
   );
 
-  const real = await existingFiles(entries.map((e) => e.file));
-  const dead = entries.filter((e) => !real.has(e.file));
-  const kept = entries.filter((e) => real.has(e.file));
+  const facts = await fileFacts(entries.map((e) => e.file));
+  const dead = entries.filter((e) => !facts.has(e.file));
+  const kept = entries
+    .filter((e) => facts.has(e.file))
+    .map((e) => ({ ...e, licence: facts.get(e.file).licence }));
   process.stderr.write(
     `\n${kept.length} kept; ${dead.length} dropped for a nonexistent file` +
       (dead.length ? `: ${dead.map((e) => `${e.code} -> ${e.file}`).join(", ")}` : "") +
@@ -461,6 +478,7 @@ async function main() {
     const fields = [`code: ${JSON.stringify(e.code)}`, `file: ${JSON.stringify(e.file)}`];
     if (e.link) fields.push(`link: ${JSON.stringify(e.link)}`);
     if (e.size) fields.push(`size: ${e.size}`);
+    if (e.licence) fields.push(`licence: ${JSON.stringify(e.licence)}`);
     return `  { ${fields.join(", ")} },`;
   });
   const countryRows = relevant.map((r) => `  ${JSON.stringify(r)}: ${JSON.stringify(regionCountry[r])},`);

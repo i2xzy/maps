@@ -42,7 +42,9 @@ describe("RintPicker", () => {
     renderWithChakra(<RintPicker onPick={vi.fn()} />);
     // The {{rint}} code is the data model, not something an author should read.
     expect(document.body.textContent).not.toMatch(/\{\{|rint/i);
-    expect(tileByCode("gb|rail").getAttribute("title")).toBe("National Rail");
+    // The tooltip names the logo and states its terms; what it must never do is
+    // expose the {{rint}} code, which is the data model rather than a name.
+    expect(tileByCode("gb|rail").getAttribute("title")).toBe("National Rail — Public domain");
   });
 
   it("groups logos by country and then by system, modes first", () => {
@@ -127,6 +129,28 @@ describe("RintPicker", () => {
     // way the picker could hand back a code that doesn't resolve.
     expect(tile("London Underground").getAttribute("data-value")).toBe("london|underground");
     expect(tileByCode("london|underground")).toBe(tile("London Underground"));
+  });
+
+  it("credits where the logos came from", () => {
+    // These are other people's images and roughly a quarter are CC BY-SA or CC BY,
+    // which obliges a credit. A tile is a listbox option and can't hold a link
+    // without breaking selection, so the credit is a footer.
+    renderWithChakra(<RintPicker onPick={vi.fn()} />);
+    const credit = screen.getByRole("link", { name: /Wikimedia Commons/ });
+    expect(credit.getAttribute("href")).toContain("commons.wikimedia.org");
+    expect(credit.getAttribute("rel")).toContain("noreferrer");
+  });
+
+  it("puts each logo's licence in its tooltip, flagging the ones needing credit", () => {
+    renderWithChakra(<RintPicker onPick={vi.fn()} />);
+    const titles = tiles()
+      .map((t) => t.getAttribute("title") ?? "")
+      .filter((t) => / — /.test(t));
+    // Every catalogued licence surfaces somewhere…
+    expect(titles.length).toBeGreaterThan(0);
+    // …and the attribution-bearing ones say so, while public domain doesn't.
+    expect(titles.some((t) => /\(credit required\)$/.test(t))).toBe(true);
+    expect(titles.some((t) => /Public domain$/.test(t))).toBe(true);
   });
 
   it("renders a thumbnail per tile straight from the catalog, lazily", () => {

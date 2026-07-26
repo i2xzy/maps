@@ -7,7 +7,9 @@ import {
   rintCatalogLabel,
   rintCatalogSearchText,
   rintCatalogSeed,
+  rintLicenceNeedsCredit,
   rintRegionLabel,
+  fileDescriptionUrl,
 } from "./rint-catalog";
 
 describe("RINT_CATALOG", () => {
@@ -338,5 +340,30 @@ describe("rintCatalogSeed", () => {
 
   it("omits unknown codes so the API can fill them in", () => {
     expect(rintCatalogSeed(["not|areallogo"])).toEqual({});
+  });
+});
+
+describe("licence handling", () => {
+  it("knows which licences oblige a credit", () => {
+    for (const free of ["Public domain", "PD", "PD-shape", "CC0"]) {
+      expect(rintLicenceNeedsCredit(free), free).toBe(false);
+    }
+    for (const attrib of ["CC BY-SA 4.0", "CC BY-SA 3.0", "CC BY 4.0", "Attribution", "LGACDMX"]) {
+      expect(rintLicenceNeedsCredit(attrib), attrib).toBe(true);
+    }
+  });
+
+  it("treats an unknown licence as needing credit", () => {
+    // The safe direction when the answer decides whether a name gets left off.
+    expect(rintLicenceNeedsCredit(undefined)).toBe(true);
+    expect(rintLicenceNeedsCredit("")).toBe(true);
+  });
+
+  it("links a file to its description page, where author and terms live", () => {
+    expect(fileDescriptionUrl("Underground no-text.svg")).toBe(
+      "https://en.wikipedia.org/wiki/File:Underground_no-text.svg",
+    );
+    // Titles with characters that need escaping still resolve.
+    expect(fileDescriptionUrl("Cercanías C3 (Azul oscuro).svg")).toContain("Cercan%C3%ADas");
   });
 });

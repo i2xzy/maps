@@ -26,6 +26,31 @@ export interface RintCatalogEntry {
   link?: string;
   /** Width in px that rint itself emits for this logo. */
   size?: number;
+  /**
+   * The file's licence, as the wiki states it ("Public domain", "CC BY-SA 4.0", …).
+   *
+   * These are other people's images, and a tool that shows them publicly has to say
+   * so. Roughly a quarter of the catalog is CC BY-SA or CC BY, which obliges credit;
+   * public domain and CC0 don't. `rintLicenceNeedsCredit` draws that line.
+   */
+  licence?: string;
+}
+
+/** The file's description page — where its author, licence and terms live. */
+export function fileDescriptionUrl(file: string): string {
+  return `https://en.wikipedia.org/wiki/File:${encodeURIComponent(file.replace(/ /g, "_"))}`;
+}
+
+/**
+ * Whether a licence obliges us to credit the author.
+ *
+ * Public domain, PD-* and CC0 don't; every CC BY / CC BY-SA does, as does a bare
+ * "Attribution" tag. Unknown counts as yes — the safe direction when the answer
+ * decides whether someone's name gets left off.
+ */
+export function rintLicenceNeedsCredit(licence: string | undefined): boolean {
+  if (licence == null || licence === "") return true;
+  return !/^(public domain|pd\b|pd-|cc0)/i.test(licence.trim());
 }
 
 export { RINT_CATALOG } from "./rint-catalog.data";

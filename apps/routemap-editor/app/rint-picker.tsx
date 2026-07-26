@@ -27,6 +27,7 @@ import { Fragment, useMemo, useState, type ReactNode } from "react";
 import {
   Image,
   Input,
+  Link,
   Listbox,
   Popover,
   Portal,
@@ -41,6 +42,7 @@ import {
   groupRintCatalog,
   rintCatalogLabel,
   rintCatalogSearchText,
+  rintLicenceNeedsCredit,
   type RintCatalogEntry,
   type RintCatalogSection,
 } from "@repo/routemap/rint-catalog";
@@ -76,6 +78,15 @@ function catalogIndex(): {
     ),
   };
   return cachedIndex;
+}
+
+/** A tile's tooltip: what the logo is, and the terms it comes under. */
+function tileTitle(entry: RintCatalogEntry): string {
+  const name = rintCatalogLabel(entry);
+  if (!entry.licence) return name;
+  return rintLicenceNeedsCredit(entry.licence)
+    ? `${name} — ${entry.licence} (credit required)`
+    : `${name} — ${entry.licence}`;
 }
 
 /**
@@ -196,7 +207,7 @@ export function RintPicker({
                     <Listbox.Item
                       item={item}
                       key={item.code}
-                      title={rintCatalogLabel(item)}
+                      title={tileTitle(item)}
                       display="flex"
                       alignItems="center"
                       justifyContent="center"
@@ -235,6 +246,23 @@ export function RintPicker({
             No logo matches “{query}”.
           </Listbox.Empty>
         </Listbox.Content>
+        {/* These are other people's images. A quarter of them are CC BY-SA or CC BY,
+            which obliges a credit, and a tile is a listbox option so it can't hold a
+            link without breaking selection — hence a footer rather than per-tile
+            links. Each logo's own licence is in its tooltip, and the file page it
+            points to carries the author and the full terms. */}
+        <Text fontSize="2xs" color="fg.subtle" px="0.5">
+          Logos from{" "}
+          <Link
+            href="https://commons.wikimedia.org/wiki/Category:Public_transport_icons"
+            target="_blank"
+            rel="noreferrer"
+            colorPalette="blue"
+          >
+            Wikimedia Commons
+          </Link>{" "}
+          and Wikipedia, under the licence shown on each logo.
+        </Text>
       </Stack>
     </Listbox.Root>
   );
