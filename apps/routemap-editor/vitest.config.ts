@@ -10,5 +10,10 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     include: ["app/**/*.test.{ts,tsx}"],
+    // The picker tests render the whole logo catalog — ~1,300 Ark components — because
+    // the IntersectionObserver stub reports everything as on screen. That's seconds in
+    // jsdom, and more when the files run in parallel, so the 5s default trips on a
+    // busy machine rather than on a real failure.
+    testTimeout: 20_000,
   },
 });
