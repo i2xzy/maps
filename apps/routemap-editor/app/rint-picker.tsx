@@ -51,7 +51,8 @@ import {
   groupRintCatalog,
   rintCatalogLabel,
   rintCatalogSearchText,
-  rintLicenceNeedsCredit,
+  rintCreditRequired,
+  rintFileCredit,
   type RintCatalogEntry,
   type RintCatalogSection,
 } from "@repo/routemap/rint-catalog";
@@ -124,13 +125,15 @@ function sectionHeight(section: RintCatalogSection): number {
   return height;
 }
 
-/** A tile's tooltip: what the logo is, and the terms it comes under. */
+/** A tile's tooltip: what the logo is, the terms it comes under, and whose it is. */
 function tileTitle(entry: RintCatalogEntry): string {
   const name = rintCatalogLabel(entry);
-  if (!entry.licence) return name;
-  return rintLicenceNeedsCredit(entry.licence)
-    ? `${name} — ${entry.licence} (credit required)`
-    : `${name} — ${entry.licence}`;
+  const credit = rintFileCredit(entry.file);
+  if (!credit) return name;
+  const by = credit.author ? ` by ${credit.author}` : "";
+  return rintCreditRequired(entry.file)
+    ? `${name} — ${credit.licence}${by} (credit required)`
+    : `${name} — ${credit.licence}${by}`;
 }
 
 /**
@@ -388,8 +391,8 @@ export function RintPicker({
         {/* These are other people's images. A quarter of them are CC BY-SA or CC BY,
             which obliges a credit, and a tile is a listbox option so it can't hold a
             link without breaking selection — hence a footer rather than per-tile
-            links. Each logo's own licence is in its tooltip, and the file page it
-            points to carries the author and the full terms. */}
+            links. Each logo's licence and author are in its tooltip, and the page
+            footer credits the ones a diagram actually uses. */}
         <Text fontSize="2xs" color="fg.subtle" px="0.5">
           Logos from{" "}
           <Link

@@ -289,6 +289,32 @@ async function expandBatch(codes) {
  *
  * `titles` takes 50 per query, so this is ~20 calls for the whole catalog.
  */
+/**
+ * Reduce an `extmetadata` value to display text. They arrive as HTML — `Artist` is
+ * typically a link to the author's user page — and a credit line has to be plain text
+ * before we can put it anywhere. `&amp;` unescapes last, so an escaped entity in the
+ * source (`&amp;lt;`) can't turn into live markup here.
+ */
+function plainText(html) {
+  return (html ?? "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim()
+    // Zero-width characters at the edges only. One file's author arrives as
+    // "\u200dVilarrubla", which renders as an artifact and compares unequal to the
+    // same author's name on the seven sibling files. Stripping them mid-string would
+    // be wrong — ZWNJ and ZWJ carry meaning inside Indic and Persian names, and
+    // several of these authors write in those scripts.
+    .replace(/^[\u200b-\u200d\ufeff]+|[\u200b-\u200d\ufeff]+$/g, "")
+    .trim();
+}
+
 async function fileFacts(files) {
   const facts = new Map();
   const list = [...new Set(files)];
@@ -319,10 +345,16 @@ async function fileFacts(files) {
     for (const page of json?.query?.pages ?? []) {
       if (!page.imagerepository) continue; // exists nowhere — dropped by the caller
       const md = page?.imageinfo?.[0]?.extmetadata ?? {};
-      // `LicenseShortName` arrives with markup in it often enough to strip.
-      const licence = (md.LicenseShortName?.value ?? "").replace(/<[^>]*>/g, "").trim();
+      const flag = md.AttributionRequired?.value;
       facts.set(asked.get(page.title) ?? page.title.replace(/^File:/, ""), {
-        licence: licence || "Unknown",
+        licence: plainText(md.LicenseShortName?.value) || "Unknown",
+        // `Attribution` is a credit line the uploader asked for specifically. Where
+        // it's set that's the one to use verbatim, and `Artist` is the fallback.
+        author: plainText(md.Attribution?.value) || plainText(md.Artist?.value) || undefined,
+        licenceUrl: (md.LicenseUrl?.value ?? "").trim() || undefined,
+        // Commons answers this outright, which beats inferring it from the licence's
+        // name. Absent for some files, and those fall back to the name.
+        creditRequired: flag == null ? undefined : flag === true || flag === "true",
       });
     }
     process.stderr.write(`  verified ${Math.min(i + STEP, list.length)}/${list.length}\r`);
@@ -417,8 +449,17 @@ async function main() {
   if (typeof wikitext !== "string") throw new Error(`could not read ${TEMPLATE}`);
   process.stderr.write(`  ${wikitext.length} bytes\n`);
 
-  const codes = harvestCodes(wikitext);
+  let codes = harvestCodes(wikitext);
   process.stderr.write(`Harvested ${codes.length} candidate codes.\n`);
+
+  // `--limit N` runs the whole pipeline over the first N codes, so a change to the
+  // later passes or the emitted shape can be smoke-tested in seconds. Writes to the
+  // real output path, so pair it with `--out` unless you mean to clobber the catalog.
+  const argLimit = process.argv.indexOf("--limit");
+  if (argLimit > 0) {
+    codes = codes.slice(0, Number(process.argv[argLimit + 1]) || 20);
+    process.stderr.write(`  --limit: ${codes.length} codes only, NOT a full catalog\n`);
+  }
 
   // `--dry-run` prints the harvested vocabulary and stops, so a change to the
   // wikitext parser can be diffed against the committed catalog for free — the
@@ -450,9 +491,7 @@ async function main() {
 
   const facts = await fileFacts(entries.map((e) => e.file));
   const dead = entries.filter((e) => !facts.has(e.file));
-  const kept = entries
-    .filter((e) => facts.has(e.file))
-    .map((e) => ({ ...e, licence: facts.get(e.file).licence }));
+  const kept = entries.filter((e) => facts.has(e.file));
   process.stderr.write(
     `\n${kept.length} kept; ${dead.length} dropped for a nonexistent file` +
       (dead.length ? `: ${dead.map((e) => `${e.code} -> ${e.file}`).join(", ")}` : "") +
@@ -478,9 +517,31 @@ async function main() {
     const fields = [`code: ${JSON.stringify(e.code)}`, `file: ${JSON.stringify(e.file)}`];
     if (e.link) fields.push(`link: ${JSON.stringify(e.link)}`);
     if (e.size) fields.push(`size: ${e.size}`);
-    if (e.licence) fields.push(`licence: ${JSON.stringify(e.licence)}`);
     return `  { ${fields.join(", ")} },`;
   });
+
+  // Credit is a property of the FILE, not the code, and these codes share files
+  // heavily — so it lives in its own table instead of being repeated on every code
+  // pointing at the same image.
+  const creditFiles = [...new Set(kept.map((e) => e.file))].sort();
+  const creditRows = creditFiles.map((f) => {
+    const c = facts.get(f);
+    const fields = [`licence: ${JSON.stringify(c.licence)}`];
+    if (c.author) fields.push(`author: ${JSON.stringify(c.author)}`);
+    if (c.licenceUrl) fields.push(`licenceUrl: ${JSON.stringify(c.licenceUrl)}`);
+    if (c.creditRequired !== undefined) fields.push(`creditRequired: ${c.creditRequired}`);
+    return `  ${JSON.stringify(f)}: { ${fields.join(", ")} },`;
+  });
+  const needCredit = creditFiles.filter((f) => {
+    const c = facts.get(f);
+    return c.creditRequired ?? !/^(public domain|pd\b|pd-|cc0)/i.test(c.licence);
+  }).length;
+  const noAuthor = creditFiles.filter((f) => !facts.get(f).author).length;
+  process.stderr.write(
+    `  ${creditFiles.length} distinct files; ${needCredit} need a credit` +
+      (noAuthor ? `; ${noAuthor} have no author recorded` : "") +
+      `.\n`,
+  );
   const countryRows = relevant.map((r) => `  ${JSON.stringify(r)}: ${JSON.stringify(regionCountry[r])},`);
 
   writeFileSync(
@@ -497,11 +558,23 @@ async function main() {
  *
  * Generated ${new Date().toISOString().slice(0, 10)} · ${kept.length} codes, ${relevant.length} regions categorised.
  */
-import type { RintCatalogEntry } from "./rint-catalog";
+import type { RintCatalogEntry, RintFileCredit } from "./rint-catalog";
 
 export const RINT_CATALOG: RintCatalogEntry[] = [
 ${rows.join("\n")}
 ];
+
+/**
+ * File -> its licence and who to credit, for the ${creditFiles.length} distinct files above.
+ *
+ * Keyed by file because that's what the licence belongs to; ${kept.length} codes share them.
+ * \`creditRequired\` is Commons' own \`AttributionRequired\` flag, which is more
+ * trustworthy than reading the licence's name — absent where Commons didn't say, and
+ * ./rint-catalog falls back to the name for those.
+ */
+export const RINT_FILE_CREDITS: Record<string, RintFileCredit> = {
+${creditRows.join("\n")}
+};
 
 /**
  * Region arg -> country, from the template's own documentation (\`/doc/countries\`

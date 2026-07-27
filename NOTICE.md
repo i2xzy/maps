@@ -27,16 +27,29 @@ its own licence and nothing here redistributes any of them.
 - **Transit logos** — the operator marks `{{rint}}` produces. Of the 1,155 distinct
   files in the catalog, 889 are attribution-free (Public domain, PD-\*, CC0) and **266
   are under a licence that requires credit** (CC BY, CC BY-SA, or unrecorded — unknown
-  counts as requiring credit, which is the safe direction). Each catalog entry carries
-  a `licence` field, and the logo picker shows it on the tile.
+  counts as requiring credit, which is the safe direction).
+
+  `RINT_FILE_CREDITS` records each file's licence, its author, and the licence deed.
+  Which files require a credit comes from Commons' own `AttributionRequired` flag, not
+  from reading licence names. Every one of the 266 names an author, so a real credit can
+  be rendered for all of them; the 13 files with no recorded author are public domain,
+  where none is owed.
 
 ### If you display these logos, attribution is your responsibility
 
 A CC BY or CC BY-SA image needs credit wherever it appears, and **there is no
 non-commercial exemption** from that obligation — using the work for free, for
-Wikipedia, or for education does not discharge it. The catalog tells you which files
-are affected and links each to its Commons description page, where the author and exact
-terms live; it does not attribute them on your behalf.
+Wikipedia, or for education does not discharge it.
+
+`logoCredits(files)` in `@repo/routemap/rint-catalog` returns what to publish for a set
+of logos — author, licence, and a link to each file's Commons description page, deduped
+and limited to the files that actually require one. It returns data rather than markup,
+because only you know where a credit belongs on your page; rendering it is still yours
+to do. The editor does so in its page footer.
+
+Note that attribution is only owed where you display these images yourself. Wikitext
+pasted into a Wikipedia article is Wikipedia's to attribute: the images live on Commons
+and `[[File:…]]` links to their description pages.
 
 Trademark is also separate from copyright. A permissive licence on the image file does
 not grant any right to use an operator's mark in a way that implies endorsement.

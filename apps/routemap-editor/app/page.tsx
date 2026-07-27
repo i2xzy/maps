@@ -19,6 +19,7 @@ import { json, jsonParseLinter } from "@codemirror/lang-json";
 import { linter, lintGutter } from "@codemirror/lint";
 import { formatJson } from "./format-json";
 import { Inspector } from "./inspector";
+import { CreditsFooter } from "./credits-footer";
 import {
   RouteMap,
   collectRintCodes,
@@ -280,6 +281,19 @@ export default function EditorPage() {
     [rintSeed, rintFiles],
   );
 
+  // The logo FILES on screen, for the footer's credits. Codes that haven't resolved
+  // yet are simply absent, so the list fills in as the diagram does.
+  //
+  // Only {{rint}} codes, not `{ file }` icons naming a Commons file directly. Those are
+  // the author's own choice of image rather than one this tool offered them, and the
+  // catalog knows nothing about their terms — it would credit every one as "Unknown".
+  const logoFiles = useStableList(
+    useMemo(
+      () => rintCodes.map((c) => (rintSeed[c] ?? rintFiles[c])?.file ?? "").filter(Boolean),
+      [rintCodes, rintSeed, rintFiles],
+    ),
+  );
+
   // Station links stay live: {{rws}} turns "Liverpool|Lime Street" into a display
   // name and a link target, and there is no catalog of every station to pre-bake.
   const rwsArgs = useStableList(
@@ -337,8 +351,12 @@ export default function EditorPage() {
 
   return (
     <>
+      {/* Column so the footer can own a strip at the bottom: the splitter takes the
+          rest, and `minH=0` lets it shrink rather than push the footer off screen. */}
+      <Flex direction="column" height="100dvh" width="100%">
       <Splitter.Root
-      height="100dvh"
+      flex="1"
+      minH="0"
       width="100%"
       panels={[
         { id: "editor", minSize: 15 },
@@ -508,6 +526,9 @@ export default function EditorPage() {
         </Splitter.Root>
       </Splitter.Panel>
       </Splitter.Root>
+
+      <CreditsFooter files={logoFiles} />
+      </Flex>
 
       <Dialog.Root open={renameOpen} onOpenChange={(e) => setRenameOpen(e.open)}>
         <Portal>

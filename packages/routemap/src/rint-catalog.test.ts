@@ -7,7 +7,10 @@ import {
   rintCatalogLabel,
   rintCatalogSearchText,
   rintCatalogSeed,
+  rintCreditRequired,
+  rintFileCredit,
   rintLicenceNeedsCredit,
+  logoCredits,
   rintRegionLabel,
   fileDescriptionUrl,
 } from "./rint-catalog";
@@ -357,6 +360,87 @@ describe("licence handling", () => {
     // The safe direction when the answer decides whether a name gets left off.
     expect(rintLicenceNeedsCredit(undefined)).toBe(true);
     expect(rintLicenceNeedsCredit("")).toBe(true);
+  });
+
+  it("records a licence for every file the catalog references", () => {
+    // A missing record means `rintCreditRequired` falls back to "yes" for a file we do
+    // know about — a credit demanded with no author to name.
+    const missing = [...new Set(RINT_CATALOG.map((e) => e.file))].filter(
+      (f) => !rintFileCredit(f)?.licence,
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("takes Commons' own flag as the answer where it has one", () => {
+    // As generated, the flag and the licence-name guess agree on all 1,155 files, so
+    // this is a guard rather than a live check: it's the flag that must win if a future
+    // regeneration turns up a file where they diverge. Asserting agreement on every
+    // flagged file is what would catch the fallback quietly taking over.
+    const flagged = [...new Set(RINT_CATALOG.map((e) => e.file))].filter(
+      (f) => rintFileCredit(f)?.creditRequired != null,
+    );
+    expect(flagged.length).toBeGreaterThan(1000);
+    for (const file of flagged) {
+      expect(rintCreditRequired(file), file).toBe(rintFileCredit(file)!.creditRequired);
+    }
+  });
+
+  it("can name an author for every credit it says is owed", () => {
+    // The point of the whole exercise: a credit with no name to put in it isn't a
+    // credit. Public-domain files without an author are fine — nothing is owed there.
+    const owedWithNoName = [...new Set(RINT_CATALOG.map((e) => e.file))]
+      .filter((f) => rintCreditRequired(f))
+      .filter((f) => !rintFileCredit(f)?.author);
+    expect(owedWithNoName).toEqual([]);
+  });
+
+  it("treats a file it has never heard of as needing credit", () => {
+    expect(rintCreditRequired("Not a real file at all.svg")).toBe(true);
+  });
+
+  it("lists only the logos that oblige a credit", () => {
+    const owed = RINT_CATALOG.find((e) => rintCreditRequired(e.file))!.file;
+    const free = RINT_CATALOG.find((e) => !rintCreditRequired(e.file))!.file;
+
+    expect(logoCredits([owed, free]).map((c) => c.file)).toEqual([owed]);
+  });
+
+  it("deduplicates files and sorts them, so a credit appears once", () => {
+    const owed = [...new Set(RINT_CATALOG.map((e) => e.file))]
+      .filter((f) => rintCreditRequired(f))
+      .slice(0, 3)
+      .sort();
+
+    expect(logoCredits([...owed].reverse().concat(owed)).map((c) => c.file)).toEqual(owed);
+  });
+
+  it("gives each credit somewhere to link for the full terms", () => {
+    const owed = RINT_CATALOG.find((e) => rintCreditRequired(e.file))!.file;
+    const [credit] = logoCredits([owed]);
+
+    expect(credit!.fileUrl).toBe(fileDescriptionUrl(owed));
+    expect(credit!.licence).toBeTruthy();
+  });
+
+  it("still credits an unknown file, naming no author it can't vouch for", () => {
+    const [credit] = logoCredits(["Not a real file at all.svg"]);
+
+    expect(credit!.licence).toBe("Unknown");
+    expect(credit!.author).toBeUndefined();
+  });
+
+  it("trims zero-width characters off the EDGES of an author's name", () => {
+    // One file's author arrives from Commons with a leading zero-width joiner, which
+    // renders as an artifact and compares unequal to the same author on sibling files.
+    //
+    // Edges only, deliberately: ZWNJ and ZWJ are meaningful INSIDE Indic and Persian
+    // names, and several of these authors write in those scripts. Asserting that no
+    // author contains one anywhere would pass today and then fail on a legitimate name,
+    // inviting a "fix" that corrupts it.
+    const odd = [...new Set(RINT_CATALOG.map((e) => e.file))]
+      .map((f) => rintFileCredit(f)?.author)
+      .filter((a): a is string => !!a && /^[\u200b-\u200d\ufeff]|[\u200b-\u200d\ufeff]$/.test(a));
+    expect(odd).toEqual([]);
   });
 
   it("links a file to its description page, where author and terms live", () => {

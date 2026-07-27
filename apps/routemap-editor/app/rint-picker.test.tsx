@@ -42,9 +42,10 @@ describe("RintPicker", () => {
     renderWithChakra(<RintPicker onPick={vi.fn()} />);
     // The {{rint}} code is the data model, not something an author should read.
     expect(document.body.textContent).not.toMatch(/\{\{|rint/i);
-    // The tooltip names the logo and states its terms; what it must never do is
-    // expose the {{rint}} code, which is the data model rather than a name.
-    expect(tileByCode("gb|rail").getAttribute("title")).toBe("National Rail — Public domain");
+    // The tooltip names the logo, its terms and its author — never the code.
+    expect(tileByCode("gb|rail").getAttribute("title")).toBe(
+      "National Rail — Public domain by Gerry Barney of Design Research Unit",
+    );
   });
 
   it("groups logos by country and then by system, modes first", () => {
@@ -141,7 +142,7 @@ describe("RintPicker", () => {
     expect(credit.getAttribute("rel")).toContain("noreferrer");
   });
 
-  it("puts each logo's licence in its tooltip, flagging the ones needing credit", () => {
+  it("puts each logo's licence and author in its tooltip, flagging the ones needing credit", () => {
     renderWithChakra(<RintPicker onPick={vi.fn()} />);
     const titles = tiles()
       .map((t) => t.getAttribute("title") ?? "")
@@ -150,7 +151,9 @@ describe("RintPicker", () => {
     expect(titles.length).toBeGreaterThan(0);
     // …and the attribution-bearing ones say so, while public domain doesn't.
     expect(titles.some((t) => /\(credit required\)$/.test(t))).toBe(true);
-    expect(titles.some((t) => /Public domain$/.test(t))).toBe(true);
+    expect(titles.some((t) => /— Public domain( by .+)?$/.test(t))).toBe(true);
+    // The author is named too — a licence alone doesn't tell you who to credit.
+    expect(titles.some((t) => / by .+/.test(t))).toBe(true);
   });
 
   it("renders a thumbnail per tile straight from the catalog, lazily", () => {

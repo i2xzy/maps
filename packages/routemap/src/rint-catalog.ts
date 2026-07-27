@@ -26,14 +26,35 @@ export interface RintCatalogEntry {
   link?: string;
   /** Width in px that rint itself emits for this logo. */
   size?: number;
+}
+
+/**
+ * Licence and credit for one file, as `RINT_FILE_CREDITS` records it.
+ *
+ * Keyed by FILE rather than by code, because that's what a licence belongs to and
+ * many codes point at the same image.
+ *
+ * These are other people's images, and a tool that shows them publicly owes them a
+ * credit. `rintCreditRequired` decides whether one is owed; `logoCredits` assembles it.
+ */
+export interface RintFileCredit {
+  /** The licence as the wiki states it ("Public domain", "CC BY-SA 4.0", …). */
+  licence: string;
   /**
-   * The file's licence, as the wiki states it ("Public domain", "CC BY-SA 4.0", …).
+   * Who to credit, as plain text.
    *
-   * These are other people's images, and a tool that shows them publicly has to say
-   * so. Roughly a quarter of the catalog is CC BY-SA or CC BY, which obliges credit;
-   * public domain and CC0 don't. `rintLicenceNeedsCredit` draws that line.
+   * Commons' `Attribution` where the uploader set one — that's a credit line they asked
+   * for specifically, to be used verbatim — otherwise `Artist`. Absent where Commons
+   * records no author, and then the file page is all we can point at.
    */
-  licence?: string;
+  author?: string;
+  /** The licence deed, so the licence name can link somewhere meaningful. */
+  licenceUrl?: string;
+  /**
+   * Commons' own `AttributionRequired` flag. Trustworthier than reading the licence's
+   * name, so `rintCreditRequired` prefers it and only falls back where it's absent.
+   */
+  creditRequired?: boolean;
 }
 
 /** The file's description page — where its author, licence and terms live. */
@@ -42,19 +63,79 @@ export function fileDescriptionUrl(file: string): string {
 }
 
 /**
- * Whether a licence obliges us to credit the author.
+ * Whether a licence NAME obliges us to credit the author.
  *
  * Public domain, PD-* and CC0 don't; every CC BY / CC BY-SA does, as does a bare
  * "Attribution" tag. Unknown counts as yes — the safe direction when the answer
  * decides whether someone's name gets left off.
+ *
+ * A fallback, not the first answer: Commons states the obligation outright per file,
+ * so prefer `rintCreditRequired`, which only lands here when that flag is missing.
  */
 export function rintLicenceNeedsCredit(licence: string | undefined): boolean {
   if (licence == null || licence === "") return true;
   return !/^(public domain|pd\b|pd-|cc0)/i.test(licence.trim());
 }
 
-export { RINT_CATALOG } from "./rint-catalog.data";
-import { RINT_CATALOG, RINT_REGION_COUNTRY } from "./rint-catalog.data";
+/** Licence and credit for a file, or undefined if the catalog doesn't know it. */
+export function rintFileCredit(file: string): RintFileCredit | undefined {
+  return RINT_FILE_CREDITS[file];
+}
+
+/**
+ * Whether showing this file obliges us to credit its author.
+ *
+ * Commons' per-file flag where it exists, else the licence name. A file the catalog
+ * has never heard of counts as requiring credit, for the same reason an unknown
+ * licence does.
+ */
+export function rintCreditRequired(file: string): boolean {
+  const credit = RINT_FILE_CREDITS[file];
+  if (!credit) return true;
+  return credit.creditRequired ?? rintLicenceNeedsCredit(credit.licence);
+}
+
+/** One credit line's worth of facts, with everywhere worth linking. */
+export interface LogoCredit {
+  file: string;
+  /** The Commons description page — the authoritative record of author and terms. */
+  fileUrl: string;
+  licence: string;
+  licenceUrl?: string;
+  /** Absent where Commons records no author; `fileUrl` is then all we can offer. */
+  author?: string;
+}
+
+/**
+ * The credits owed for a set of logo files — deduped, sorted, and limited to the files
+ * that actually require one.
+ *
+ * Returns DATA, not markup, because only the caller knows where a credit belongs on
+ * their page. Pass the files a diagram resolved to; get back what to publish.
+ *
+ * Worth being clear about what this does and doesn't discharge. CC BY and CC BY-SA want
+ * the creator, the licence and a link to the material, and CC 4.0 accepts a link to a
+ * resource carrying that information — which `fileUrl` is. There is no non-commercial
+ * exemption: a free tool owes the same credit as a paid one.
+ */
+export function logoCredits(files: Iterable<string>): LogoCredit[] {
+  const out = new Map<string, LogoCredit>();
+  for (const file of files) {
+    if (out.has(file) || !rintCreditRequired(file)) continue;
+    const credit = RINT_FILE_CREDITS[file];
+    out.set(file, {
+      file,
+      fileUrl: fileDescriptionUrl(file),
+      licence: credit?.licence ?? "Unknown",
+      licenceUrl: credit?.licenceUrl,
+      author: credit?.author,
+    });
+  }
+  return [...out.values()].sort((a, b) => a.file.localeCompare(b.file));
+}
+
+export { RINT_CATALOG, RINT_FILE_CREDITS } from "./rint-catalog.data";
+import { RINT_CATALOG, RINT_FILE_CREDITS, RINT_REGION_COUNTRY } from "./rint-catalog.data";
 
 /**
  * Canonical form of a rint code. The template lowercases each arg through `{{lc:}}`
