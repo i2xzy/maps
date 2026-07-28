@@ -28,6 +28,8 @@ import {
   createRwsResolver,
   expandRint,
   expandRws,
+  migrateDiagram,
+  needsMigration,
   toWikitext,
   type RouteDiagram,
   type Selection,
@@ -66,6 +68,20 @@ const SAMPLE = `{
     { "type": "colspan", "text": [{ "icon": "gb|rail" }, " interchange with ", { "text": "National Rail", "link": true }, " at all stations"] }
   ]
 }`;
+
+/**
+ * Migrate one diagram's JSON text, keeping the author's formatting when there's
+ * nothing to do. Invalid JSON is returned untouched — the editor already reports that.
+ */
+function migrateText(text: string): string {
+  try {
+    const parsed = JSON.parse(text) as RouteDiagram;
+    if (!needsMigration(parsed)) return text;
+    return JSON.stringify(migrateDiagram(parsed), null, 2);
+  } catch {
+    return text;
+  }
+}
 
 // Initial state (SSR-safe: no localStorage). The mount effect replaces it from
 // storage, so first paint shows the sample without a hydration mismatch.
@@ -173,7 +189,10 @@ export default function EditorPage() {
       const legacy = localStorage.getItem(STORAGE_KEY);
       list = [legacy ? { id: newId(), name: "My diagram", text: legacy } : SEED];
     }
-    setDiagrams(list);
+    // Bring any diagram written against the old label shape up to date. Left alone it
+    // would render and export with its logos silently missing — the old `icons` field
+    // is simply unread now, and nothing throws.
+    setDiagrams(list.map((d) => ({ ...d, text: migrateText(d.text) })));
     const savedActive = localStorage.getItem(ACTIVE_KEY);
     setActiveId(savedActive && list.some((d) => d.id === savedActive) ? savedActive : list[0]!.id);
 
@@ -454,6 +473,26 @@ export default function EditorPage() {
                   pane. A background click clears the selection; cell/label clicks
                   stopPropagation so they don't bubble here. */}
               <Box flex="1" minW="0" height="100%" overflow="auto" p="6" onClick={() => setSelection(null)}>
+                {parsed.diagram && needsMigration(parsed.diagram) ? (
+                  // Load-time migration can't catch JSON pasted straight into the pane,
+                  // and the failure is silent — the logos just aren't there. So say so
+                  // rather than letting someone copy wikitext that quietly lost them.
+                  <Box bg="yellow.subtle" color="yellow.fg" p="3" mb="4" fontSize="sm" borderRadius="sm">
+                    <Box fontWeight="semibold" mb="1">
+                      This diagram uses the old logo format
+                    </Box>
+                    <Box mb="2">
+                      Its logos won’t render or export until it’s converted — the old{" "}
+                      <Box as="code" fontFamily="mono">
+                        icons
+                      </Box>{" "}
+                      field is no longer read.
+                    </Box>
+                    <Button size="xs" onClick={() => setText(migrateText(text))}>
+                      Convert
+                    </Button>
+                  </Box>
+                ) : null}
                 {parsed.diagram ? (
                   <PreviewBoundary key={text}>
                     <RouteMap

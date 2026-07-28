@@ -7,3 +7,4 @@ export * from "./serialize";
 export * from "./icon";
 export * from "./parse";
 export * from "./descriptor";
+export * from "./migrate";
