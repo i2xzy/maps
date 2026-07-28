@@ -186,7 +186,8 @@ are asserted as a floor in the test suite, so they can only go up.
 
 <h2 id="whats-missing">🧭 What's missing</h2>
 
-For the route diagram editor:
+For the route diagram editor — [ROUTEMAP-PLAN.md](./ROUTEMAP-PLAN.md) has the ordered plan,
+the measurements behind it, and the decisions already taken:
 
 - Not deployed yet.
 - About half of BSicon cell codes decode into the semantic form the editor's controls
