@@ -281,6 +281,12 @@ function buildLines(
   const runs: TextRun[] = typeof text === "string" ? [text] : text;
   const lines: Piece[][] = [[]];
   for (const run of runs) {
+    if (typeof run === "object" && "raw" in run) {
+      // Shown literally: we can't expand an arbitrary template client-side, and text
+      // the reader can see beats content that silently isn't there.
+      (lines[lines.length - 1] as Piece[]).push({ text: run.raw });
+      continue;
+    }
     if (typeof run === "object" && "icon" in run) {
       (lines[lines.length - 1] as Piece[]).push({ icon: run.icon });
       continue;

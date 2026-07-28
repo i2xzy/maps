@@ -123,6 +123,22 @@ export type LabelIcon =
   | { file: string; size?: number; alt?: string };
 
 /**
+ * Wikitext we don't model, carried verbatim.
+ *
+ * The escape hatch that makes a wikitext round-trip safe. Without it, anything
+ * unrecognised has to be kept as plain text — and plain text's pipes are LINE BREAKS to
+ * the serializer, so `{{BSto|a|b}}` came back as `{{BSsplit|{{BSto|a|b}}}}`. Real
+ * diagrams are full of templates we've never heard of, and silently rewriting them is
+ * worse than not understanding them.
+ *
+ * Emitted exactly as given and never split. The renderer can't expand it, so it shows
+ * as literal text — visibly not understood, which is the honest failure.
+ */
+export interface RawRun {
+  raw: string;
+}
+
+/**
  * One transit logo, inline where the author put it.
  *
  * Singular, and a RUN rather than a field on the label. Icons used to live in two
@@ -197,6 +213,7 @@ export type TextRun =
   | SplitRun
   | BreakRun
   | IconRun
+  | RawRun
   | {
       text?: string;
       link?: string | true;

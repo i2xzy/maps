@@ -8,3 +8,4 @@ export * from "./icon";
 export * from "./parse";
 export * from "./descriptor";
 export * from "./migrate";
+export * from "./from-wikitext";

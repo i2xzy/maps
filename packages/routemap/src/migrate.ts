@@ -57,7 +57,7 @@ function migrateRun(run: TextRun): TextRun[] {
   if ("split" in run) {
     return [{ split: run.split.map((line) => (typeof line === "string" ? line : migrateRuns(line))) }];
   }
-  if ("br" in run || "icon" in run) return [run];
+  if ("br" in run || "icon" in run || "raw" in run) return [run];
 
   const { icons, ...rest } = run as LegacyRun;
   const list = iconList(icons);
@@ -91,6 +91,7 @@ function tidyRuns(runs: TextRun[]): TextRun[] {
       !("split" in run) &&
       !("br" in run) &&
       !("icon" in run) &&
+      !("raw" in run) &&
       typeof run.text === "string" &&
       Object.keys(run).filter((k) => run[k as keyof typeof run] !== undefined).length === 1
         ? run.text

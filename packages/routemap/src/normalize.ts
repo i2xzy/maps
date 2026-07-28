@@ -11,6 +11,7 @@ import type {
   RouteDiagram,
   SideLabel,
   BreakRun,
+  RawRun,
   SideSlots,
   SplitRun,
   TextRun,
@@ -100,7 +101,7 @@ export function normalizeSide(side: SideLabel | null | undefined): NormalizedSid
  * A run carrying content, as opposed to a `{ split }` or a `{ br }`. An `{ icon }` IS
  * content — the collectors resolve logos, so they have to see these.
  */
-type ContentRun = Exclude<TextRun, string | SplitRun | BreakRun>;
+type ContentRun = Exclude<TextRun, string | SplitRun | BreakRun | RawRun>;
 
 /**
  * Every content-bearing run in a label's text, with `{ split }` runs flattened.
@@ -113,7 +114,7 @@ export function labelRuns(text: string | TextRun[] | null | undefined): ContentR
   if (text == null || typeof text === "string") return [];
   const out: ContentRun[] = [];
   for (const run of text) {
-    if (typeof run === "string" || "br" in run) continue;
+    if (typeof run === "string" || "br" in run || "raw" in run) continue;
     if ("split" in run) {
       for (const line of run.split) out.push(...labelRuns(typeof line === "string" ? [] : line));
       continue;

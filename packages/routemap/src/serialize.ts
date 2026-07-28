@@ -40,6 +40,7 @@ function iconToWiki(icon: LabelIcon): string {
 /** One inline run -> wiki. */
 function runToWiki(run: TextRun): string {
   if (typeof run === "string") return run;
+  if ("raw" in run) return run.raw;
   if ("br" in run) return "<br>";
   if ("icon" in run) return iconToWiki(run.icon);
   // An explicit split emits the template directly, so whatever sits beside it in the
@@ -91,7 +92,10 @@ function splitRunLines(text: string | TextRun[]): TextRun[][] {
       continue;
     }
     // An rws run's display comes from the wiki, so its `text` is not ours to break.
-    const body = "split" in run || "br" in run || "icon" in run || run.rws ? undefined : run.text;
+    const body =
+      "split" in run || "br" in run || "icon" in run || "raw" in run || run.rws
+        ? undefined
+        : run.text;
     if (typeof body !== "string") {
       push(run);
       continue;

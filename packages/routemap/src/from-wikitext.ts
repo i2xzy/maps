@@ -1,0 +1,322 @@
+/**
+ * Read a `{{Routemap}}` `map=` body into a `RouteDiagram`.
+ *
+ * Ported from `Module:Routemap`, which is the reference parser — its own grammar
+ * comment is the shape below, and the field ORDER and COUNT rules come from its code
+ * rather than from the prose documentation, which glosses over both:
+ *
+ *   rowProps~~linfo4~~linfo3~~linfo2~~linfo1! !(icons)~~rinfo1~~rinfo2~~rinfo3~~rinfo4~~rowProps
+ *
+ * The left part is read BACKWARDS from `! !` and the right part forwards from the
+ * icons, so a field's meaning depends on how many there are. One field is always
+ * `main` ("assume only linfo2 was provided"), never `dist`.
+ *
+ * LOSSLESSNESS IS THE POINT. Once a user can edit wikitext, anything this drops is
+ * destroyed on the next serialize. So anything not understood is preserved verbatim
+ * rather than discarded — an unrecognised BSicon code stays a code string, and text
+ * this can't decompose stays one raw run. `roundTripReport` in the test suite is what
+ * proves it, by diffing real diagrams.
+ */
+import type {
+  Cell,
+  CellIcon,
+  DiagramRow,
+  RouteDiagram,
+  SideSlots,
+  SideLabel,
+  TextRun,
+} from "./types";
+import { SLOT_NAMES, type SlotName } from "./normalize";
+
+/** Split on a separator, ignoring any that fall inside `{{…}}` or `[[…]]`. */
+function splitTop(s: string, sep: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s.startsWith("{{", i) || s.startsWith("[[", i)) {
+      depth++;
+      i++;
+      continue;
+    }
+    if (s.startsWith("}}", i) || s.startsWith("]]", i)) {
+      if (depth > 0) depth--;
+      i++;
+      continue;
+    }
+    if (depth === 0 && s.startsWith(sep, i)) {
+      out.push(s.slice(start, i));
+      i += sep.length - 1;
+      start = i + 1;
+    }
+  }
+  out.push(s.slice(start));
+  return out;
+}
+
+/** One `{{name|args}}` at the very start of `s`, or null. */
+function template(s: string): { name: string; args: string[]; length: number } | null {
+  if (!s.startsWith("{{")) return null;
+  let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s.startsWith("{{", i) || s.startsWith("[[", i)) {
+      depth++;
+      i++;
+      continue;
+    }
+    if (s.startsWith("}}", i) || s.startsWith("]]", i)) {
+      depth--;
+      i++;
+      if (depth === 0) {
+        const inner = s.slice(2, i - 1);
+        const parts = splitTop(inner, "|");
+        return { name: (parts[0] ?? "").trim(), args: parts.slice(1), length: i + 1 };
+      }
+      continue;
+    }
+  }
+  return null;
+}
+
+/** One `[[target|display]]` at the start of `s`, or null. */
+function wikilink(s: string): { target: string; display?: string; length: number } | null {
+  if (!s.startsWith("[[")) return null;
+  const end = s.indexOf("]]");
+  if (end < 0) return null;
+  const parts = splitTop(s.slice(2, end), "|");
+  return {
+    target: (parts[0] ?? "").trim(),
+    display: parts.length > 1 ? parts.slice(1).join("|") : undefined,
+    length: end + 2,
+  };
+}
+
+/**
+ * Label text -> runs.
+ *
+ * Emits the smallest thing that round-trips: a plain stretch stays a bare string, and
+ * marks/links/templates become object runs. `{{!}}` comes back as the `\|` escape the
+ * model uses for a literal pipe, since a bare `|` here would mean a line break.
+ */
+export function parseLabelText(text: string): TextRun[] {
+  const runs: TextRun[] = [];
+  let plain = "";
+  const flush = () => {
+    if (plain) runs.push(plain);
+    plain = "";
+  };
+
+  let i = 0;
+  while (i < text.length) {
+    const rest = text.slice(i);
+
+    if (rest.startsWith("<br")) {
+      const end = rest.indexOf(">");
+      if (end >= 0) {
+        flush();
+        runs.push({ br: true });
+        i += end + 1;
+        continue;
+      }
+    }
+
+    const tpl = template(rest);
+    if (tpl) {
+      const name = tpl.name.toLowerCase();
+      if (name === "!") {
+        // A literal pipe. The model escapes it so it isn't read as a line break.
+        plain += "\\|";
+        i += tpl.length;
+        continue;
+      }
+      if (name === "rint" || name === "rail-interchange") {
+        flush();
+        runs.push({ icon: tpl.args.map((a) => a.trim()).join("|") });
+        i += tpl.length;
+        continue;
+      }
+      if (name === "rws" || name === "rail-interchange-station") {
+        flush();
+        runs.push({ rws: tpl.args.join("|").trim() });
+        i += tpl.length;
+        continue;
+      }
+      if (name === "bssplit") {
+        flush();
+        runs.push({ split: tpl.args.map((a) => parseLabelText(a)) });
+        i += tpl.length;
+        continue;
+      }
+      // Any other template — {{BSto}}, {{tram}}, hundreds more — kept whole. Its pipes
+      // are arguments; left as plain text the serializer would read them as line breaks
+      // and wrap the whole thing in a {{BSsplit}}.
+      flush();
+      runs.push({ raw: rest.slice(0, tpl.length) });
+      i += tpl.length;
+      continue;
+    }
+
+    const link = wikilink(rest);
+    if (link && /^(file|image):/i.test(link.target)) {
+      // `[[File:X|20px|link=|alt=|X]]` is an image with parameters. Those pipes are
+      // parameters, so it goes through verbatim rather than as a link with a display.
+      flush();
+      runs.push({ raw: rest.slice(0, link.length) });
+      i += link.length;
+      continue;
+    }
+    if (link) {
+      flush();
+      runs.push(
+        link.display != null && link.display !== link.target
+          ? { text: link.display, link: link.target }
+          : { text: link.target, link: true },
+      );
+      i += link.length;
+      continue;
+    }
+
+    // `'''bold'''` / `''italic''`. Bold is tested FIRST because `'''` also starts with
+    // `''`, and the match must `break` out — running both arms wrapped the same text
+    // twice, turning `'''Stations'''` into `'''Stations''''''Stations''`.
+    let marked = false;
+    for (const [mark, key] of [
+      ["'''", "bold"],
+      ["''", "italic"],
+    ] as const) {
+      if (!rest.startsWith(mark)) continue;
+      const end = rest.indexOf(mark, mark.length);
+      if (end < 0) continue;
+      flush();
+      const inner = parseLabelText(rest.slice(mark.length, end));
+      // A mark only survives on a TEXT run. An `{ rws }` or `{ raw }` run has no place
+      // to put it and the serializer drops it, so `''to {{rws|Marple}}''` came back with
+      // the marks scattered across the pieces. A mixed span goes through whole instead.
+      if (inner.every((r) => typeof r === "string")) {
+        for (const r of inner) runs.push({ text: r as string, [key]: true } as TextRun);
+      } else {
+        runs.push({ raw: rest.slice(0, end + mark.length) });
+      }
+      i += end + mark.length;
+      marked = true;
+      break;
+    }
+    if (marked) continue;
+
+    plain += text[i];
+    i++;
+  }
+  flush();
+  return runs;
+}
+
+/** A label field -> the simplest value that round-trips it: a string, or runs. */
+function parseLabel(field: string): string | TextRun[] | undefined {
+  const text = field.trim();
+  if (!text) return undefined;
+  const runs = parseLabelText(text);
+  if (runs.length === 1 && typeof runs[0] === "string") return runs[0];
+  return runs;
+}
+
+/** One icon-strip field -> cells, overlays kept as a stack. */
+function parseCells(strip: string): Cell[] {
+  return splitTop(strip, "\\").map((cell) => {
+    // Empty layers are KEPT once there's more than one: `!~vHST` is an empty base with
+    // an overlay on top, and dropping the blank turns it into a plain cell.
+    const layers = splitTop(cell, "!~").map((c) => c.trim());
+    if (layers.every((c) => c === "")) return null;
+    if (layers.length === 1) return layers[0] as CellIcon;
+    return layers as CellIcon[];
+  });
+}
+
+/** Assign the LEFT fields, which the module reads backwards from `! !`. */
+function leftSlots(part: string): SideSlots {
+  const f = splitTop(part, "~~");
+  const out: SideSlots = {};
+  const set = (name: SlotName, raw: string | undefined) => {
+    const v = raw == null ? undefined : parseLabel(raw);
+    if (v !== undefined) out[name] = v;
+  };
+  if (f.length <= 1) {
+    // "assume only linfo2 was provided" — one field is main, never dist.
+    set("main", f[0]);
+    return out;
+  }
+  set("dist", f[f.length - 1]);
+  set("main", f[f.length - 2]);
+  if (f.length > 2) set("remark", f[f.length - 3]);
+  if (f.length > 3) set("outer", f[f.length - 4]);
+  return out;
+}
+
+/** Assign the RIGHT fields, which run forwards from the icon strip. */
+function rightSlots(fields: string[]): SideSlots {
+  const out: SideSlots = {};
+  const set = (name: SlotName, raw: string | undefined) => {
+    const v = raw == null ? undefined : parseLabel(raw);
+    if (v !== undefined) out[name] = v;
+  };
+  if (fields.length <= 1) {
+    set("main", fields[0]);
+    return out;
+  }
+  set("dist", fields[0]);
+  set("main", fields[1]);
+  if (fields.length > 2) set("remark", fields[2]);
+  if (fields.length > 3) set("outer", fields[3]);
+  return out;
+}
+
+/** A side with only `main` is written as that label; otherwise as slots. */
+function sideValue(slots: SideSlots): SideLabel | SideSlots | undefined {
+  const filled = SLOT_NAMES.filter((n) => slots[n] !== undefined);
+  if (filled.length === 0) return undefined;
+  if (filled.length === 1 && filled[0] === "main") return slots.main ?? undefined;
+  return slots;
+}
+
+/** Parse one map line into a row. */
+function parseRow(line: string): DiagramRow | null {
+  const colspan = /^-colspan(?:-(\d+))?/.exec(line.trim());
+  if (colspan) return { type: "colspan" };
+
+  const parts = splitTop(line, "! !");
+  const hasLeft = parts.length > 1;
+  const left = hasLeft ? (parts[0] as string) : "";
+  const right = hasLeft ? parts.slice(1).join("! !") : line;
+
+  const rightFields = splitTop(right, "~~");
+  const cells = parseCells(rightFields[0] ?? "");
+
+  const row: DiagramRow = { cells };
+  const l = sideValue(leftSlots(left));
+  const r = sideValue(rightSlots(rightFields.slice(1)));
+  if (l !== undefined) row.left = l;
+  if (r !== undefined) row.right = r;
+  return row;
+}
+
+/**
+ * Parse a `{{Routemap}}` `map=` body (the row lines, no template wrapper).
+ *
+ * Blank lines are dropped; a `-colspan-` marker starts a full-width row whose text is
+ * the line that follows it, which is how the template writes one.
+ */
+export function fromWikitext(body: string): RouteDiagram {
+  const rows: DiagramRow[] = [];
+  const lines = body.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] as string;
+    if (line.trim() === "") continue;
+    if (/^-colspan/.test(line.trim())) {
+      const text = parseLabel(lines[++i] ?? "");
+      rows.push({ type: "colspan", ...(text !== undefined ? { text } : {}) });
+      continue;
+    }
+    const row = parseRow(line);
+    if (row) rows.push(row);
+  }
+  return { rows };
+}
