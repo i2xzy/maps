@@ -19,13 +19,22 @@
  *          │        { stack, note } stack + right annotation (Routemap `~~`)
  *          └─ ColspanRow { type:'colspan', text }   full-width text/legend row
  *
- * `{{Routemap}}` operator -> model mapping (the round-trip contract, honoured
- * when the deferred parser/serializer land):
+ * `{{Routemap}}` operator -> model mapping (the round-trip contract). Taken from
+ * `Module:Routemap`, which is the real parser; its own grammar comment reads:
+ *
+ *   rowProps~~linfo4~~linfo3~~linfo2~~linfo1! !(icons)~~rinfo1~~rinfo2~~rinfo3~~rinfo4~~rowProps
+ *
  *   `\`     column separator      -> element boundary in cells[]
  *   `!~`    overlay               -> Cell array / CellObject.stack
- *   `~~`    right annotation      -> CellObject.note
- *   `!`/`! !` left/right markers  -> GridRow.left / GridRow.right
+ *   `! !`   left labels | icons   -> GridRow.left (the LEFT boundary only)
+ *   `~~`    label slot separator  -> SideSlots, four per side
  *   `-colspan-` full-width row    -> ColspanRow
+ *
+ * The slots are numbered OUTWARD FROM THE ICONS on both sides (info1 nearest), so
+ * the left side is written outermost-first and the right side innermost-first — the
+ * source then reads in the same order as the rendered page. A lone label is info2
+ * ("main text"), NOT info1: the module says so outright ("assume only linfo2 was
+ * provided"), and reading it as info1 would misplace every simple label.
  *
  * Geometry (from the T1 spike — deterministic, see .context/rdt-spike/FINDINGS.md):
  *   full icon  = 500x500 SVG units, centre line at x=250
@@ -166,10 +175,37 @@ export type SideLabel =
     };
 
 /** A normal grid row: side labels + one cell per column. */
+/**
+ * The four label slots one side of a row can hold, named as `Module:Routemap` names
+ * them (`linfo1`..`linfo4` / `rinfo1`..`rinfo4`), numbered outward from the icons.
+ *
+ * Not four uniform columns: the module renders `main` and `remark` in a SINGLE table
+ * cell (it calls the pair `linfo3+2`), while `outer` gets its own cell at 90% via
+ * `.RMsi`. Laying them out as four equal columns would not match the wiki.
+ */
+export interface SideSlots {
+  /** info1 — nearest the icons. Distance or time, in the wiki's own examples. */
+  dist?: SideLabel | null;
+  /** info2 — the main label. This is where a lone label goes. */
+  main?: SideLabel | null;
+  /** info3 — a remark, sharing a table cell with `main`. */
+  remark?: SideLabel | null;
+  /** info4 — outermost, in its own cell at 90%. */
+  outer?: SideLabel | null;
+}
+
 export interface GridRow {
   type?: "grid";
-  left?: SideLabel | null;
-  right?: SideLabel | null;
+  /**
+   * The left labels: a `SideLabel` for the common one-label case (it becomes `main`,
+   * matching the wiki's positional default), or a `SideSlots` to use more than one.
+   *
+   * The two object shapes are told apart by their keys, which are disjoint —
+   * `SideSlots` has dist/main/remark/outer, `SideLabel` has text/rws/icons/link/… —
+   * so no discriminator field is needed and existing diagrams keep working untouched.
+   */
+  left?: SideLabel | SideSlots | null;
+  right?: SideLabel | SideSlots | null;
   cells: Cell[];
 }
 

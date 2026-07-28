@@ -22,10 +22,13 @@ import {
   diagramColumns,
   iconCode,
   isWidthPrefix,
+  emptySlots,
   normalizeCell,
   normalizeSide,
+  normalizeSlots,
   prefixWidthFraction,
   type NormalizedSide,
+  type NormalizedSlots,
 } from "./normalize";
 
 export interface PlacedIcon {
@@ -53,8 +56,13 @@ export interface PlacedRow {
   index: number;
   /** Present on colspan (full-width text) rows: its text + optional inline logos. */
   colspan?: NormalizedSide;
-  left?: NormalizedSide | null;
-  right?: NormalizedSide | null;
+  /**
+   * All four label slots per side, innermost-first (see `SideSlots`). Carried whole
+   * even though the renderer currently draws only `main`, so the serializer and any
+   * future reader share one normalized shape rather than two.
+   */
+  left: NormalizedSlots;
+  right: NormalizedSlots;
   cells: PlacedCell[];
 }
 
@@ -88,7 +96,7 @@ export function computeLayout(diagram: RouteDiagram): DiagramLayout {
         italic: row.italic,
         bold: row.bold,
       }) ?? { text: row.text };
-      rows.push({ index, colspan, cells: [] });
+      rows.push({ index, colspan, left: emptySlots(), right: emptySlots(), cells: [] });
       return;
     }
 
@@ -124,8 +132,8 @@ export function computeLayout(diagram: RouteDiagram): DiagramLayout {
 
     rows.push({
       index,
-      left: normalizeSide(row.left),
-      right: normalizeSide(row.right),
+      left: normalizeSlots(row.left),
+      right: normalizeSlots(row.right),
       cells,
     });
   });

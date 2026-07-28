@@ -74,3 +74,70 @@ describe("toWikitext (diagram defaults)", () => {
     expect(out).toBe("exSTR\\exSTR"); // both the object and the decodable string inherit ex
   });
 });
+
+describe("toWikitext label slots", () => {
+  // The four slots per side, as `Module:Routemap` reads them. Its grammar comment:
+  //   rowProps~~linfo4~~linfo3~~linfo2~~linfo1! !(icons)~~rinfo1~~rinfo2~~rinfo3~~rinfo4~~rowProps
+  const row = (left: unknown, right: unknown) =>
+    toWikitext({ rows: [{ left, right, cells: ["STR"] } as never] });
+
+  it("writes a lone label as ONE field, which is how the wiki reads it back", () => {
+    // A single field is `main` by the module's own positional default. Padding it out
+    // to `~~ ~~Euston` would move the label to a different slot.
+    expect(row("Euston", null)).toBe("Euston! !STR");
+    expect(row(null, "Euston")).toBe("STR~~Euston");
+  });
+
+  it("orders the left side outermost-first and the right side innermost-first", () => {
+    // Both sides read outward from the icons, so the source order mirrors the page.
+    expect(row({ dist: "0", main: "Euston", remark: "terminus", outer: "note" }, null)).toBe(
+      "note~~terminus~~Euston~~0! !STR",
+    );
+    expect(row(null, { dist: "0", main: "Euston", remark: "terminus", outer: "note" })).toBe(
+      "STR~~0~~Euston~~terminus~~note",
+    );
+  });
+
+  it("pads with a space, never with nothing, so `~~~~` can't become a signature", () => {
+    // Four consecutive tildes are a MediaWiki signature. The module trims each field,
+    // so a space reads as absent while keeping the tilde pairs apart.
+    const out = row(null, { outer: "Bridge" });
+    expect(out).toBe("STR~~ ~~ ~~ ~~Bridge");
+    expect(out).not.toContain("~~~~");
+  });
+
+  it("emits two fields for a dist-only label, since one field would mean `main`", () => {
+    // On the LEFT, `dist` is the field nearest `! !` — so it comes LAST and the empty
+    // `main` leads. Writing "1 km~~ " instead would be read back as a main label.
+    expect(row({ dist: "1 km" }, null)).toBe(" ~~1 km! !STR");
+    expect(row(null, { dist: "1 km" })).toBe("STR~~1 km~~ ");
+  });
+
+  it("reproduces the units header from the template's own documentation", () => {
+    // The docs give `~~km! !~~km~~` for a row labelling both columns "km". We emit a
+    // space where they leave a field empty; the module trims every field, so the two
+    // are the same row. Anchoring on a real documented example is the point.
+    const out = toWikitext({
+      rows: [{ left: { dist: "km" }, right: { dist: "km" }, cells: [] } as never],
+    });
+    expect(out).toBe(" ~~km! !~~km~~ ");
+    expect(out.replace(/ /g, "")).toBe("~~km!!~~km~~".replace(/ /g, ""));
+  });
+
+  it("omits the outer fields entirely when nothing occupies them", () => {
+    // "The third and fourth pairs of tildes can be omitted if there is no content
+    // following either of them."
+    expect(row({ dist: "0", main: "Euston" }, null)).toBe("Euston~~0! !STR");
+    expect(row(null, { dist: "0", main: "Euston" })).toBe("STR~~0~~Euston");
+  });
+
+  it("keeps the slot object and the plain label interchangeable for one label", () => {
+    expect(row({ main: "Euston" }, null)).toBe(row("Euston", null));
+  });
+
+  it("carries a slot's own formatting, not just its text", () => {
+    expect(row(null, { dist: { text: "0", italic: true }, main: "Euston" })).toBe(
+      "STR~~''0''~~Euston",
+    );
+  });
+});

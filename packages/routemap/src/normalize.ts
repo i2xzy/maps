@@ -11,6 +11,7 @@ import type {
   LabelIcon,
   RouteDiagram,
   SideLabel,
+  SideSlots,
   TextRun,
 } from "./types";
 import { isGridRow } from "./types";
@@ -98,6 +99,91 @@ export function normalizeSide(side: SideLabel | null | undefined): NormalizedSid
     italic: side.italic,
     bold: side.bold,
   };
+}
+
+/** The slot names, innermost first — the order the RIGHT side is written in. */
+export const SLOT_NAMES = ["dist", "main", "remark", "outer"] as const;
+export type SlotName = (typeof SLOT_NAMES)[number];
+
+/** Every slot of one side, normalized; absent slots are null. */
+export type NormalizedSlots = Record<SlotName, NormalizedSide | null>;
+
+/** All four slots empty — a side with no labels at all. */
+export function emptySlots(): NormalizedSlots {
+  return { dist: null, main: null, remark: null, outer: null };
+}
+
+/**
+ * Whether a side object is the multi-slot form rather than a single label.
+ *
+ * Decided on keys, because the two shapes have none in common: `SideSlots` is
+ * dist/main/remark/outer, `SideLabel` is text/rws/icons/link/title/italic/bold. An
+ * object carrying no key from either is empty, and reading it as a lone label puts
+ * `null` in `main`, which is the same answer.
+ */
+function isSideSlots(side: object): side is SideSlots {
+  return SLOT_NAMES.some((name) => name in side);
+}
+
+/**
+ * Coerce either side shape into all four slots.
+ *
+ * A lone label becomes `main`, not `dist` — the wiki's positional default, which
+ * `Module:Routemap` states as "assume only linfo2 was provided". Getting this
+ * backwards would misplace every single-label row in every diagram.
+ */
+export function normalizeSlots(
+  side: SideLabel | SideSlots | null | undefined,
+): NormalizedSlots {
+  const empty = emptySlots();
+  if (side == null) return empty;
+  if (typeof side === "object" && !Array.isArray(side) && isSideSlots(side)) {
+    return {
+      dist: normalizeSide(side.dist),
+      main: normalizeSide(side.main),
+      remark: normalizeSide(side.remark),
+      outer: normalizeSide(side.outer),
+    };
+  }
+  return { ...empty, main: normalizeSide(side as SideLabel) };
+}
+
+/**
+ * The RAW `main` slot of a side, whichever shape the side is written in.
+ *
+ * Raw, not normalized: an editor needs the author's own value back to put in a form,
+ * not the coerced `{ text }` that `normalizeSlots` produces.
+ */
+export function mainSlot(
+  side: SideLabel | SideSlots | null | undefined,
+): SideLabel | null | undefined {
+  if (side == null) return side;
+  if (typeof side === "object" && !Array.isArray(side) && isSideSlots(side)) return side.main;
+  return side as SideLabel;
+}
+
+/**
+ * Replace a side's `main` slot, keeping its existing shape and its other slots.
+ *
+ * A side written as a plain label stays a plain label. Promoting every edited row to
+ * the `{ main: … }` form would rewrite diagrams wholesale on the first keystroke and
+ * bury a one-line change in a diff.
+ */
+export function withMainSlot(
+  side: SideLabel | SideSlots | null | undefined,
+  main: SideLabel | null | undefined,
+): SideLabel | SideSlots | null | undefined {
+  if (side != null && typeof side === "object" && !Array.isArray(side) && isSideSlots(side)) {
+    return { ...side, main };
+  }
+  // `undefined` passes through rather than becoming null, so clearing a label removes
+  // the key from the author's JSON instead of leaving `"left": null` behind.
+  return main;
+}
+
+/** Whether any slot of a side holds anything. */
+export function hasAnySlot(slots: NormalizedSlots): boolean {
+  return SLOT_NAMES.some((name) => slots[name] != null);
 }
 
 /** Max column count across grid rows (explicit `diagram.columns` wins). */

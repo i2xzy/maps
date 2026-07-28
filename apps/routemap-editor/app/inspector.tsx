@@ -34,8 +34,10 @@ import {
   iconSubtypes,
   isColspanRow,
   isFieldVisible,
+  mainSlot,
   previewOptions,
   safeIconCode,
+  withMainSlot,
   type Cell,
   type CellIcon,
   type ColspanRow,
@@ -752,19 +754,22 @@ export function Inspector({
     body = (
       <Section title="Labels">
         <Stack gap="3">
+          {/* The `main` slot only. A row can hold four labels per side, but the form
+              edits the one nearly every row uses, and `withMainSlot` leaves the other
+              three — and the side's written shape — exactly as the author left them. */}
           <LabelSlot
             key={`left-${i}`}
             side="left"
-            value={grid.left}
-            onChange={(v) => setRow({ ...grid, left: v })}
+            value={mainSlot(grid.left) ?? null}
+            onChange={(v) => setRow({ ...grid, left: withMainSlot(grid.left, v) })}
             resolveRws={resolveRws}
             resolveLogo={resolveLogo}
           />
           <LabelSlot
             key={`right-${i}`}
             side="right"
-            value={grid.right}
-            onChange={(v) => setRow({ ...grid, right: v })}
+            value={mainSlot(grid.right) ?? null}
+            onChange={(v) => setRow({ ...grid, right: withMainSlot(grid.right, v) })}
             resolveRws={resolveRws}
             resolveLogo={resolveLogo}
           />

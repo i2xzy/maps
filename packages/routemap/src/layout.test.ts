@@ -44,9 +44,23 @@ describe("computeLayout", () => {
     expect(overlay).toEqual(["STR", "exSTR"]);
   });
 
-  it("normalizes side labels", () => {
-    expect(layout.rows[1]?.left).toEqual({ text: "Handsacre Jn" });
-    expect(layout.rows[0]?.left).toBeNull();
+  it("normalizes a lone side label into the `main` slot", () => {
+    // `main`, not `dist`: a single label is the wiki's positional default, and the
+    // whole four-slot scheme hangs off getting that one right.
+    expect(layout.rows[1]?.left.main).toEqual({ text: "Handsacre Jn" });
+    expect(layout.rows[1]?.left.dist).toBeNull();
+    expect(layout.rows[0]?.left.main).toBeNull();
+  });
+
+  it("carries all four slots for a side that uses them", () => {
+    const d: RouteDiagram = {
+      rows: [{ left: { dist: "0 km", main: "Euston", remark: "terminus" }, cells: ["KBHFa"] }],
+    };
+    const side = computeLayout(d).rows[0]!.left;
+    expect(side.dist).toEqual({ text: "0 km" });
+    expect(side.main).toEqual({ text: "Euston" });
+    expect(side.remark).toEqual({ text: "terminus" });
+    expect(side.outer).toBeNull();
   });
 
   it("renders colspan rows with no cells", () => {

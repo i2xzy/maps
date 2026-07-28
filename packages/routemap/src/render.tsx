@@ -540,7 +540,7 @@ export function RouteMap({
           return (
             <tr key={row.index} {...rowProps(row.index)} style={{ ...cursor, ...ring(rowSel) }}>
               <td style={{ ...labelCell, textAlign: "right" }}>
-                <Label label={row.left} side="left" resolveHref={resolveHref} resolveRws={resolveRws} resolveLogo={resolveLogo} />
+                <Label label={row.left.main} side="left" resolveHref={resolveHref} resolveRws={resolveRws} resolveLogo={resolveLogo} />
               </td>
               <td
                 style={{
@@ -567,7 +567,7 @@ export function RouteMap({
                 ))}
               </td>
               <td style={{ ...labelCell, textAlign: "left" }}>
-                <Label label={row.right} side="right" resolveHref={resolveHref} resolveRws={resolveRws} resolveLogo={resolveLogo} />
+                <Label label={row.right.main} side="right" resolveHref={resolveHref} resolveRws={resolveRws} resolveLogo={resolveLogo} />
               </td>
             </tr>
           );

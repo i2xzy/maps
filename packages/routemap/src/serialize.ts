@@ -2,15 +2,25 @@
  * Serialize a RouteDiagram to {{Routemap}} MAP source — the row lines only, ready
  * to paste into a {{Routemap}}/{{BS-map}} `map=` parameter (no template wrapper,
  * since the wrapper varies by page). One-way, best-effort v1: covers rows, cells,
- * overlays (`!~`), spacers, left/right labels with links ([[…]]), stations
- * ({{rws}}), transit logos ({{rint}}), multi-line ({{BSsplit}}), italic/bold, and
- * colspans.
+ * overlays (`!~`), spacers, all four label slots per side with links ([[…]]),
+ * stations ({{rws}}), transit logos ({{rint}}), multi-line ({{BSsplit}}),
+ * italic/bold, and colspans.
  *
- * Deferred: cell-level notes, icon links (`!@`), and the reverse parser.
+ * Deferred: cell-level notes, icon links (`!@`), row properties (`bg=`), and the
+ * reverse parser.
  */
-import type { Cell, LabelIcon, RouteDiagram, SideLabel, TextRun } from "./types";
+import type { Cell, LabelIcon, RouteDiagram, TextRun } from "./types";
 import { isColspanRow } from "./types";
-import { iconCode, normalizeCell, normalizeSide, type NormalizedSide } from "./normalize";
+import {
+  SLOT_NAMES,
+  iconCode,
+  normalizeCell,
+  normalizeSide,
+  normalizeSlots,
+  type NormalizedSide,
+  type NormalizedSlots,
+  type SlotName,
+} from "./normalize";
 import type { IconContext } from "./icon";
 import { iconFile, rintCode } from "./rint";
 
@@ -87,14 +97,41 @@ function sideToWiki(norm: NormalizedSide | null, dir: "left" | "right"): string 
   return body;
 }
 
-const labelToWiki = (side: SideLabel | null | undefined, dir: "left" | "right"): string =>
-  sideToWiki(normalizeSide(side ?? null), dir);
-
 /** One cell -> wiki: overlays joined by `!~`; spacer/empty stay as their token. */
 function cellToWiki(cell: Cell, ctx?: IconContext): string {
   const norm = normalizeCell(cell);
   if (!norm) return "";
   return norm.stack.map((i) => iconCode(i, ctx)).join("!~");
+}
+
+/**
+ * How many `~~` fields a side needs, by its outermost occupied slot.
+ *
+ * Not cosmetic — the count IS the addressing. `Module:Routemap` reads the left part
+ * backwards from `! !` and the right part forwards from the icons, so a field's
+ * meaning depends on how many there are. Emit one field and it's read as `main`
+ * whatever you meant; emit `dist` alone in one field and it comes back as `main`.
+ */
+const SLOT_FIELDS: Record<SlotName, number> = { main: 1, dist: 2, remark: 3, outer: 4 };
+
+/**
+ * One side's `~~`-separated fields, in the order they're written.
+ *
+ * Innermost-first on the right (`~~dist~~main~~remark~~outer`) and reversed on the
+ * left (`outer~~remark~~main~~dist! !`), so the source reads in the same order as the
+ * rendered page. The single-field case is `main` alone, matching the wiki's own
+ * positional default rather than falling out of the general rule.
+ */
+function slotFields(slots: NormalizedSlots, dir: "left" | "right"): string[] {
+  let count = 0;
+  for (const name of SLOT_NAMES) if (slots[name]) count = Math.max(count, SLOT_FIELDS[name]);
+  if (count === 0) return [];
+  const inner = [slots.dist, slots.main, slots.remark, slots.outer];
+  const ordered = count === 1 ? [slots.main] : inner.slice(0, count);
+  // A placeholder is a SPACE, never empty: four consecutive tildes are a MediaWiki
+  // signature, and the module trims every field so a space still reads as absent.
+  const fields = ordered.map((slot) => sideToWiki(slot ?? null, dir) || " ");
+  return dir === "left" ? fields.reverse() : fields;
 }
 
 function rowToWiki(row: RouteDiagram["rows"][number], ctx?: IconContext): string {
@@ -109,10 +146,14 @@ function rowToWiki(row: RouteDiagram["rows"][number], ctx?: IconContext): string
     });
     return `-colspan-1\n${sideToWiki(norm, "left")}`;
   }
-  const left = labelToWiki(row.left, "left");
-  const right = labelToWiki(row.right, "right");
+  const left = slotFields(normalizeSlots(row.left), "left");
+  const right = slotFields(normalizeSlots(row.right), "right");
   const cells = (row.cells ?? []).map((c) => cellToWiki(c, ctx)).join("\\");
-  return `${left ? `${left}! !` : ""}${cells}${right ? `~~${right}` : ""}`;
+  return (
+    (left.length ? `${left.join("~~")}! !` : "") +
+    cells +
+    (right.length ? `~~${right.join("~~")}` : "")
+  );
 }
 
 /** Serialize a diagram to the {{Routemap}} `map=` body (row lines, no wrapper). */
