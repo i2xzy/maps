@@ -33,7 +33,6 @@ import {
 
 export interface PlacedIcon {
   code: string;
-  title?: string;
   href?: string;
 }
 
@@ -49,7 +48,6 @@ export interface PlacedCell {
    */
   spacer: number | null;
   /** Right-side annotation (Routemap `~~`). */
-  note?: string;
 }
 
 export interface PlacedRow {
@@ -73,9 +71,9 @@ export interface DiagramLayout {
 }
 
 const placeIcon = (icon: CellIcon, ctx?: IconContext): PlacedIcon => {
-  // title/href live on an IconRef only (not a bare string or a semantic IconObject).
+  // href lives on an IconRef only (not a bare string or a semantic IconObject).
   const ref = typeof icon !== "string" && !("kind" in icon) ? icon : undefined;
-  return { code: iconCode(icon, ctx), title: ref?.title, href: ref?.href };
+  return { code: iconCode(icon, ctx), href: ref?.href };
 };
 
 export function computeLayout(diagram: RouteDiagram): DiagramLayout {
@@ -120,13 +118,13 @@ export function computeLayout(diagram: RouteDiagram): DiagramLayout {
       // `{ kind: "spacer" }` with no width serializes to "", and the editor already calls
       // that a full-width blank spacer — layout was the only place reading it as an icon
       // with no code, which renders an <img> with an empty src.
-      if (only !== undefined && !norm.note && iconCode(only, ctx) === "") {
+      if (only !== undefined && iconCode(only, ctx) === "") {
         cells.push({ column, icons: [], spacer: 1 });
         continue;
       }
 
       // A lone pure width-prefix token ("d", "cd", …) is a sized blank, not an icon.
-      if (only !== undefined && !norm.note && isWidthPrefix(iconCode(only, ctx))) {
+      if (only !== undefined && isWidthPrefix(iconCode(only, ctx))) {
         cells.push({ column, icons: [], spacer: prefixWidthFraction(iconCode(only, ctx)) });
         continue;
       }
@@ -135,7 +133,6 @@ export function computeLayout(diagram: RouteDiagram): DiagramLayout {
         column,
         icons: norm.stack.map((i) => placeIcon(i, ctx)),
         spacer: null,
-        note: norm.note,
       });
     }
 

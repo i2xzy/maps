@@ -442,8 +442,6 @@ function CellEditor({ cell, onChange }: { cell: Cell; onChange: (cell: Cell) => 
     );
   }
   if (Array.isArray(cell)) return <StackEditor stack={cell} onChange={onChange} />;
-  // `{ stack, note }`: edit the stack, leave `note` alone — it is deferred in the
-  // serializer, so a control for it would edit a field nothing renders.
   if (typeof cell === "object" && "stack" in cell) {
     return <StackEditor stack={cell.stack} onChange={(next) => onChange({ ...cell, stack: Array.isArray(next) ? next : [next as CellIcon] })} />;
   }

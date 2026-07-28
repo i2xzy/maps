@@ -33,10 +33,13 @@ describe("RouteMap (HTML table)", () => {
     expect(html).toMatch(/colspan="7"/i);
   });
 
-  it("wraps a linked icon in an anchor with alt/title", () => {
+  it("wraps a linked icon in an anchor, tooltipped with its own code", () => {
     expect(html).toContain('href="/f/1"');
-    expect(html).toContain('alt="a station"');
-    expect(html).toContain('title="a station"');
+    // What Module:Routemap emits: `alt=` empty, the CODE as the tooltip. A track glyph is
+    // decorative to a screen reader, and the code is what an author wants on hover — the
+    // template's docs say "the ID of each icon can be seen in its tooltip".
+    expect(html).toContain('alt=""');
+    expect(html).toContain('title="BHF"');
   });
 
   it("sizes icons by height (aspect ratio), never an explicit width", () => {

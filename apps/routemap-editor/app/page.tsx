@@ -71,7 +71,7 @@ const SAMPLE = `{
     { "right": "d spacer shifts to right lane", "cells": ["d", "dSTR"] },
     { "cells": ["vSTR", "exSTR"] },
     { "right": { "text": ["pedestrian walkway to", "|", { "text": "St Pancras International", "link": true }, " ", { "icon": "london|underground" }, " ", { "icon": "London|thameslink" }], "italic": true }, "cells": ["BHF"] },
-    { "left": "Bromford Tunnel", "cells": [{ "code": "hKRZW", "title": "bridge over water" }] },
+    { "left": "Bromford Tunnel", "cells": ["hKRZW"] },
     { "left": [{ "icon": "gb|rail" }, " ", { "icon": "london|underground" }, " ", { "text": "Euston", "link": true }], "cells": ["KBHFe"] },
     { "type": "colspan", "text": [{ "icon": "gb|rail" }, " interchange with ", { "text": "National Rail", "link": true }, " at all stations"] }
   ]

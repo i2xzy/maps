@@ -38,12 +38,12 @@ describe("normalizeCell", () => {
     expect(normalizeCell(["STR", "exSTR"])).toEqual({ stack: ["STR", "exSTR"] });
   });
   it("wraps an IconRef object into a stack", () => {
-    expect(normalizeCell({ code: "STR", title: "main line" })).toEqual({
-      stack: [{ code: "STR", title: "main line" }],
+    expect(normalizeCell({ code: "STR", href: "/main-line" })).toEqual({
+      stack: [{ code: "STR", href: "/main-line" }],
     });
   });
   it("passes a CellObject through and drops empty stacks", () => {
-    expect(normalizeCell({ stack: ["STR"], note: "x" })).toEqual({ stack: ["STR"], note: "x" });
+    expect(normalizeCell({ stack: ["STR"] })).toEqual({ stack: ["STR"] });
     expect(normalizeCell({ stack: [] })).toBeNull();
   });
 });

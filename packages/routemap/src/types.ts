@@ -84,8 +84,6 @@ export type CellIcon = IconCode | IconRef | IconObject;
 export interface CellObject {
   /** Icons composited in order, bottom-to-top (Routemap `!~`). */
   stack: CellIcon[];
-  /** Right-side annotation text for this cell. */
-  note?: string;
 }
 
 /**

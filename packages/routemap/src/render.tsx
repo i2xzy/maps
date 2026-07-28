@@ -560,8 +560,12 @@ function Cell({
         const img = (
           <img
             src={resolveIcon(icon.code)}
-            alt={base ? (icon.title ?? icon.code) : (icon.title ?? "")}
-            title={icon.title}
+            // `alt=""` and the code as the tooltip is what Module:Routemap emits: a track
+            // glyph is decorative to a screen reader, and the code is what a diagram author
+            // wants on hover. `{{Routemap}}`'s own docs say "the ID of each icon can be
+            // seen in its tooltip".
+            alt=""
+            title={icon.code}
             height={cellSize}
             style={{
               height: cellSize,

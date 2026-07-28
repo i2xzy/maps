@@ -12,7 +12,7 @@ const diagram: RouteDiagram = {
     { cells: ["STR"] },
     { left: "Handsacre Jn", cells: ["ABZrg", "STRc3"] },
     { cells: ["STR", ["STR", "exSTR"]] },
-    { cells: [{ code: "dSTR", title: "half lane" }] },
+    { cells: [{ code: "dSTR", href: "/half" }] },
     { type: "colspan", text: "interchange with National Rail" },
   ],
 };
@@ -34,9 +34,11 @@ describe("computeLayout", () => {
     expect(branch?.[1]?.icons.map((i) => i.code)).toEqual(["STRc3"]);
   });
 
-  it("carries icon metadata (title/href) through", () => {
+  it("carries an icon's href through", () => {
+    // `href` is the only IconRef metadata left. There is no `title`: an icon's tooltip is
+    // its own code, which is what {{Routemap}} does.
     const half = layout.rows[3]?.cells[0]?.icons[0];
-    expect(half).toMatchObject({ code: "dSTR", title: "half lane" });
+    expect(half).toMatchObject({ code: "dSTR", href: "/half" });
   });
 
   it("preserves overlay stacks in order", () => {
