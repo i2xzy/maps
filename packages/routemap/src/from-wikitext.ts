@@ -190,11 +190,22 @@ export function parseLabelText(text: string): TextRun[] {
       if (end < 0) continue;
       flush();
       const inner = parseLabelText(rest.slice(mark.length, end));
-      // A mark only survives on a TEXT run. An `{ rws }` or `{ raw }` run has no place
-      // to put it and the serializer drops it, so `''to {{rws|Marple}}''` came back with
-      // the marks scattered across the pieces. A mixed span goes through whole instead.
-      if (inner.every((r) => typeof r === "string")) {
-        for (const r of inner) runs.push({ text: r as string, [key]: true } as TextRun);
+      // Marks go on a run, but the source wrote ONE pair of quotes around the whole
+      // span — so a span of several runs would come back with a pair around each, which
+      // is a different string. Hence: a single run that can carry a mark (text, a link,
+      // or `{ rws }`, all of which the serializer wraps after building their body) is
+      // marked; anything else goes through whole.
+      const only = inner.length === 1 ? inner[0] : undefined;
+      const markable =
+        only !== undefined &&
+        (typeof only === "string" ||
+          !("icon" in only || "raw" in only || "split" in only || "br" in only));
+      if (markable) {
+        runs.push(
+          typeof only === "string"
+            ? ({ text: only, [key]: true } as TextRun)
+            : ({ ...only, [key]: true } as TextRun),
+        );
       } else {
         runs.push({ raw: rest.slice(0, end + mark.length) });
       }

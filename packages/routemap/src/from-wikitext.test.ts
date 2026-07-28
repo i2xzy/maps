@@ -83,9 +83,9 @@ describe("fromWikitext round-trip", () => {
     expect(toWikitext(fromWikitext(src))).toBe(src);
   });
 
-  it("keeps a mark spanning a template whole", () => {
-    // A mark only survives on a text run; an rws or raw run has nowhere to put it, so a
-    // mixed span went out with its quotes scattered across the pieces.
+  it("keeps a multi-run mark span whole", () => {
+    // The source wrote ONE pair of quotes around the span; marking each run separately
+    // would emit a pair around each. See the "marks around a template" block.
     const src = "STR~~''to {{rws|Marple}}''";
     expect(toWikitext(fromWikitext(src))).toBe(src);
   });
@@ -163,5 +163,35 @@ describe("fromRoutemap / toRoutemap (the {{Routemap}} call)", () => {
     const d = fromRoutemap(src);
     expect(mapParam(d, "map2")).toBe("\nBHF\n");
     expect(toRoutemap(d, "STR")).toBe(src);
+  });
+});
+
+describe("marks around a template", () => {
+  it("marks a single link run rather than falling back to raw", () => {
+    // `'''[[X|Y]]'''` is fully representable — a link run carries bold. Bailing to raw
+    // here was over-conservative and it showed: 119 of the corpus's 340 raw runs were
+    // spans like this, rendering as muted placeholders instead of real labels.
+    expect(parseLabelText("'''[[Junction (rail)|Junctions]]'''")).toEqual([
+      { text: "Junctions", link: "Junction (rail)", bold: true },
+    ]);
+  });
+
+  it("marks a single rws run", () => {
+    // The serializer wraps an rws run's body too, so a mark survives it.
+    expect(parseLabelText("''{{rws|Marple}}''")).toEqual([{ rws: "Marple", italic: true }]);
+  });
+
+  it("keeps a MULTI-run span whole, because the quotes wrapped all of it", () => {
+    // One pair of quotes in the source. Marking each run separately would emit a pair
+    // around each, which is a different string — `''to ''''{{rws|Marple}}''`.
+    expect(parseLabelText("''to {{rws|Marple}}''")).toEqual([
+      { raw: "''to {{rws|Marple}}''" },
+    ]);
+  });
+
+  it("keeps a span containing an icon whole", () => {
+    // An `{ icon }` run has no field for a mark and the serializer returns before
+    // wrapping, so the mark would vanish.
+    expect(parseLabelText("''{{rint|gb|rail}}''")).toEqual([{ raw: "''{{rint|gb|rail}}''" }]);
   });
 });
