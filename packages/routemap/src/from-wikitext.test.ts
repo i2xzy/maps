@@ -28,6 +28,18 @@ const rows = Object.entries(corpus as Record<string, string>).flatMap(([title, b
   body.split("\n").filter((l) => l.trim() !== "").map((line) => ({ title, line })),
 );
 
+/**
+ * Parse and serialize with PROVENANCE STRIPPED, which is what measures the parser.
+ *
+ * `fromWikitext` records each row's original text and `toWikitext` re-emits it for an
+ * untouched row — so measuring the round-trip without removing it scores 99.4% and tests
+ * nothing but the copy. Dropping `src` puts the parser back under the microscope.
+ */
+const roundTrip = (line: string): string => {
+  const d = fromWikitext(line);
+  return toWikitext({ ...d, rows: d.rows.map((r) => ({ ...r, src: undefined })) });
+};
+
 describe("fromWikitext round-trip", () => {
   /**
    * The safety property for editable wikitext: parse then serialize must not change the
@@ -37,7 +49,7 @@ describe("fromWikitext round-trip", () => {
    * remaining classes are closed; never lower it to make a change pass.
    */
   it("preserves at least 94% of real rows, semantically", () => {
-    const kept = rows.filter(({ line }) => norm(toWikitext(fromWikitext(line))) === norm(line));
+    const kept = rows.filter(({ line }) => norm(roundTrip(line)) === norm(line));
     expect(kept.length / rows.length).toBeGreaterThan(0.94);
   });
 
@@ -45,7 +57,7 @@ describe("fromWikitext round-trip", () => {
     // A parser that crashes on real input is worse than one that misreads it: the whole
     // diagram becomes unopenable rather than one row being wrong.
     for (const { title, line } of rows) {
-      expect(() => toWikitext(fromWikitext(line)), `${title}: ${line}`).not.toThrow();
+      expect(() => roundTrip(line), `${title}: ${line}`).not.toThrow();
     }
   });
 
@@ -193,5 +205,38 @@ describe("marks around a template", () => {
     // An `{ icon }` run has no field for a mark and the serializer returns before
     // wrapping, so the mark would vanish.
     expect(parseLabelText("''{{rint|gb|rail}}''")).toEqual([{ raw: "''{{rint|gb|rail}}''" }]);
+  });
+});
+
+describe("provenance: exporting an imported diagram", () => {
+  it("emits an untouched row's ORIGINAL text, byte for byte", () => {
+    // The point of the whole mechanism: import, edit one row, copy back, and every other
+    // byte is exactly as the article had it.
+    const src = "{{left|{{rws|X}}}}~~ ~~ ! !\\tSTR red\\c~~ ~~&nbsp; ~~far";
+    expect(toWikitext(fromWikitext(src))).toBe(src);
+  });
+
+  it("re-serializes a row the user DID change", () => {
+    const d = fromWikitext("Euston! !KBHFe");
+    const row = d.rows[0] as { left?: unknown };
+    row.left = "Euston Square";
+    expect(toWikitext(d)).toBe("Euston Square! !KBHFe");
+  });
+
+  it("protects rows the parser does NOT round-trip, which is the hard case", () => {
+    // Comparing serialized text would agree only where the round-trip already works.
+    // Comparing MODELS protects a row precisely because its text can't be reproduced.
+    const kept = rows.filter(({ line }) => toWikitext(fromWikitext(line)) === line);
+    const lossy = rows.filter(({ line }) => roundTrip(line) !== line.trim());
+    expect(lossy.length).toBeGreaterThan(100); // there are plenty of these
+    expect(kept.length / rows.length).toBeGreaterThan(0.99); // and provenance covers them
+  });
+
+  it("keeps provenance out of the way once a row is edited", () => {
+    // A stale `src` would mean an edit that shows in the preview and not in the export.
+    // Nothing has to remember to clear it: the model comparison notices.
+    const d = fromWikitext("STR~~note");
+    (d.rows[0] as { right?: unknown }).right = "changed";
+    expect(toWikitext(d)).toBe("STR~~changed");
   });
 });

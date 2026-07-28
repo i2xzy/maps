@@ -23,6 +23,7 @@ import {
 } from "./normalize";
 import type { IconContext } from "./icon";
 import { iconFile, rintCode } from "./rint";
+import { fromWikitext } from "./from-wikitext";
 
 const iconSize = (icon: LabelIcon): number | undefined =>
   typeof icon === "object" && "size" in icon ? icon.size : undefined;
@@ -196,7 +197,47 @@ function rowToWiki(row: RouteDiagram["rows"][number], ctx?: IconContext): string
   );
 }
 
+/** Structural equality, ignoring key order and `undefined` fields. */
+function same(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a == null || b == null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((v, i) => same(v, b[i]));
+  }
+  const keys = (o: object) =>
+    Object.keys(o).filter((k) => (o as Record<string, unknown>)[k] !== undefined);
+  const ka = keys(a);
+  const kb = keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every((k) =>
+    same((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
+  );
+}
+
+/**
+ * One row -> wiki, preferring its ORIGINAL text when the row hasn't changed.
+ *
+ * `row.src` is re-parsed and compared to the row itself; equal means untouched, so the
+ * original bytes go out. That's what lets someone import a diagram, edit one row, and
+ * copy back without the other rows being quietly rewritten through a parser that is
+ * ~94% faithful.
+ *
+ * The comparison is on MODELS, not on text. Comparing serialized output would agree
+ * exactly where the round-trip already works, and it is the rows that DON'T round-trip
+ * which most need their original preserved.
+ */
+function rowOrOriginal(row: RouteDiagram["rows"][number], ctx?: IconContext): string {
+  const { src, ...rest } = row as { src?: string };
+  if (src == null) return rowToWiki(row, ctx);
+  const reparsed = fromWikitext(src).rows[0];
+  if (reparsed == null) return rowToWiki(row, ctx);
+  return same({ ...reparsed, src: undefined }, { ...rest, src: undefined })
+    ? src
+    : rowToWiki(row, ctx);
+}
+
 /** Serialize a diagram to the {{Routemap}} `map=` body (row lines, no wrapper). */
 export function toWikitext(diagram: RouteDiagram): string {
-  return diagram.rows.map((row) => rowToWiki(row, diagram.defaults)).join("\n");
+  return diagram.rows.map((row) => rowOrOriginal(row, diagram.defaults)).join("\n");
 }

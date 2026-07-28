@@ -324,11 +324,16 @@ export function fromWikitext(body: string): RouteDiagram {
     if (line.trim() === "") continue;
     if (/^-colspan/.test(line.trim())) {
       const text = parseLabel(lines[++i] ?? "");
-      rows.push({ type: "colspan", ...(text !== undefined ? { text } : {}) });
+      rows.push({
+        type: "colspan",
+        ...(text !== undefined ? { text } : {}),
+        src: `${lines[i - 1]}\n${lines[i] ?? ""}`,
+      });
       continue;
     }
     const row = parseRow(line);
-    if (row) rows.push(row);
+    // The original text, so an untouched row can be exported byte-for-byte.
+    if (row) rows.push({ ...row, src: line });
   }
   return { rows };
 }

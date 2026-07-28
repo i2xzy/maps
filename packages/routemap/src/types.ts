@@ -269,6 +269,19 @@ export interface SideSlots {
 export interface GridRow {
   type?: "grid";
   /**
+   * The row's original wikitext, when it came from a parse.
+   *
+   * Provenance for a safe export. `toWikitext` re-parses this and compares the result to
+   * the row: if they match, the row is untouched and the ORIGINAL text is emitted
+   * unchanged. So importing a diagram, editing one row and copying back rewrites that row
+   * and leaves every other byte alone.
+   *
+   * Comparing models rather than output is the point. Comparing text would agree only
+   * where the round-trip is already faithful — and it's the ~6% of rows that DON'T
+   * round-trip that most need protecting.
+   */
+  src?: string;
+  /**
    * The left labels: a `SideLabel` for the common one-label case (it becomes `main`,
    * matching the wiki's positional default), or a `SideSlots` to use more than one.
    *
@@ -287,6 +300,8 @@ export interface GridRow {
  *  link: true }, " at all stations"]`. */
 export interface ColspanRow {
   type: "colspan";
+  /** The row's original wikitext — see `GridRow.src`. */
+  src?: string;
   text?: string | TextRun[];
   rws?: string;
   link?: string | true;
