@@ -20,6 +20,8 @@
  * Idempotent, and it leaves a diagram that is already current untouched.
  */
 import type {
+  Cell,
+  CellIcon,
   ColspanRow,
   DiagramRow,
   GridRow,
@@ -30,6 +32,8 @@ import type {
   TextRun,
 } from "./types";
 import { SLOT_NAMES } from "./normalize";
+import { codeToIcon } from "./parse";
+import { iconToCode } from "./icon";
 
 /** The old shapes, as they appear in a document written before the change. */
 type LegacyIcons = { icons?: LabelIcon | LabelIcon[] };
@@ -184,6 +188,50 @@ function collapse(side: Extract<SideLabel, { text?: unknown }>): SideLabel {
   return keys.length === 1 && keys[0] === "text" && Array.isArray(side.text) ? side.text : side;
 }
 
+/**
+ * A cell layer as the semantic object form, where that's lossless.
+ *
+ * Only when the code decodes to a `kind` AND encodes straight back to the same code, so
+ * canonicalizing can never change the emitted wikitext. Roughly half of real BSicon codes
+ * decode (the junction and shift families mostly don't), so a canonical document is mixed —
+ * objects where we understand the code, the code itself where we don't. That's honest: a
+ * string here means "we have nothing to say about this beyond its name".
+ *
+ * The decoder also emits fields at their default, and whether one can be dropped has to be
+ * CHECKED rather than assumed: `STRc3` keeps its code without `cornerAdd: false`, while
+ * `ABZrg` without `through: false` encodes to `ABZgrg` — a different icon. So each field is
+ * removed only if the code still comes back identical.
+ */
+function cellLayer(layer: CellIcon): CellIcon {
+  if (typeof layer !== "string" || layer === "") return layer;
+  const decoded = codeToIcon(layer);
+  if (!("kind" in decoded)) return layer;
+  if (iconToCode(decoded) !== layer) return layer;
+
+  let best = decoded as unknown as Record<string, unknown>;
+  for (const key of Object.keys(best)) {
+    if (key === "kind") continue;
+    const without = { ...best };
+    delete without[key];
+    try {
+      if (iconToCode(without as never) === layer) best = without;
+    } catch {
+      // keep the field
+    }
+  }
+  return best as unknown as CellIcon;
+}
+
+/** Every layer of one cell, with an absent cell becoming an explicit full-width spacer. */
+function canonicalCell(cell: Cell): Cell {
+  if (cell == null || cell === "") return { kind: "spacer" };
+  if (Array.isArray(cell)) return cell.map(cellLayer);
+  if (typeof cell === "object" && "stack" in cell) {
+    return { ...cell, stack: cell.stack.map(cellLayer) };
+  }
+  return cellLayer(cell as CellIcon);
+}
+
 function migrateRow(row: DiagramRow): DiagramRow {
   if ((row as ColspanRow).type === "colspan") {
     const colspan = row as ColspanRow & LegacyIcons;
@@ -201,7 +249,12 @@ function migrateRow(row: DiagramRow): DiagramRow {
     return { ...rest, text: body.text, rws: body.rws, link: body.link } as ColspanRow;
   }
   const grid = row as GridRow;
-  return { ...grid, left: migrateSide(grid.left, "left"), right: migrateSide(grid.right, "right") };
+  return {
+    ...grid,
+    left: migrateSide(grid.left, "left"),
+    right: migrateSide(grid.right, "right"),
+    ...(grid.cells ? { cells: grid.cells.map(canonicalCell) } : {}),
+  };
 }
 
 /**

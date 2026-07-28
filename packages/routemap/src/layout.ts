@@ -114,8 +114,18 @@ export function computeLayout(diagram: RouteDiagram): DiagramLayout {
         continue;
       }
 
-      // A lone pure width-prefix token ("d", "cd", …) is a sized blank, not an icon.
       const only = norm.stack.length === 1 ? norm.stack[0] : undefined;
+
+      // A lone EMPTY code is a full-width blank, exactly like an absent cell.
+      // `{ kind: "spacer" }` with no width serializes to "", and the editor already calls
+      // that a full-width blank spacer — layout was the only place reading it as an icon
+      // with no code, which renders an <img> with an empty src.
+      if (only !== undefined && !norm.note && iconCode(only, ctx) === "") {
+        cells.push({ column, icons: [], spacer: 1 });
+        continue;
+      }
+
+      // A lone pure width-prefix token ("d", "cd", …) is a sized blank, not an icon.
       if (only !== undefined && !norm.note && isWidthPrefix(iconCode(only, ctx))) {
         cells.push({ column, icons: [], spacer: prefixWidthFraction(iconCode(only, ctx)) });
         continue;

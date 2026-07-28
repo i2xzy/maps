@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canonicalizeDiagram, migrateDiagram, needsMigration } from "./migrate";
 import { toWikitext } from "./serialize";
+import { computeLayout } from "./layout";
 import type { RouteDiagram } from "./types";
 
 /**
@@ -185,15 +186,81 @@ describe("canonicalizeDiagram", () => {
     // straight to `text` rewrote `"text": "X"` as `"text": ["X"]` on Format — same value,
     // written worse, on every label carrying a mark.
     const row = { left: { text: "Handsacre Junction", italic: true }, cells: ["STR"] };
-    expect(canonicalizeDiagram({ rows: [row] } as never).rows[0]).toEqual(row);
+    // `left` only: canonicalizing also converts the CELL to its semantic object form.
+    expect((canonicalizeDiagram({ rows: [row] } as never).rows[0] as { left: unknown }).left).toEqual(row.left);
   });
 
   it("keeps an array when it holds more than one run", () => {
     const row = { left: { text: ["a ", { rws: "B" }], italic: true }, cells: ["STR"] };
-    expect(canonicalizeDiagram({ rows: [row] } as never).rows[0]).toEqual(row);
+    expect((canonicalizeDiagram({ rows: [row] } as never).rows[0] as { left: unknown }).left).toEqual(row.left);
   });
 
   it("leaves a plain string label alone", () => {
     expect(right(of("Euston"))).toBe("Euston");
+  });
+});
+
+describe("canonical cells", () => {
+  const cellsOf = (cells: unknown[]) =>
+    (canonicalizeDiagram({ rows: [{ cells }] } as never).rows[0] as { cells: unknown[] }).cells;
+
+  it("turns a code the model understands into its object form", () => {
+    expect(cellsOf(["STR", "BHF"])).toEqual([{ kind: "track" }, { kind: "station" }]);
+  });
+
+  it("leaves a code it can't model as a string", () => {
+    // Roughly half of real BSicon codes don't decode — the junction and shift families
+    // mostly. A string here means "nothing to say about this beyond its name".
+    expect(cellsOf(["uemSPLa", "exKRWg+r"])).toEqual(["uemSPLa", "exKRWg+r"]);
+  });
+
+  it("only converts when the code encodes straight back", () => {
+    // The guard that keeps canonicalizing from changing the emitted wikitext. Anything
+    // that decodes but re-encodes differently stays exactly as written.
+    for (const code of ["STR", "exSTR", "BHF", "KBHFe", "hKRZW"]) {
+      const out = cellsOf([code])[0];
+      expect(toWikitext({ rows: [{ cells: [out] }] } as never), code).toBe(code);
+    }
+  });
+
+  it("makes an absent cell an explicit full-width spacer", () => {
+    expect(cellsOf([null, "STR"])).toEqual([{ kind: "spacer" }, { kind: "track" }]);
+  });
+
+  it("keeps that spacer identical to null in both outputs", () => {
+    // The reason this is safe. `{ kind: "spacer" }` serializes to "" and lays out as a
+    // full-width blank, exactly as an absent cell does.
+    const asNull = { rows: [{ cells: [null, "STR"] }] } as never;
+    const asSpacer = { rows: [{ cells: [{ kind: "spacer" }, "STR"] }] } as never;
+    expect(toWikitext(asSpacer)).toBe(toWikitext(asNull));
+    const lay = (d: never) =>
+      computeLayout(d).rows[0]!.cells.map((c) => ({ spacer: c.spacer, n: c.icons.length }));
+    expect(lay(asSpacer)).toEqual(lay(asNull));
+  });
+
+  it("converts the layers of an overlay stack", () => {
+    expect(cellsOf([["STR", "BHF"]])).toEqual([[{ kind: "track" }, { kind: "station" }]]);
+  });
+});
+
+describe("canonical cells: minimising the object", () => {
+  const cell = (code: string) =>
+    ((canonicalizeDiagram({ rows: [{ cells: [code] }] } as never).rows[0] as { cells: unknown[] })
+      .cells[0]);
+
+  it("drops a default field when the code survives without it", () => {
+    expect(cell("STRc3")).toEqual({ kind: "track", corner: 3 }); // no `cornerAdd: false`
+  });
+
+  it("KEEPS a default field the code depends on", () => {
+    // `ABZrg` without `through: false` encodes to `ABZgrg` — a different icon. Whether a
+    // default can be dropped has to be checked, not assumed.
+    expect(cell("ABZrg")).toMatchObject({ kind: "junction", through: false });
+  });
+
+  it("never changes the code, whatever it drops", () => {
+    for (const code of ["ABZrg", "STRc3", "BHF", "KBHFe", "exSTR", "hKRZW", "dSTR", "vSTR"]) {
+      expect(toWikitext({ rows: [{ cells: [cell(code)] }] } as never), code).toBe(code);
+    }
   });
 });
