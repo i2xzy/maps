@@ -70,7 +70,40 @@ function migrateRun(run: TextRun): TextRun[] {
   return [...body, ...(hasBody ? [" " as TextRun] : []), ...iconRuns(list)];
 }
 
-const migrateRuns = (runs: TextRun[]): TextRun[] => runs.flatMap(migrateRun);
+/**
+ * Tidy a run list: drop object wrappers that carry nothing, then merge adjacent text.
+ *
+ * `{ text: " Hello" }` with no marks IS the string `" Hello"`, and two plain strings
+ * side by side are one string — so migration output reads the way a person would have
+ * written it rather than showing the seams of the conversion.
+ *
+ * Collapsing to a STRING rather than to a single object also matters: an object run's
+ * `text` and a bare string are handled slightly differently downstream, and the string
+ * is the form with no surprises.
+ */
+function tidyRuns(runs: TextRun[]): TextRun[] {
+  const out: TextRun[] = [];
+  for (const run of runs) {
+    // An object whose only meaningful field is `text` is just that text.
+    const bare =
+      run != null &&
+      typeof run === "object" &&
+      !("split" in run) &&
+      !("br" in run) &&
+      !("icon" in run) &&
+      typeof run.text === "string" &&
+      Object.keys(run).filter((k) => run[k as keyof typeof run] !== undefined).length === 1
+        ? run.text
+        : run;
+
+    const prev = out[out.length - 1];
+    if (typeof bare === "string" && typeof prev === "string") out[out.length - 1] = prev + bare;
+    else out.push(bare);
+  }
+  return out.filter((r) => r !== "");
+}
+
+const migrateRuns = (runs: TextRun[]): TextRun[] => tidyRuns(runs.flatMap(migrateRun));
 
 /** Text (string or runs) as runs, with any run-level logos moved out. */
 function textAsRuns(text: string | TextRun[] | undefined): TextRun[] {

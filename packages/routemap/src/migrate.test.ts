@@ -89,6 +89,38 @@ describe("migrateDiagram", () => {
     ).toBe("{{rint|london|underground}} X! !STR");
   });
 
+  it("merges the seams the conversion leaves behind", () => {
+    // A run carrying both text and logos becomes text + space + logos, and the text
+    // half is an object with nothing on it but `text`. Left as-is the output shows the
+    // conversion's seams: `{ text: " Hello" }, " "` where `" Hello "` says the same.
+    const d = migrateDiagram({
+      rows: [{ right: [{ text: " Hello", icons: ["bus|1", "bus|1"] }], cells: ["BHF"] }],
+    } as never);
+    expect((d.rows[0] as { right: unknown }).right).toEqual([
+      " Hello ",
+      { icon: "bus|1" },
+      " ",
+      { icon: "bus|1" },
+    ]);
+  });
+
+  it("collapses a marks-free object run to a bare string", () => {
+    const d = migrateDiagram({
+      rows: [{ right: [{ text: "a" }, { text: "b" }, { icons: ["air"] }], cells: ["BHF"] }],
+    } as never);
+    expect((d.rows[0] as { right: unknown }).right).toEqual(["ab", { icon: "air" }]);
+  });
+
+  it("keeps an object run that carries marks", () => {
+    const d = migrateDiagram({
+      rows: [{ right: [{ text: "a", italic: true }, { icons: ["air"] }], cells: ["BHF"] }],
+    } as never);
+    expect((d.rows[0] as { right: unknown }).right).toEqual([
+      { text: "a", italic: true },
+      { icon: "air" },
+    ]);
+  });
+
   it("leaves a current diagram completely alone", () => {
     const current: RouteDiagram = {
       rows: [{ left: [{ icon: "gb|rail" }, " ", "Euston"], cells: ["KBHFe"] } as never],

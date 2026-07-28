@@ -208,3 +208,36 @@ describe("toWikitext <br> runs", () => {
     );
   });
 });
+
+describe("toWikitext pipes in runs", () => {
+  const right = (text: unknown) =>
+    toWikitext({ rows: [{ right: text, cells: ["BHF"] } as never] });
+
+  it("splits an OBJECT run's text on a pipe, like a plain string", () => {
+    // The renderer always split every run's text. The serializer treated an object run
+    // as unbreakable, so `{ text: "a|b" }` drew as two lines and exported a RAW pipe —
+    // which ends the `{{Routemap|map=…}}` parameter and breaks the template.
+    expect(right([{ text: "a|b" }])).toBe("BHF~~{{BSsplit|a|b}}");
+  });
+
+  it("keeps each line's marks when a marked run splits", () => {
+    expect(right([{ text: "a|b", italic: true }])).toBe("BHF~~{{BSsplit|''a''|''b''}}");
+  });
+
+  it("emits an escaped pipe as {{!}}, not as a bare pipe or a backslash", () => {
+    // `\| ` means a literal pipe. A bare `|` would end the template parameter, and a
+    // backslash isn't wiki syntax at all — `{{!}}` is MediaWiki's escape for this.
+    expect(right(["a\\|b"])).toBe("BHF~~a{{!}}b");
+    expect(right([{ text: "a\\|b", bold: true }])).toBe("BHF~~'''a{{!}}b'''");
+  });
+
+  it("mixes a real break and an escaped pipe in one run", () => {
+    expect(right(["a\\|b|c"])).toBe("BHF~~{{BSsplit|a{{!}}b|c}}");
+  });
+
+  it("never breaks a station link on the pipe in its own args", () => {
+    // `{{rws|Liverpool|Lime Street}}` — that pipe is an argument separator, and its
+    // display text comes from the wiki, so it is not ours to split.
+    expect(right([{ rws: "Liverpool|Lime Street" }])).toBe("BHF~~{{rws|Liverpool|Lime Street}}");
+  });
+});

@@ -61,22 +61,47 @@ function runToWiki(run: TextRun): string {
   return s;
 }
 
-/** Split a text value into lines of runs at unescaped `|` (BSsplit boundaries). */
+/**
+ * Split a text value into lines of runs at unescaped `|` (BSsplit boundaries).
+ *
+ * A run's own `text` splits too, not just a bare string. The renderer's `buildLines`
+ * has always split every run's text, so treating a marked run as unbreakable here
+ * emitted a RAW `|` — and a raw pipe inside a `{{Routemap|map=…}}` parameter ends the
+ * parameter, so `{ text: "a|b", italic: true }` rendered as two lines and exported as
+ * broken template syntax.
+ *
+ * `{ split }`, `{ br }` and `{ icon }` runs stay atomic: they have no text to break.
+ */
 function splitRunLines(text: string | TextRun[]): TextRun[][] {
   const runs: TextRun[] = typeof text === "string" ? [text] : text;
   const lines: TextRun[][] = [[]];
+  const push = (run: TextRun) => (lines[lines.length - 1] as TextRun[]).push(run);
+  // `\|` in the model is a literal pipe. It cannot be emitted as one: a bare `|`
+  // inside a `{{Routemap|map=…}}` parameter ends the parameter. `{{!}}` is MediaWiki's
+  // escape for exactly this. The renderer unescapes to a real `|` instead, because
+  // there it IS the character the reader should see.
+  const unescape = (s: string) => s.replace(/\\\|/g, "{{!}}");
+
   for (const run of runs) {
     if (typeof run === "string") {
       run.split(/(?<!\\)\|/).forEach((part, i) => {
         if (i > 0) lines.push([]);
-        const un = part.replace(/\\\|/g, "|");
-        if (un !== "") (lines[lines.length - 1] as TextRun[]).push(un);
+        if (part !== "") push(unescape(part));
       });
-    } else {
-      // Objects (including a `{ split }`) are atomic here: the sugar only breaks
-      // PLAIN strings, so an explicit split stays a single run on its own line.
-      (lines[lines.length - 1] as TextRun[]).push(run);
+      continue;
     }
+    // An rws run's display comes from the wiki, so its `text` is not ours to break.
+    const body = "split" in run || "br" in run || "icon" in run || run.rws ? undefined : run.text;
+    if (typeof body !== "string") {
+      push(run);
+      continue;
+    }
+    // Always through `unescape`, split or not: a run with `\|` and no line break still
+    // has to emit `{{!}}` rather than a literal backslash.
+    body.split(/(?<!\\)\|/).forEach((part, i) => {
+      if (i > 0) lines.push([]);
+      push({ ...run, text: unescape(part) });
+    });
   }
   return lines;
 }
