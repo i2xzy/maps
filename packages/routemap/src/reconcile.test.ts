@@ -6,19 +6,17 @@ import type { RouteDiagram } from "./types";
 
 describe("reconcileRows", () => {
   it("keeps the model of a row whose line didn't change", () => {
-    // The reported bug: a label authored as `{ text: [...], italic: true }` serializes to
-    // `''to {{rws|A}} & {{rws|B}}''` and parses back as one opaque `{ raw }` run. Typing a
-    // character anywhere in the wikitext pane re-parsed everything and flattened it.
+    // `title` is the clearest case: the serializer never emits it, so ANY wikitext
+    // round-trip loses it. Reconciling keeps it for a row nobody touched.
     const authored: RouteDiagram = {
       rows: [
-        { left: { text: ["to ", { rws: "Liverpool|Lime Street" }], italic: true }, cells: ["STR"] },
+        { left: { text: "Euston", title: "hover text" }, cells: ["KBHFe"] },
         { left: "Delta Junction", cells: ["ABZrg"] },
       ],
     };
-    const text = toWikitext(authored);
-    const reparsed = fromWikitext(text);
-    // Parsing alone loses the structure…
-    expect(JSON.stringify(reparsed.rows[0])).toContain('"raw"');
+    const reparsed = fromWikitext(toWikitext(authored));
+    // Parsing alone drops it…
+    expect(JSON.stringify(reparsed.rows[0])).not.toContain("hover text");
     // …and reconciling gets it back, because the line is unchanged.
     const merged = reconcileRows(reparsed, authored);
     expect(merged.rows[0]).toBe(authored.rows[0]);

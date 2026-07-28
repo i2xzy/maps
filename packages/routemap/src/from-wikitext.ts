@@ -20,6 +20,7 @@
 import type {
   Cell,
   CellIcon,
+  ColspanRow,
   DiagramRow,
   MapParam,
   RouteDiagram,
@@ -222,13 +223,64 @@ export function parseLabelText(text: string): TextRun[] {
   return runs;
 }
 
-/** A label field -> the simplest value that round-trips it: a string, or runs. */
-function parseLabel(field: string): string | TextRun[] | undefined {
+/**
+ * `''…''` or `'''…'''` wrapping the WHOLE field, which is a label-level mark.
+ *
+ * Only when the FIRST closing marker is the last thing in the field. `''a'' and ''b''`
+ * also starts and ends with the marker, and stripping its outer pair would produce
+ * `a'' and ''b` — two different labels spliced into one.
+ */
+function outerMark(text: string): { inner: string; key: "bold" | "italic" } | null {
+  for (const [mark, key] of [
+    ["'''", "bold"],
+    ["''", "italic"],
+  ] as const) {
+    if (!text.startsWith(mark)) continue;
+    const close = text.indexOf(mark, mark.length);
+    if (close > 0 && close === text.length - mark.length) {
+      return { inner: text.slice(mark.length, close), key };
+    }
+  }
+  return null;
+}
+
+/**
+ * A label field -> the simplest value that round-trips it.
+ *
+ * A mark around the whole field becomes a LABEL-level `italic`/`bold` rather than a run
+ * mark, which is what the wiki means by it and what the model already has. Reading it as a
+ * run mark is what made `''to {{rws|A}} & {{rws|B}}''` collapse into one opaque `{ raw }`
+ * run: the span covers several runs, one pair of quotes can't be distributed across them,
+ * and the parser gave up. At label level there is nothing to distribute.
+ */
+function parseLabel(field: string): SideLabel | undefined {
   const text = field.trim();
   if (!text) return undefined;
+
+  const outer = outerMark(text);
+  if (outer) {
+    const inner = parseLabel(outer.inner);
+    if (inner !== undefined && (typeof inner === "string" || Array.isArray(inner))) {
+      return { text: inner, [outer.key]: true };
+    }
+    if (inner !== undefined && typeof inner === "object") {
+      // Already an object (a nested mark) — fold this mark onto it.
+      return { ...inner, [outer.key]: true };
+    }
+  }
+
   const runs = parseLabelText(text);
   if (runs.length === 1 && typeof runs[0] === "string") return runs[0];
   return runs;
+}
+
+/** A colspan row keeps its mark in its own `italic`/`bold`, not in a wrapper object. */
+function parseColspanBody(field: string): Partial<ColspanRow> {
+  const value = parseLabel(field);
+  if (value === undefined) return {};
+  if (typeof value === "string" || Array.isArray(value)) return { text: value };
+  const { text, ...marks } = value;
+  return { text, ...marks };
 }
 
 /** One icon-strip field -> cells, overlays kept as a stack. */
@@ -323,10 +375,10 @@ export function fromWikitext(body: string): RouteDiagram {
     const line = lines[i] as string;
     if (line.trim() === "") continue;
     if (/^-colspan/.test(line.trim())) {
-      const text = parseLabel(lines[++i] ?? "");
+      const body = parseColspanBody(lines[++i] ?? "");
       rows.push({
         type: "colspan",
-        ...(text !== undefined ? { text } : {}),
+        ...body,
         src: `${lines[i - 1]}\n${lines[i] ?? ""}`,
       });
       continue;

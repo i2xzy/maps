@@ -240,3 +240,35 @@ describe("provenance: exporting an imported diagram", () => {
     expect(toWikitext(d)).toBe("STR~~changed");
   });
 });
+
+describe("a mark around the whole field", () => {
+  it("becomes a LABEL-level italic, not a run mark", () => {
+    // What the wiki means by it, and what the model already has. Read as a run mark, a span
+    // covering several runs can't distribute one pair of quotes across them, so the parser
+    // used to give up and emit an opaque `{ raw }` — which then flattened on every edit.
+    expect(fromWikitext("''to {{rws|A}} & {{rws|B}}''! !STR").rows[0]).toMatchObject({
+      left: { text: ["to ", { rws: "A" }, " & ", { rws: "B" }], italic: true },
+    });
+  });
+
+  it("does the same for bold, and folds a nested pair", () => {
+    expect(fromWikitext("'''X'''! !STR").rows[0]).toMatchObject({ left: { text: "X", bold: true } });
+  });
+
+  it("leaves two separate spans alone", () => {
+    // `''a'' and ''b''` also starts and ends with the marker. Stripping its outer pair
+    // would give `a'' and ''b` — two labels spliced into one.
+    const row = fromWikitext("''a'' and ''b''! !STR").rows[0] as { left?: unknown };
+    expect(JSON.stringify(row.left)).not.toContain("and ''b");
+    expect(toWikitext(fromWikitext("''a'' and ''b''! !STR"))).toBe("''a'' and ''b''! !STR");
+  });
+
+  it("keeps a colspan row's mark on the row itself", () => {
+    // A colspan has its own `italic`, so it doesn't want a wrapper object around its text.
+    expect(fromWikitext("-colspan-1\n''interchange here''").rows[0]).toMatchObject({
+      type: "colspan",
+      text: "interchange here",
+      italic: true,
+    });
+  });
+});
