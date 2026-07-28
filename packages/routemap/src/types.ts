@@ -123,6 +123,22 @@ export type LabelIcon =
   | { file: string; size?: number; alt?: string };
 
 /**
+ * One transit logo, inline where the author put it.
+ *
+ * Singular, and a RUN rather than a field on the label. Icons used to live in two
+ * places — `icons` on the label (placed on its outer edge) and `icons` on a run — and
+ * the two serialize to byte-identical wikitext, so nothing could tell them apart when
+ * reading it back. One representation is what makes a wikitext reader possible.
+ *
+ * Spacing is the author's, as it is between any two runs: `[{ icon }, " ", "Euston"]`
+ * is `{{rint|…}} Euston`, and dropping the `" "` is the wikitext without the space.
+ * `size` and `alt` ride on the `LabelIcon` itself.
+ */
+export interface IconRun {
+  icon: LabelIcon;
+}
+
+/**
  * A plain `<br>` line break, as plenty of real diagrams use instead of `{{BSsplit}}`.
  *
  * NOT interchangeable with a split, which is why it needs its own run. A `{{BSsplit}}`
@@ -168,7 +184,7 @@ export interface SplitRun {
  *   - `rws` — a station link, given as {{rws}}'s own args (e.g. "Liverpool|Lime
  *     Street"). Both the display AND the target are resolved from the wiki
  *     (`resolveRws`), since rws builds them non-trivially; `text` is ignored.
- *   - `title` — hover text; `icons` — inline logos after the text.
+ *   - `title` — hover text. A logo is its own `{ icon }` run, not a field here.
  * Runs concatenate inline.
  *
  * A `|` anywhere in a run's text is a LINE BREAK (the wiki {{BSsplit}} separator);
@@ -180,12 +196,12 @@ export type TextRun =
   | string
   | SplitRun
   | BreakRun
+  | IconRun
   | {
       text?: string;
       link?: string | true;
       rws?: string;
       title?: string;
-      icons?: LabelIcon[];
       /** Bold/italic just this run (the wiki `'''`/`''` marks). Label-level
        *  `bold`/`italic` on SideLabel still style the whole label. */
       bold?: boolean;
@@ -195,8 +211,6 @@ export type TextRun =
 /**
  * Left/right row label. A bare string is shorthand for `{ text }`; a bare array
  * is shorthand for `{ text: [...] }` (inline runs). The object form adds:
- *   - `icons` — whole-label logos on the outer edge (before the text for a left
- *     label, after for a right), like {{rint}} beside a station name.
  *   - `link` / `title` — link/hover the whole label (a run's own link wins).
  *   - `italic` / `bold` — the wiki `i` / `b` cell params.
  * Multiple links/partial links come from run objects in `text`; multi-line comes
@@ -209,7 +223,6 @@ export type SideLabel =
       text?: string | TextRun[];
       /** Whole-label station link (sugar for a single `{ rws }` run). */
       rws?: string;
-      icons?: LabelIcon[];
       link?: string | true;
       title?: string;
       italic?: boolean;
@@ -253,13 +266,12 @@ export interface GridRow {
 
 /** A full-width text/legend row (Routemap `-colspan-`). Its text supports the
  *  same inline runs as a label (links, `|` breaks, inline logos) plus whole-row
- *  `icons`/italic/bold — e.g. `["interchange with ", { text: "National Rail",
+ *  italic/bold and `{ icon }` runs — e.g. `["interchange with ", { text: "National Rail",
  *  link: true }, " at all stations"]`. */
 export interface ColspanRow {
   type: "colspan";
   text?: string | TextRun[];
   rws?: string;
-  icons?: LabelIcon[];
   link?: string | true;
   title?: string;
   italic?: boolean;

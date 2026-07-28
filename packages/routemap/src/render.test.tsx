@@ -190,7 +190,7 @@ describe("RouteMap (HTML table)", () => {
         diagram={{
           rows: [
             {
-              left: { text: "Euston", icons: ["gb|rail", { file: "Underground (no text).svg", size: 16 }] },
+              left: [{ icon: "gb|rail" }, " ", { icon: { file: "Underground (no text).svg", size: 16 } }, " ", "Euston"],
               cells: ["BHF"],
             },
           ],
@@ -213,7 +213,7 @@ describe("RouteMap (HTML table)", () => {
   it("renders logos on a colspan row", () => {
     const out = renderToStaticMarkup(
       <RouteMap
-        diagram={{ rows: [{ type: "colspan", text: "interchange with National Rail", icons: ["gb|rail"] }] }}
+        diagram={{ rows: [{ type: "colspan", text: [{ icon: "gb|rail" }, " ", "interchange with National Rail"] }] }}
         resolveIcon={(c) => c}
         resolveLogo={(icon) => (typeof icon === "string" ? { url: `/rint/${icon}` } : { url: "" })}
       />,
@@ -230,7 +230,7 @@ describe("RouteMap (HTML table)", () => {
           rows: [
             {
               right: {
-                text: ["walkway to", "|", { text: "St Pancras", icons: ["london|underground"] }],
+                text: ["walkway to", "|", { text: "St Pancras" }, " ", { icon: "london|underground" }],
                 italic: true,
               },
               cells: ["BHF"],
@@ -282,7 +282,7 @@ describe("RouteMap (HTML table)", () => {
   it("accepts a whole-label rws (sugar for a single station run)", () => {
     const out = renderToStaticMarkup(
       <RouteMap
-        diagram={{ rows: [{ left: { rws: "Euston", icons: ["gb|rail"] }, cells: ["KBHFe"] }] }}
+        diagram={{ rows: [{ left: [{ icon: "gb|rail" }, " ", { rws: "Euston" }], cells: ["KBHFe"] }] }}
         resolveIcon={(c) => c}
         resolveLogo={(icon) => (typeof icon === "string" ? { url: `/rint/${icon}` } : { url: "" })}
         resolveRws={(a) => (a === "Euston" ? { target: "Euston railway station", display: "Euston" } : undefined)}
@@ -296,7 +296,7 @@ describe("RouteMap (HTML table)", () => {
   it("omits a rint logo whose code isn't resolved yet", () => {
     const out = renderToStaticMarkup(
       <RouteMap
-        diagram={{ rows: [{ left: { text: "X", icons: ["london|underground"] }, cells: [""] }] }}
+        diagram={{ rows: [{ left: [{ icon: "london|underground" }, " ", "X"], cells: [""] }] }}
         resolveIcon={(c) => c}
         resolveLogo={() => ({ url: "" })} // nothing resolved
       />,
@@ -316,8 +316,7 @@ describe("RouteMap (HTML table)", () => {
           rows: [
             {
               right: {
-                text: [{ icons: ["bicycle"] }, " London ", { text: "Bridge", link: true }, " Hello"],
-                icons: ["bus"],
+                text: [{ icon: "bus" }, " ", { icon: "bicycle" }, " London ", { text: "Bridge", link: true }, " Hello"],
               },
               cells: ["BHF"],
             },
@@ -351,25 +350,28 @@ describe("RouteMap (HTML table)", () => {
       return cell.replace(/<img[^>]*>/g, "@").replace(/<[^>]+>/g, "");
     };
 
-    // Left label, outer-edge icons: logos, space, text.
-    expect(shape(render({ rows: [{ left: { text: "X", icons: ["air"] }, cells: ["STR"] }] }))).toBe("@ X");
-    // Right label: text, space, logos.
-    expect(shape(render({ rows: [{ right: { text: "X", icons: ["air"] }, cells: ["STR"] }] }))).toBe("X @");
-    // Two logos in one set are separated by a space too.
-    expect(shape(render({ rows: [{ left: { text: "X", icons: ["air", "bus"] }, cells: ["STR"] }] }))).toBe("@ @ X");
-    // A run carrying text AND icons gets one space between them…
-    expect(shape(render({ rows: [{ left: { text: [{ text: "X", icons: ["air"] }] }, cells: ["STR"] }] }))).toBe("X @");
-    // …but a lone `{ icons: [...] }` run adds none, because the neighbouring text owns
-    // it — which is why the author's " X" keeps its leading space.
-    expect(shape(render({ rows: [{ left: { text: [{ icons: ["air"] }, " X"] }, cells: ["STR"] }] }))).toBe("@ X");
+    // Every space is one the author wrote. There is no implicit spacing left anywhere:
+    // logos are runs, so the model says exactly what the wikitext says, which is the
+    // whole point of dropping the outer-edge rule and the per-run icon list.
+    const left = (text: unknown) =>
+      shape(render({ rows: [{ left: text, cells: ["STR"] } as never] }));
+
+    expect(left([{ icon: "air" }, " ", "X"])).toBe("@ X");
+    expect(left(["X", " ", { icon: "air" }])).toBe("X @");
+    expect(left([{ icon: "air" }, " ", { icon: "bus" }, " ", "X"])).toBe("@ @ X");
     // No authored space and no margin means they really do touch, as on the wiki.
-    expect(shape(render({ rows: [{ left: { text: [{ icons: ["air"] }, "X"] }, cells: ["STR"] }] }))).toBe("@X");
+    expect(left([{ icon: "air" }, "X"])).toBe("@X");
+    // A space between two logos is a run like any other.
+    expect(left([{ icon: "air" }, { icon: "bus" }])).toBe("@@");
+    // And the author's own leading space survives, which is the bug that started all
+    // this: an inline-flex label trimmed it and ran the words together.
+    expect(left([{ icon: "air" }, " X"])).toBe("@ X");
   });
 
   it("gives label logos no margin and no flex, like Wikipedia", () => {
     const out = renderToStaticMarkup(
       <RouteMap
-        diagram={{ rows: [{ left: { text: "X", icons: ["air"] }, cells: ["STR"] }] }}
+        diagram={{ rows: [{ left: [{ icon: "air" }, " ", "X"], cells: ["STR"] }] }}
         resolveIcon={(c) => c}
         resolveLogo={() => ({ url: "/f/x.svg", size: 13 })}
       />,
@@ -390,7 +392,7 @@ describe("RouteMap (HTML table)", () => {
   it("renders a rint logo as a link (operator article) with a tooltip", () => {
     const out = renderToStaticMarkup(
       <RouteMap
-        diagram={{ rows: [{ left: { text: "X", icons: ["air"] }, cells: ["STR"] }] }}
+        diagram={{ rows: [{ left: [{ icon: "air" }, " ", "X"], cells: ["STR"] }] }}
         resolveIcon={(c) => c}
         // simulate expandRint having resolved the code -> file/link/alt
         resolveLogo={() => ({ url: "/f/FLUG.svg", size: 13, link: "Lists of airports", alt: "Airport interchange" })}
@@ -545,13 +547,13 @@ describe("RouteMap {{BSsplit}} runs", () => {
     // its first row — that's the difference between `{{rint|x}} {{BSsplit|a|b}}` and
     // `{{BSsplit|{{rint|x}} a|b}}`.
     // The logo url, not `<img>` — the row also contains the BHF cell icon.
-    const html = row([{ icons: ["gb|rail"] }, " ", { split: ["a", "b"] }]);
+    const html = row([{ icon: "gb|rail" }, " ", { split: ["a", "b"] }]);
     expect(html).toContain("/logo.svg");
     expect(html.indexOf("/logo.svg")).toBeLessThan(html.indexOf("inline-table"));
   });
 
   it("puts a logo INSIDE the stack when it's written inside a line", () => {
-    const html = row([{ split: [[{ icons: ["gb|rail"] }, "a"], "b"] }]);
+    const html = row([{ split: [[{ icon: "gb|rail" }, "a"], "b"] }]);
     expect(html).toContain("/logo.svg");
     expect(html.indexOf("inline-table")).toBeLessThan(html.indexOf("/logo.svg"));
   });

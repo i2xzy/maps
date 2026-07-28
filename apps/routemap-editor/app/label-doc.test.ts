@@ -2,12 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { SideLabel } from "@repo/routemap";
 import {
   docToLabel,
-  labelIcons,
-  labelIsMultiLine,
   labelIsRteEditable,
   labelToDoc,
   logoInsertContent,
-  setLabelIcons,
 } from "./label-doc";
 
 describe("labelIsRteEditable", () => {
@@ -24,64 +21,14 @@ describe("labelIsRteEditable", () => {
     expect(labelIsRteEditable(["to ", { rws: "Euston" }])).toBe(true);
   });
 
-  it("accepts icons — inline ones are nodes, whole-label ones are the strip", () => {
-    expect(labelIsRteEditable({ text: "x", icons: ["gb|rail"] })).toBe(true);
-    expect(labelIsRteEditable([{ text: "x", icons: ["air"] }])).toBe(true);
+  it("accepts a logo, which is a node in the document like anything else", () => {
+    expect(labelIsRteEditable([{ icon: "gb|rail" }, " ", "x"] as never)).toBe(true);
   });
 
   it("rejects a title, which the editor has no way to represent", () => {
     // Without this the fallback would silently drop it on the first keystroke.
     expect(labelIsRteEditable({ text: "x", title: "hover" })).toBe(false);
     expect(labelIsRteEditable([{ text: "x", title: "hover" }])).toBe(false);
-  });
-});
-
-describe("labelIcons / setLabelIcons", () => {
-  it("reads whole-label icons, and only those", () => {
-    expect(labelIcons({ text: "Euston", icons: ["gb|rail"] })).toEqual(["gb|rail"]);
-    expect(labelIcons("Euston")).toEqual([]);
-    // An icon on a RUN belongs to the document, not the strip.
-    expect(labelIcons([{ text: "Euston", icons: ["gb|rail"] }])).toEqual([]);
-  });
-
-  it("attaches icons to text of any shape", () => {
-    expect(setLabelIcons("Euston", ["gb|rail"])).toEqual({ text: "Euston", icons: ["gb|rail"] });
-    expect(setLabelIcons(["a", "|", "b"], ["air"])).toEqual({ text: ["a", "|", "b"], icons: ["air"] });
-    // Icons with no text at all are still a label worth keeping.
-    expect(setLabelIcons(undefined, ["air"])).toEqual({ icons: ["air"] });
-  });
-
-  it("keeps the label's other fields when only the icons change", () => {
-    expect(setLabelIcons({ text: "Euston", link: true, italic: true }, ["gb|rail"])).toEqual({
-      text: "Euston",
-      link: true,
-      italic: true,
-      icons: ["gb|rail"],
-    });
-  });
-
-  it("collapses back to bare text when the last icon is removed", () => {
-    expect(setLabelIcons({ text: "Euston", icons: ["gb|rail"] }, [])).toEqual({ text: "Euston" });
-    expect(setLabelIcons({ icons: ["gb|rail"] }, [])).toBeUndefined();
-    expect(setLabelIcons("Euston", [])).toBe("Euston");
-  });
-});
-
-describe("labelIsMultiLine", () => {
-  it("is true when a `|` splits the label into lines", () => {
-    expect(labelIsMultiLine("foo|bar")).toBe(true);
-    expect(labelIsMultiLine(["foo", "|", "bar"])).toBe(true);
-    expect(labelIsMultiLine({ text: [{ text: "a|b", bold: true }] })).toBe(true);
-  });
-
-  it("is false for one line, escaped pipes included", () => {
-    expect(labelIsMultiLine(null)).toBe(false);
-    expect(labelIsMultiLine("Euston")).toBe(false);
-    expect(labelIsMultiLine({ text: "Euston", icons: ["gb|rail"] })).toBe(false);
-    // `\\|` is a literal pipe in the text, not a line break — and a pipe inside an
-    // icon CODE is not label text at all.
-    expect(labelIsMultiLine("a\\|b")).toBe(false);
-    expect(labelIsMultiLine([{ rws: "Liverpool|Lime Street" }])).toBe(false);
   });
 });
 
@@ -157,93 +104,71 @@ describe("labelToDoc → docToLabel round-trips", () => {
     expect(docToLabel({ type: "doc", content: [{ type: "paragraph" }] })).toBeUndefined();
   });
 
-  it("keeps a run's icons attached to that run, not split off", () => {
-    expect(round([{ text: "Euston", icons: ["gb|rail"] }])).toEqual([
-      { text: "Euston", icons: ["gb|rail"] },
-    ]);
-    // Several logos on one run stay in order on that run.
-    expect(round([{ text: "Euston", link: true, icons: ["gb|rail", "london|underground"] }])).toEqual([
-      { text: "Euston", link: true, icons: ["gb|rail", "london|underground"] },
-    ]);
+  it("round-trips logo runs in order, as runs like any other", () => {
+    // No attachment rules left: an icon used to be a field on the preceding run, so
+    // the converter promoted plain strings to hold one and special-cased rws runs that
+    // couldn't. Now it is simply a run, and order is the whole story.
+    expect(round(["to ", { icon: "air" }])).toEqual(["to ", { icon: "air" }]);
+    // Adjacent plain text coalesces (" " + "Euston" -> " Euston"), which is the same
+    // wikitext in fewer runs — the round-trip preserves meaning, not run boundaries.
+    expect(round([{ icon: "gb|rail" }, " ", { icon: "london|underground" }, " ", "Euston"])).toEqual(
+      [{ icon: "gb|rail" }, " ", { icon: "london|underground" }, " Euston"],
+    );
   });
 
-  it("promotes a plain string run so it can carry trailing icons", () => {
-    expect(round(["to ", { icons: ["air"] }])).toEqual([{ text: "to ", icons: ["air"] }]);
-  });
-
-  it("keeps a station run's own icons", () => {
-    // An rws run is atomic, so its icons become a following run — render-equivalent,
-    // since a run's icons trail it either way. What must NOT happen is losing them.
-    expect(round([{ rws: "Euston", icons: ["gb|rail"] }])).toEqual([
+  it("keeps a logo next to a station link without merging them", () => {
+    // An rws run is atomic — its text comes from the wiki — and a logo beside it is
+    // just the next run, so nothing has to be merged or promoted.
+    expect(round([{ rws: "Euston" }, " ", { icon: "gb|rail" }])).toEqual([
       { rws: "Euston" },
-      { icons: ["gb|rail"] },
-    ]);
-    expect(round([{ rws: "Euston", icons: ["gb|rail", "london|underground"] }])).toEqual([
-      { rws: "Euston" },
-      { icons: ["gb|rail", "london|underground"] },
-    ]);
-  });
-
-  it("keeps icons after a station link as their own run", () => {
-    // An rws run's text comes from the wiki, so icons can't ride along on it.
-    expect(round([{ rws: "Euston" }, { icons: ["gb|rail"] }])).toEqual([
-      { rws: "Euston" },
-      { icons: ["gb|rail"] },
+      " ",
+      { icon: "gb|rail" },
     ]);
   });
 
   it("round-trips the non-code icon forms instead of flattening them", () => {
-    expect(round([{ text: "x", icons: [{ file: "Custom logo.svg" }] }])).toEqual([
-      { text: "x", icons: [{ file: "Custom logo.svg" }] },
+    // `size`/`alt` live on the LabelIcon, so the run stays `{ icon }` whatever shape
+    // the icon itself takes.
+    expect(round([{ icon: { file: "Custom logo.svg" } }])).toEqual([
+      { icon: { file: "Custom logo.svg" } },
     ]);
-    expect(round([{ text: "x", icons: [{ rint: "air", size: 20 }] }])).toEqual([
-      { text: "x", icons: [{ rint: "air", size: 20 }] },
+    expect(round([{ icon: { rint: "air", size: 20 } }])).toEqual([
+      { icon: { rint: "air", size: 20 } },
     ]);
-  });
-
-  it("leaves whole-label icons out of the document (the strip owns them)", () => {
-    const doc = labelToDoc({ text: "Euston", icons: ["gb|rail"] });
-    expect(JSON.stringify(doc)).not.toContain("rint");
-    expect(docToLabel(doc)).toBe("Euston");
   });
 
   it("puts an icon on its own line when the line starts with one", () => {
-    expect(round(["a", "|", { icons: ["air"] }])).toEqual(["a", "|", { icons: ["air"] }]);
+    expect(round(["a", "|", { icon: "air" }])).toEqual(["a", "|", { icon: "air" }]);
   });
 });
 
 describe("logoInsertContent", () => {
-  const shape = (after: string) =>
-    logoInsertContent("gb|rail", after)
+  const shape = (before: string, after: string) =>
+    logoInsertContent("gb|rail", before, after)
       .map((n) => (n.type === "rint" ? "@" : JSON.stringify(n.text)))
       .join("");
 
-  it("adds a trailing space when text follows the logo", () => {
-    // Spacing is authored, not styled: `{{rint|x}}Euston` really does draw crushed.
-    expect(shape("E")).toBe('@" "');
+  it("spaces BOTH sides when text abuts the logo", () => {
+    // Runs concatenate with nothing between them, so if these spaces aren't real
+    // content nothing else supplies them and the logo touches the text.
+    expect(shape("n", "E")).toBe('" "@" "');
   });
 
-  it("adds nothing when a space, a boundary, or another node follows", () => {
-    expect(shape(" ")).toBe("@");
-    expect(shape("")).toBe("@"); // end of line, or an adjacent logo / station node
+  it("adds no space where there already is one", () => {
+    expect(shape(" ", " ")).toBe("@");
+    expect(shape("", "")).toBe("@"); // start and end of a line
   });
 
-  it("never adds a LEADING space, because the serializer writes that one", () => {
-    // A logo dropped after text joins that run's `icons`, and serialize.ts emits the
-    // boundary space itself. Inserting one here too gave `Euston  {{rint|gb|rail}}`.
+  it("spaces only the side that needs it", () => {
+    expect(shape("n", "")).toBe('" "@');
+    expect(shape("", "E")).toBe('@" "');
+  });
+
+  it("round-trips to a logo run with the authored spaces intact", () => {
     const doc = labelToDoc("Euston");
     const para = doc.content![0]!;
-    para.content = [...(para.content ?? []), ...logoInsertContent("gb|rail", "")];
-    expect(docToLabel(doc)).toEqual([{ text: "Euston", icons: ["gb|rail"] }]);
-  });
-
-  it("puts the space in the document when the logo leads, since nothing else will", () => {
-    // A leading logo becomes its own `{ icons }` run, which the serializer writes
-    // with no space — so the space has to be real content.
-    const doc = labelToDoc("Euston");
-    const para = doc.content![0]!;
-    para.content = [...logoInsertContent("gb|rail", "E"), ...(para.content ?? [])];
-    expect(docToLabel(doc)).toEqual([{ icons: ["gb|rail"] }, " Euston"]);
+    para.content = [...(para.content ?? []), ...logoInsertContent("gb|rail", "n", "")];
+    expect(docToLabel(doc)).toEqual(["Euston ", { icon: "gb|rail" }]);
   });
 });
 
@@ -286,7 +211,7 @@ describe("<br> vs {{BSsplit}} in the document", () => {
     expect(labelIsRteEditable([{ split: ["a", "b"] }] as never)).toBe(false);
   });
 
-  it("starts a new run for an icon after a break, not on the break itself", () => {
+  it("keeps a logo after a break as its own run", () => {
     const doc = {
       type: "doc",
       content: [
@@ -300,6 +225,6 @@ describe("<br> vs {{BSsplit}} in the document", () => {
         },
       ],
     };
-    expect(docToLabel(doc)).toEqual(["a", { br: true }, { icons: ["gb|rail"] }]);
+    expect(docToLabel(doc)).toEqual(["a", { br: true }, { icon: "gb|rail" }]);
   });
 });

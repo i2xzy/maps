@@ -60,10 +60,10 @@ const SAMPLE = `{
     { "right": "…over two half (d) tracks", "cells": ["dSTR", "dSTR"] },
     { "right": "d spacer shifts to right lane", "cells": ["d", "dSTR"] },
     { "cells": ["vSTR", "exSTR"] },
-    { "right": { "text": ["pedestrian walkway to", "|", { "text": "St Pancras International", "link": true, "icons": ["london|underground", "London|thameslink"] }], "italic": true }, "cells": ["BHF"] },
+    { "right": { "text": ["pedestrian walkway to", "|", { "text": "St Pancras International", "link": true }, " ", { "icon": "london|underground" }, " ", { "icon": "London|thameslink" }], "italic": true }, "cells": ["BHF"] },
     { "left": "Bromford Tunnel", "cells": [{ "code": "hKRZW", "title": "bridge over water" }] },
-    { "left": { "text": "Euston", "link": true, "icons": ["gb|rail", "london|underground"] }, "cells": ["KBHFe"] },
-    { "type": "colspan", "text": ["interchange with ", { "text": "National Rail", "link": true }, " at all stations"], "icons": ["gb|rail"] }
+    { "left": [{ "icon": "gb|rail" }, " ", { "icon": "london|underground" }, " ", { "text": "Euston", "link": true }], "cells": ["KBHFe"] },
+    { "type": "colspan", "text": [{ "icon": "gb|rail" }, " interchange with ", { "text": "National Rail", "link": true }, " at all stations"] }
   ]
 }`;
 

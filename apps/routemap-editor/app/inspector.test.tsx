@@ -289,70 +289,8 @@ describe("Inspector: row selection (labels & colspan)", () => {
     expect(screen.getByText(/Rich label — edit in JSON/)).toBeTruthy();
   });
 
-  it("hides the logo strip on a plain single-line label", () => {
-    // On one line, whole-label icons and an inline logo are the same wikitext, so a
-    // second control for it is just clutter — the editor toolbar covers that case.
-    renderWithChakra(
-      <Controlled initial={{ rows: [{ left: "Euston", cells: [] }] }} select={{ kind: "row", row: 0 }} />,
-    );
-    expect(screen.queryByRole("button", { name: /^Logo$/ })).toBeNull();
-  });
 
-  it("shows the logo strip on a multi-line label, where placement differs", () => {
-    // Outside a {{BSsplit}} the logo sits against the whole stack; inside, on one
-    // line. Wikipedia uses both, so this has to stay reachable.
-    renderWithChakra(
-      <Controlled
-        initial={{ rows: [{ left: "Penang|Perak", cells: [] }] }}
-        select={{ kind: "row", row: 0 }}
-      />,
-    );
-    expect(screen.getByRole("button", { name: /^Logo$/ })).toBeTruthy();
-  });
 
-  it("shows the logo strip whenever the label already has whole-label icons", () => {
-    renderWithChakra(
-      <Controlled
-        initial={{ rows: [{ left: { text: "Euston", icons: ["gb|rail"] }, cells: [] }] }}
-        select={{ kind: "row", row: 0 }}
-      />,
-    );
-    // Single line, but the icons exist — they must be visible and removable.
-    expect(screen.getByLabelText("Remove National Rail")).toBeTruthy();
-  });
-
-  it("edits a label's whole-label logos without disturbing its text", () => {
-    renderWithChakra(
-      <Controlled
-        initial={{ rows: [{ left: { text: "Euston", link: true, icons: ["gb|rail", "not|acode"] }, cells: [] }] }}
-        select={{ kind: "row", row: 0 }}
-      />,
-    );
-    // Icons are a strip beside the editor, not a JSON fallback.
-    expect(screen.queryByText(/Rich label — edit in JSON/)).toBeNull();
-    expect(screen.getByLabelText("Left main text")).toBeTruthy();
-
-    // An uncatalogued code has no name, so the chip falls back to showing it raw.
-    fireEvent.click(screen.getByLabelText("Remove not|acode"));
-    expect((model().rows![0] as { left?: unknown }).left).toEqual({ text: "Euston", link: true, icons: ["gb|rail"] });
-
-    // Dropping the last one collapses `icons` away rather than leaving `[]`.
-    // A catalogued logo is named, not shown as a template code.
-    fireEvent.click(screen.getByLabelText("Remove National Rail"));
-    expect((model().rows![0] as { left?: unknown }).left).toEqual({ text: "Euston", link: true });
-  });
-
-  it("keeps whole-label logos when the label's text is edited", () => {
-    renderWithChakra(
-      <Controlled
-        initial={{ rows: [{ left: { text: "Euston", icons: ["gb|rail"] }, cells: [] }] }}
-        select={{ kind: "row", row: 0 }}
-      />,
-    );
-    // The icons live outside the document, so a text edit has to re-attach them.
-    fireEvent.change(screen.getByLabelText("Left main text"), { target: { value: "Euston station" } });
-    expect((model().rows![0] as { left?: unknown }).left).toEqual({ text: "Euston station", icons: ["gb|rail"] });
-  });
 
   it("edits colspan text", () => {
     renderWithChakra(

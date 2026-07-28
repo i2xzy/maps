@@ -73,8 +73,8 @@ describe("collectRintCodes", () => {
   it("gathers distinct rint codes from labels, ignoring { file }", () => {
     const d: RouteDiagram = {
       rows: [
-        { left: { text: "Euston", icons: ["gb|rail", "london|underground"] }, cells: ["BHF"] },
-        { right: { text: "OOC", icons: ["london|underground", { region: "air" }, { file: "Y.svg" }] }, cells: ["STR"] },
+        { left: [{ icon: "gb|rail" }, " ", { icon: "london|underground" }, " ", "Euston"], cells: ["BHF"] },
+        { right: ["OOC ", { icon: "london|underground" }, { icon: { region: "air" } }, { icon: { file: "Y.svg" } }], cells: ["STR"] },
         { type: "colspan", text: "note" },
       ],
     };
@@ -85,7 +85,7 @@ describe("collectRintCodes", () => {
     const d: RouteDiagram = {
       rows: [
         {
-          right: { text: ["walkway to", { text: "St Pancras", icons: ["london|underground", "London|thameslink"] }] },
+          right: ["walkway to", { text: "St Pancras" }, { icon: "london|underground" }, { icon: "London|thameslink" }],
           cells: ["BHF"],
         },
       ],

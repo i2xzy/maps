@@ -19,7 +19,6 @@
  * names, not BSicons).
  */
 import {
-  Fragment as Part,
   useState,
   type CSSProperties,
   type ReactElement,
@@ -162,9 +161,8 @@ type TextStyle = { fontStyle?: "italic"; fontWeight?: "bold"; fontSize?: string 
  * (its one `img` rule is scoped to `.RMir`, the icon row).
  *
  * All spacing is therefore a LITERAL SPACE in the markup — the space the author typed
- * between `{{rint|…}}` and the label text. `spaced()` below reproduces exactly where
- * `serialize.ts` writes those spaces, so the render and the wikitext agree by
- * construction rather than by coincidence.
+ * between `{{rint|…}}` and the label text. Which is exactly what a `" "` run is here,
+ * so the render and the wikitext agree by construction rather than by coincidence.
  */
 const logoImgStyle = (width: number): CSSProperties => ({
   // `inline` is what MediaWiki computes, but it has to be stated: host CSS resets
@@ -178,52 +176,38 @@ const logoImgStyle = (width: number): CSSProperties => ({
 });
 
 /**
- * Join logos, and the boundary between logos and text, with single spaces — the way
- * `serialize.ts` does: logos are `join(" ")`, and a boundary space appears only when
- * there is text on that side (`${s}${s ? " " : ""}${icons}`). A lone `{ icons: [...] }`
- * run gets no space of its own, because on the wiki side the neighbouring text
- * carries it.
+ * One {{rint}} logo.
+ *
+ * rint sizes are a WIDTH bound (MediaWiki `|Npx|` sets width; height auto-scales), so
+ * we fix width and let height flow. Width precedence: the icon's explicit `size` >
+ * rint's own size > 14px default.
+ *
+ * One logo, not a list: spacing between adjacent logos is the author's, written as a
+ * run, exactly as the space between `{{rint|a}}` and `{{rint|b}}` is in the wikitext.
+ * An unresolved code renders nothing until it resolves.
  */
-function spaced(...parts: ReactNode[]): ReactNode[] {
-  const out: ReactNode[] = [];
-  for (const part of parts) {
-    if (part == null || part === "") continue;
-    // Keyed, because the result is rendered as an ARRAY of children. Without keys React
-    // warns, and — the part that actually bites — it reconciles by position, so a logo
-    // resolving and shifting the text along remounts the text instead of moving it.
-    if (out.length) out.push(<Part key={out.length}>{" "}</Part>);
-    out.push(<Part key={out.length}>{part}</Part>);
-  }
-  return out;
-}
-
-/** Render {{rint}} logo <img>s for a set of label icons (unresolved ones omitted).
- *  rint sizes are a WIDTH bound (MediaWiki `|Npx|` sets width; height auto-scales),
- *  so we fix width and let height flow. Width precedence: the icon's explicit
- *  `size` > rint's own size > 14px default. */
-function renderLogos(
-  icons: LabelIcon[],
-  resolveLogo: (icon: LabelIcon) => ResolvedLogo,
-  resolveHref: (ref: string) => string | undefined,
-): ReactNode[] {
-  return icons
-    .map((ic, i) => {
-      const { url, size, link, alt } = resolveLogo(ic);
-      if (!url) return null; // unresolved rint code — omit until available
-      const opt = typeof ic === "string" ? undefined : ic;
-      const img = <img src={url} alt={opt?.alt ?? alt ?? ""} style={logoImgStyle(opt?.size ?? size ?? 14)} />;
-      // rint logos link to the operator's article, with the article as hover text.
-      const href = link ? resolveHref(link) : undefined;
-      return href ? (
-        <a key={i} href={href} title={link}>
-          {img}
-        </a>
-      ) : (
-        <span key={i}>{img}</span>
-      );
-    })
-    .filter(Boolean)
-    .flatMap((logo, i) => (i ? [" ", logo] : [logo])); // {{rint|a}} {{rint|b}}
+function Logo({
+  icon,
+  resolveLogo,
+  resolveHref,
+}: {
+  icon: LabelIcon;
+  resolveLogo: (icon: LabelIcon) => ResolvedLogo;
+  resolveHref: (ref: string) => string | undefined;
+}): ReactNode {
+  const { url, size, link, alt } = resolveLogo(icon);
+  if (!url) return null;
+  const opt = typeof icon === "string" ? undefined : icon;
+  const img = <img src={url} alt={opt?.alt ?? alt ?? ""} style={logoImgStyle(opt?.size ?? size ?? 14)} />;
+  // rint logos link to the operator's article, with the article as hover text.
+  const href = link ? resolveHref(link) : undefined;
+  return href ? (
+    <a href={href} title={link}>
+      {img}
+    </a>
+  ) : (
+    <span>{img}</span>
+  );
 }
 
 /**
@@ -233,29 +217,18 @@ function renderLogos(
  */
 type LabelSide = "left" | "right" | "colspan";
 
-/**
- * Place logos on the OUTER edge of text: before it for a left label, after for right.
- *
- * Plain inline flow, NOT a flex container. Wrapping a label in `inline-flex` makes
- * every text run a flex item, and a flex item trims its own leading and trailing
- * whitespace — so `["…", " London ", { rws }]` lost the spaces around "London" and
- * the words ran together. A `gap` on the container used to hide that by inserting
- * space between every item; take the gap away and the crushing shows. Logos align
- * themselves via `vertical-align`, which is what inline content is supposed to use.
- */
-function withLogos(text: ReactNode, logos: ReactNode[], side: LabelSide): ReactNode {
-  if (logos.length === 0) return text;
-  return <>{side === "right" ? spaced(text, logos) : spaced(logos, text)}</>;
-}
-
 interface Fragment {
   text: string;
   link?: string | true;
   rws?: string;
   title?: string;
-  icons?: LabelIcon[];
   bold?: boolean;
   italic?: boolean;
+}
+
+/** A logo on a line, where the author put it. */
+interface IconPiece {
+  icon: LabelIcon;
 }
 
 /** A `<br>` on a line — a break WITHIN the line, not a new one. */
@@ -268,10 +241,11 @@ interface SplitPiece {
   lines: Piece[][];
 }
 /** One thing on a line: a text fragment, or a `{{BSsplit}}` sitting beside it. */
-type Piece = Fragment | SplitPiece | BreakPiece;
+type Piece = Fragment | SplitPiece | BreakPiece | IconPiece;
 
 const isSplitPiece = (p: Piece): p is SplitPiece => "lines" in p;
 const isBreakPiece = (p: Piece): p is BreakPiece => "br" in p;
+const isIconPiece = (p: Piece): p is IconPiece => "icon" in p;
 
 // Split a run's text on an unescaped `|` (line break); unescape `\|` to a pipe.
 const splitLines = (s: string): string[] =>
@@ -293,6 +267,10 @@ function buildLines(
   const runs: TextRun[] = typeof text === "string" ? [text] : text;
   const lines: Piece[][] = [[]];
   for (const run of runs) {
+    if (typeof run === "object" && "icon" in run) {
+      (lines[lines.length - 1] as Piece[]).push({ icon: run.icon });
+      continue;
+    }
     if (typeof run === "object" && "br" in run) {
       (lines[lines.length - 1] as Piece[]).push({ br: true });
       continue;
@@ -312,7 +290,6 @@ function buildLines(
         link: r.link ?? labelLink,
         rws: r.rws,
         title: r.title ?? labelTitle,
-        icons: i === pieces.length - 1 ? r.icons : undefined, // icons trail the run
         bold: r.bold,
         italic: r.italic,
       });
@@ -369,7 +346,6 @@ function renderFragment(
   key: number,
   resolveHref: (ref: string) => string | undefined,
   resolveRws: (args: string) => RwsEntry | undefined,
-  resolveLogo: (icon: LabelIcon) => ResolvedLogo,
 ): ReactNode {
   let node: ReactNode = f.text;
   if (f.rws) {
@@ -410,17 +386,15 @@ function renderFragment(
       </span>
     );
   }
-  const logos = renderLogos(f.icons ?? [], resolveLogo, resolveHref);
-  // Plain inline flow — see logoImgStyle on why this must not be a flex container.
-  return <span key={key}>{logos.length ? spaced(node, logos) : node}</span>;
+  return <span key={key}>{node}</span>;
 }
 
 /**
- * A side label: text plus optional inline logos ({{rint}} transit icons). Logos
- * render on the OUTER edge — before the text for a left label, after it for a
- * right one — mirroring how wiki places interchange icons beside a station name.
- * `italic` renders the text slightly smaller (wiki line/annotation convention);
- * `bold` bolds it. Logos keep their own size.
+ * A side label: its runs, in the order the author wrote them.
+ *
+ * Logos are `{ icon }` runs, so there is no outer-edge rule any more and no separate
+ * whole-label icon list — which is what let two different models serialize to the same
+ * wikitext. `italic`/`bold` style the whole label; a logo keeps its own size.
  */
 function Label({
   label,
@@ -437,8 +411,7 @@ function Label({
 }): ReactNode {
   const text = label?.text;
   const hasText = text != null && text !== "" && (typeof text === "string" || text.length > 0);
-  const icons = Array.isArray(label?.icons) ? label.icons : [];
-  if (!hasText && icons.length === 0) return "";
+  if (!hasText) return "";
 
   const style: TextStyle = {
     fontStyle: label?.italic ? "italic" : undefined,
@@ -450,14 +423,16 @@ function Label({
     const lines = buildLines(text as string | TextRun[], label?.link, label?.title);
     const renderLine = (line: Piece[]): ReactNode[] =>
       line.map((piece, i) =>
-        isBreakPiece(piece) ? (
+        isIconPiece(piece) ? (
+          <Logo key={i} icon={piece.icon} resolveLogo={resolveLogo} resolveHref={resolveHref} />
+        ) : isBreakPiece(piece) ? (
           <br key={i} />
         ) : isSplitPiece(piece) ? (
           // A split BESIDE other content, not around it. Same table as the whole-label
           // case below — one `.RMsplit`, so it shrinks by the same rule.
           <SplitTable key={i} lines={piece.lines} side={side} renderLine={renderLine} />
         ) : (
-          renderFragment(piece, i, resolveHref, resolveRws, resolveLogo)
+          renderFragment(piece, i, resolveHref, resolveRws)
         ),
       );
     const hasStyle = style.fontStyle || style.fontWeight || style.fontSize;
@@ -471,8 +446,7 @@ function Label({
       );
     }
   }
-  // Whole-label icons sit on the outer edge (before text for left, after for right).
-  return withLogos(textNode, renderLogos(icons, resolveLogo, resolveHref), side);
+  return textNode;
 }
 
 function Cell({

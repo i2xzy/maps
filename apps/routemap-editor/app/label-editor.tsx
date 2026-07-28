@@ -133,13 +133,14 @@ function LogoControl({ editor }: { editor: Editor }): ReactNode {
         </IconButton>
       }
       onPick={(code) => {
-        // Spacing around a logo is authored, not styled, so the picker has to type
-        // the space a wiki author would. Only what FOLLOWS the caret matters — see
-        // `logoInsertContent` for why a leading space would double up.
+        // Spacing around a logo is authored, not styled, so the picker types the
+        // spaces a wiki author would — on both sides, since a logo is a run now and
+        // nothing downstream adds a boundary space.
         const { state } = editor;
-        const { to } = state.selection;
+        const { from, to } = state.selection;
+        const before = state.doc.textBetween(Math.max(0, from - 1), from);
         const after = state.doc.textBetween(to, Math.min(state.doc.content.size, to + 1));
-        editor.chain().focus().insertContent(logoInsertContent(code, after)).run();
+        editor.chain().focus().insertContent(logoInsertContent(code, before, after)).run();
       }}
     />
   );

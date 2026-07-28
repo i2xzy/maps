@@ -32,7 +32,7 @@ describe("toWikitext", () => {
           },
           cells: ["STR"],
         },
-        { left: { rws: "Birmingham New Street", icons: ["birmingham"] }, cells: ["BHF"] },
+        { left: [{ icon: "birmingham" }, " ", { rws: "Birmingham New Street" }], cells: ["BHF"] },
       ],
     });
     expect(out).toContain("{{rws|Liverpool|Lime Street}}");
@@ -53,7 +53,7 @@ describe("toWikitext", () => {
     const out = toWikitext({
       rows: [
         { right: "pedestrian walkway to|St Pancras International", cells: ["BHF"] },
-        { type: "colspan", text: ["interchange with ", { text: "National Rail", link: true }], icons: ["gb|rail"] },
+        { type: "colspan", text: [{ icon: "gb|rail" }, " ", "interchange with ", { text: "National Rail", link: true }] },
       ],
     });
     expect(out).toContain("~~{{BSsplit|pedestrian walkway to|St Pancras International}}");
@@ -153,9 +153,9 @@ describe("toWikitext {{BSsplit}} runs", () => {
     // The separating space is its own run. Runs concatenate with nothing between them,
     // so spacing is the author's to state — same as it is in the wikitext.
     expect(
-      right([{ icons: ["gb|rail"] }, " ", { split: ["Platform 1", "Platform 2"] }]),
+      right([{ icon: "gb|rail" }, " ", { split: ["Platform 1", "Platform 2"] }]),
     ).toBe("BHF~~{{rint|gb|rail}} {{BSsplit|Platform 1|Platform 2}}");
-    expect(right([{ icons: ["gb|rail"] }, { split: ["a", "b"] }])).toBe(
+    expect(right([{ icon: "gb|rail" }, { split: ["a", "b"] }])).toBe(
       "BHF~~{{rint|gb|rail}}{{BSsplit|a|b}}",
     );
   });

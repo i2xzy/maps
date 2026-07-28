@@ -85,12 +85,11 @@ export function computeLayout(diagram: RouteDiagram): DiagramLayout {
 
   diagram.rows.forEach((row, index) => {
     if (isColspanRow(row)) {
-      // A colspan is a centered label: reuse normalizeSide to coerce its icons,
-      // fold whole-row rws, and carry link/title.
+      // A colspan is a centered label: reuse normalizeSide to fold whole-row rws and
+      // carry link/title.
       const colspan = normalizeSide({
         text: row.text,
         rws: row.rws,
-        icons: row.icons,
         link: row.link,
         title: row.title,
         italic: row.italic,

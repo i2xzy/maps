@@ -8,7 +8,6 @@ import type {
   CellIcon,
   CellObject,
   IconCode,
-  LabelIcon,
   RouteDiagram,
   SideLabel,
   BreakRun,
@@ -41,7 +40,6 @@ function applyDefaults(code: string, ctx: IconContext): IconCode {
 /** Normalized side label shape shared by normalize + layout + render. */
 export interface NormalizedSide {
   text?: string | TextRun[];
-  icons?: LabelIcon[];
   link?: string | true;
   title?: string;
   italic?: boolean;
@@ -84,18 +82,13 @@ export function normalizeSide(side: SideLabel | null | undefined): NormalizedSid
   if (side == null) return null;
   if (typeof side === "string") return side ? { text: side } : null;
   if (Array.isArray(side)) return side.length ? { text: side } : null;
-  // Accept a single icon written without the array wrapper (icons: {region}).
-  const icons =
-    side.icons == null ? undefined : Array.isArray(side.icons) ? side.icons : [side.icons];
   // Whole-label `rws` is sugar for a single station run (when there's no text).
   const empty = side.text == null || side.text === "" || (Array.isArray(side.text) && !side.text.length);
   const text = empty && side.rws ? [{ rws: side.rws }] : side.text;
   const hasText = Array.isArray(text) ? text.length > 0 : !!text && text.length > 0;
-  const hasIcons = !!icons && icons.length > 0;
-  if (!hasText && !hasIcons) return null;
+  if (!hasText) return null;
   return {
     text,
-    icons,
     link: side.link,
     title: side.title,
     italic: side.italic,
@@ -103,7 +96,10 @@ export function normalizeSide(side: SideLabel | null | undefined): NormalizedSid
   };
 }
 
-/** A run that carries content, as opposed to a `{ split }` or a bare string. */
+/**
+ * A run carrying content, as opposed to a `{ split }` or a `{ br }`. An `{ icon }` IS
+ * content — the collectors resolve logos, so they have to see these.
+ */
 type ContentRun = Exclude<TextRun, string | SplitRun | BreakRun>;
 
 /**

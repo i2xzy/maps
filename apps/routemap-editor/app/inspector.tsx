@@ -48,7 +48,6 @@ import {
   type GridRow,
   type IconKind,
   type IconObject,
-  type LabelIcon,
   type RouteDiagram,
   type Selection,
   type SideLabel,
@@ -56,9 +55,8 @@ import {
   type SlotName,
 } from "@repo/routemap";
 import { LabelRichEditor } from "./label-editor";
-import { labelIcons, labelIsMultiLine, labelIsRteEditable, setLabelIcons } from "./label-doc";
-import { RintPickerPopover } from "./rint-picker";
-import { iconLabel, type LogoResolver } from "./rint-node";
+import { labelIsRteEditable } from "./label-doc";
+import type { LogoResolver } from "./rint-node";
 import type { RwsResolver } from "./rws-node";
 
 const KINDS: IconKind[] = [
@@ -482,61 +480,6 @@ function CellEditor({ cell, onChange }: { cell: Cell; onChange: (cell: Cell) => 
   );
 }
 
-/**
- * The whole-label logo strip: the `icons` that render on the label's outer edge.
- * Separate from the rich-text editor because their position isn't a position in
- * the text (see the note in label-doc.ts) — inline logos go in the editor itself.
- */
-function LabelIconStrip({
-  icons,
-  onChange,
-  resolveLogo,
-}: {
-  icons: LabelIcon[];
-  onChange: (icons: LabelIcon[]) => void;
-  resolveLogo?: LogoResolver;
-}): ReactNode {
-  return (
-    <HStack gap="1" wrap="wrap">
-      {icons.map((icon, i) => {
-        const name = iconLabel(icon);
-        const url = resolveLogo?.(icon)?.url;
-        return (
-          <HStack
-            key={`${name}-${i}`}
-            gap="1"
-            px="1"
-            py="0.5"
-            borderWidth="1px"
-            borderColor="border"
-            borderRadius="sm"
-            title={name}
-          >
-            {url ? (
-              <Image src={url} alt={name} height="12px" width="auto" maxWidth="none" />
-            ) : (
-              <Text fontSize="2xs" color="fg.muted" truncate maxWidth="20">
-                {name}
-              </Text>
-            )}
-            <MiniBtn title={`Remove ${name}`} onClick={() => onChange(icons.filter((_, j) => j !== i))}>
-              <Trash2 size={10} />
-            </MiniBtn>
-          </HStack>
-        );
-      })}
-      <RintPickerPopover
-        trigger={
-          <Button size="2xs" variant="outline">
-            <Plus size={10} /> Logo
-          </Button>
-        }
-        onPick={(code) => onChange([...icons, code])}
-      />
-    </HStack>
-  );
-}
-
 // ── labels: an "Add …" button until there's something to edit; then a rich-text
 //    editor (text/bold/italic/link/logos) with a remove button, plus the strip for
 //    outer-edge logos. Labels carrying `title` stay JSON-only — the RTE has no
@@ -557,8 +500,6 @@ function LabelSlot({
   resolveRws?: RwsResolver;
   resolveLogo?: LogoResolver;
 }): ReactNode {
-  const icons = labelIcons(value);
-
   return (
     <Stack gap="1">
       <Flex align="center" justify="space-between">
@@ -574,26 +515,16 @@ function LabelSlot({
       </Flex>
       {labelIsRteEditable(value) ? (
         <>
+          {/* No separate logo strip any more. A logo is an `{ icon }` run, so the
+              toolbar's logo button puts it in the document like any other content —
+              there is no second place for icons to live and no second control. */}
           <LabelRichEditor
-            // Whole-label icons live outside the document, so re-attach them to
-            // every text edit or the first keystroke would drop them.
             value={value}
-            onChange={(v) => onChange(setLabelIcons(v, icons))}
+            onChange={onChange}
             ariaLabel={`${capitalize(side)} ${caption.toLowerCase()}`}
             resolveRws={resolveRws}
             resolveLogo={resolveLogo}
           />
-          {/* Only shown when it can do something the toolbar's logo button can't:
-              hold logos the label already has, or place them OUTSIDE a {{BSsplit}}
-              on a multi-line label. On a single-line label the two are the same
-              wikitext, so the strip would be a second control for one result. */}
-          {(icons.length > 0 || labelIsMultiLine(value)) && (
-            <LabelIconStrip
-              icons={icons}
-              onChange={(next) => onChange(setLabelIcons(value, next))}
-              resolveLogo={resolveLogo}
-            />
-          )}
         </>
       ) : (
         <Text fontSize="xs" color="fg.muted">

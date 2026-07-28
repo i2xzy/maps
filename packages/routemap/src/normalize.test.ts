@@ -53,34 +53,23 @@ describe("normalizeSide", () => {
     expect(normalizeSide(null)).toBeNull();
     expect(normalizeSide("")).toBeNull();
     expect(normalizeSide({})).toBeNull();
-    expect(normalizeSide({ text: "", icons: [] })).toBeNull();
+    expect(normalizeSide({ text: [] })).toBeNull();
   });
   it("wraps a bare string as text", () => {
     expect(normalizeSide("Euston")).toEqual({ text: "Euston" });
   });
-  it("keeps an object with text or icons", () => {
-    expect(normalizeSide({ text: "Curzon", icons: ["tram"] })).toEqual({
-      text: "Curzon",
-      icons: ["tram"],
-    });
+  it("keeps an object with text", () => {
+    expect(normalizeSide({ text: "Curzon" })).toEqual({ text: "Curzon" });
   });
-  it("keeps a multi-line (string[]) label and drops an empty one", () => {
-    expect(normalizeSide({ text: ["walkway to", "St Pancras"] })).toEqual({
-      text: ["walkway to", "St Pancras"],
-      icons: undefined,
-    });
-    expect(normalizeSide({ text: [] })).toBeNull();
+  it("keeps a logo run inside the text, where the author put it", () => {
+    // Whole-label `icons` are gone: they placed logos on an outer edge, and serialized
+    // to the same wikitext as a run-level logo, so nothing could tell the two apart.
+    const side = { text: [{ icon: "london|underground" }, " ", "Euston"] };
+    expect(normalizeSide(side as never)).toEqual({ text: side.text });
   });
-  it("wraps a single icon written without the array", () => {
-    expect(normalizeSide({ text: "Euston", icons: { region: "london", name: "underground" } as never })).toEqual({
-      text: "Euston",
-      icons: [{ region: "london", name: "underground" }],
-    });
-  });
-  it("keeps an icons array as-is", () => {
-    expect(normalizeSide({ icons: [{ region: "gb", name: "rail" }] })).toEqual({
-      icons: [{ region: "gb", name: "rail" }],
-    });
+  it("treats a label of only a logo run as present, not empty", () => {
+    const side = { text: [{ icon: "gb|rail" }] };
+    expect(normalizeSide(side as never)).toEqual({ text: side.text });
   });
 });
 

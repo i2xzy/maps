@@ -41,6 +41,7 @@ function iconToWiki(icon: LabelIcon): string {
 function runToWiki(run: TextRun): string {
   if (typeof run === "string") return run;
   if ("br" in run) return "<br>";
+  if ("icon" in run) return iconToWiki(run.icon);
   // An explicit split emits the template directly, so whatever sits beside it in the
   // run list stays beside it — which is the difference from the `|` sugar below.
   if ("split" in run) {
@@ -57,8 +58,6 @@ function runToWiki(run: TextRun): string {
   } else s = run.text ?? "";
   if (run.bold && s) s = `'''${s}'''`;
   if (run.italic && s) s = `''${s}''`;
-  const icons = (run.icons ?? []).map(iconToWiki).filter(Boolean);
-  if (icons.length) s = `${s}${s ? " " : ""}${icons.join(" ")}`;
   return s;
 }
 
@@ -88,8 +87,15 @@ function textToWiki(text: string | TextRun[]): string {
   return parts.length > 1 ? `{{BSsplit|${parts.join("|")}}}` : (parts[0] ?? "");
 }
 
-/** A normalized label -> wiki: text + outer-edge logos + italic/bold. */
-function sideToWiki(norm: NormalizedSide | null, dir: "left" | "right"): string {
+/**
+ * A normalized label -> wiki: its text, then whole-label italic/bold.
+ *
+ * No logo placement here any more. Logos are `{ icon }` runs sitting where the author
+ * put them, so the old outer-edge rule — before the text on the left, after it on the
+ * right — has nothing left to apply to, and the read-back ambiguity it created is gone
+ * with it.
+ */
+function sideToWiki(norm: NormalizedSide | null): string {
   if (!norm) return "";
   let body: string;
   if (norm.link != null && typeof norm.text === "string") {
@@ -97,11 +103,6 @@ function sideToWiki(norm: NormalizedSide | null, dir: "left" | "right"): string 
     body = norm.text && norm.text !== ref ? `[[${ref}|${norm.text}]]` : `[[${ref}]]`;
   } else {
     body = norm.text != null ? textToWiki(norm.text) : "";
-  }
-  const icons = (norm.icons ?? []).map(iconToWiki).filter(Boolean);
-  if (icons.length) {
-    const ic = icons.join(" ");
-    body = dir === "left" ? `${ic}${body ? ` ${body}` : ""}` : `${body ? `${body} ` : ""}${ic}`;
   }
   if (norm.bold) body = `'''${body}'''`;
   if (norm.italic) body = `''${body}''`;
@@ -141,7 +142,7 @@ function slotFields(slots: NormalizedSlots, dir: "left" | "right"): string[] {
   const ordered = count === 1 ? [slots.main] : inner.slice(0, count);
   // A placeholder is a SPACE, never empty: four consecutive tildes are a MediaWiki
   // signature, and the module trims every field so a space still reads as absent.
-  const fields = ordered.map((slot) => sideToWiki(slot ?? null, dir) || " ");
+  const fields = ordered.map((slot) => sideToWiki(slot ?? null) || " ");
   return dir === "left" ? fields.reverse() : fields;
 }
 
@@ -150,12 +151,11 @@ function rowToWiki(row: RouteDiagram["rows"][number], ctx?: IconContext): string
     const norm = normalizeSide({
       text: row.text,
       rws: row.rws,
-      icons: row.icons,
       link: row.link,
       italic: row.italic,
       bold: row.bold,
     });
-    return `-colspan-1\n${sideToWiki(norm, "left")}`;
+    return `-colspan-1\n${sideToWiki(norm)}`;
   }
   const left = slotFields(normalizeSlots(row.left), "left");
   const right = slotFields(normalizeSlots(row.right), "right");

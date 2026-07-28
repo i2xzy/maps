@@ -186,14 +186,14 @@ export function collectRwsArgs(diagram: RouteDiagram): string[] {
   const seen = new Set<string>();
   const scan = (side: unknown) => {
     const norm = normalizeSide(side as never);
-    for (const run of labelRuns(norm?.text)) if (run.rws) seen.add(run.rws);
+    for (const run of labelRuns(norm?.text)) if ("rws" in run && run.rws) seen.add(run.rws);
   };
   for (const row of diagram.rows) {
     if ("cells" in row) {
       scan(row.left);
       scan(row.right);
     } else {
-      scan({ text: row.text, rws: row.rws, icons: row.icons });
+      scan({ text: row.text, rws: row.rws });
     }
   }
   return [...seen];
@@ -210,15 +210,15 @@ export function collectRintCodes(diagram: RouteDiagram): string[] {
   };
   const scan = (side: unknown) => {
     const norm = normalizeSide(side as never);
-    add(norm?.icons); // whole-label logos
-    for (const run of labelRuns(norm?.text)) add(run.icons); // per-run logos, splits included
+    // Every `{ icon }` run, splits included — a logo nested in one still has to resolve.
+    for (const run of labelRuns(norm?.text)) if ("icon" in run) add([run.icon]);
   };
   for (const row of diagram.rows) {
     if ("cells" in row) {
       scan(row.left);
       scan(row.right);
     } else {
-      scan({ text: row.text, icons: row.icons }); // colspan row logos
+      scan({ text: row.text }); // a colspan row's logos are runs in its text
     }
   }
   return [...seen];

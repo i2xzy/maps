@@ -2,35 +2,30 @@
  * Bridge between a routemap `SideLabel` and a TipTap document, so the rich-text
  * editor can edit a label's text body.
  *
- * Covers plain text + per-run **bold / italic / link**, `rws` station links,
- * inline `icons` ({{rint}} logos), and line breaks. A line break is the wiki `|`
- * (BSsplit) separator: each TipTap paragraph / hard break becomes one line, joined
- * in the model by a lone `"|"` run; a literal pipe in the text is escaped as `\|`.
+ * Covers plain text + per-run **bold / italic / link**, `rws` station links, `{ icon }`
+ * logos, and line breaks. Paragraph = a `{{BSsplit}}` line, joined in the model by a
+ * lone `"|"` run; hard break = a `{ br }`; a literal pipe is escaped as `\|`.
  * Label-level `bold`/`italic`/`link` are folded onto the runs on the way in (they
  * render identically).
  *
- * WHOLE-LABEL `icons` are deliberately NOT in the document. They render on the
- * label's outer edge — before the text for a left label, after it for a right one,
- * and once for the whole block when the text wraps to several lines — which no
- * position inside a single inline flow reproduces. The inspector edits them as a
- * separate strip and re-attaches them around `docToLabel`.
+ * Every logo is a run, so it lives IN the document as a node like anything else. There
+ * used to be a second, whole-label `icons` field placed on the label's outer edge, and
+ * a separate strip to edit it — both gone, along with the re-attach dance that kept
+ * the first keystroke from dropping them.
  *
  * `title` has no representation here, so `labelIsRteEditable` rejects labels that
  * carry one rather than dropping it on the first keystroke.
  */
 import type { JSONContent } from "@tiptap/react";
-import type { BreakRun, LabelIcon, SideLabel, SplitRun, TextRun } from "@repo/routemap";
+import type { BreakRun, IconRun, LabelIcon, SideLabel, SplitRun, TextRun } from "@repo/routemap";
 
-type RunObj = Exclude<TextRun, string | SplitRun | BreakRun>;
-
-/** Splits are filtered before conversion; `labelIsRteEditable` keeps them out. */
-const contentRuns = (runs: TextRun[]): (string | RunObj)[] =>
-  runs.filter((r): r is string | RunObj => typeof r === "string" || !("split" in r));
+type RunObj = Exclude<TextRun, string | SplitRun | BreakRun | IconRun>;
 
 /** Runs the document can hold: splits can't round-trip, `<br>` can (a hardBreak). */
-const docRuns = (runs: TextRun[]): (string | RunObj | BreakRun)[] =>
+const docRuns = (runs: TextRun[]): (string | RunObj | BreakRun | IconRun)[] =>
   runs.filter(
-    (r): r is string | RunObj | BreakRun => typeof r === "string" || !("split" in r),
+    (r): r is string | RunObj | BreakRun | IconRun =>
+      typeof r === "string" || !("split" in r),
   );
 
 const asRuns = (text: SideLabel | undefined): TextRun[] => {
@@ -53,56 +48,7 @@ export function labelIsRteEditable(label: SideLabel | null | undefined): boolean
   return Array.isArray(label) || label.title == null;
 }
 
-/** Whole-label `icons`, which live outside the document (see the module note). */
-export function labelIcons(label: SideLabel | null | undefined): LabelIcon[] {
-  if (label == null || typeof label === "string" || Array.isArray(label)) return [];
-  return Array.isArray(label.icons) ? label.icons : label.icons ? [label.icons] : [];
-}
 
-/**
- * Whether the label wraps onto more than one line — a `|` anywhere in its text,
- * which is the wiki {{BSsplit}} separator.
- *
- * This is what decides whether whole-label `icons` are worth a separate control. On
- * ONE line they're indistinguishable from a logo placed at the edge of the text: both
- * serialize to `{{rint|x}} Euston`. On several they are not — whole-label icons sit
- * outside the {{BSsplit}}, centred against the whole stack, where an inline logo sits
- * inside one line. Both placements are used on Wikipedia (Des Plaines and Lyon Metro
- * Line C put the logo outside; East Coast Main Line does both), so the distinction
- * has to stay reachable.
- */
-export function labelIsMultiLine(label: SideLabel | null | undefined): boolean {
-  const runs = label == null || typeof label === "string" || Array.isArray(label)
-    ? asRuns(label ?? undefined)
-    : asRuns(label.text as SideLabel | undefined);
-  return contentRuns(runs).some((r) => {
-    const text = typeof r === "string" ? r : (r.text ?? "");
-    return /(?<!\\)\|/.test(text);
-  });
-}
-
-/**
- * Set a label's whole-label `icons`, keeping everything else about it.
- *
- * Serves both edits: re-attaching icons to a fresh `docToLabel` result (a string
- * or runs), and changing the icons on a label whose text nobody touched — hence
- * the spread, which preserves `link`/`italic`/`bold` that the object form may
- * carry. Dropping the last icon collapses the label back to its bare text.
- */
-export function setLabelIcons(
-  label: SideLabel | null | undefined,
-  icons: LabelIcon[],
-): SideLabel | undefined {
-  if (icons.length > 0) {
-    if (label == null) return { icons }; // icons alone are a valid label
-    if (typeof label === "string" || Array.isArray(label)) return { text: label, icons };
-    return { ...label, icons };
-  }
-  if (label == null || typeof label === "string" || Array.isArray(label)) return label ?? undefined;
-  const rest = { ...label };
-  delete rest.icons;
-  return Object.keys(rest).length > 0 ? rest : undefined;
-}
 
 const escapePipe = (s: string) => s.replace(/\|/g, "\\|");
 const splitPipes = (s: string) => s.split(/(?<!\\)\|/).map((p) => p.replace(/\\\|/g, "|"));
@@ -152,6 +98,10 @@ export function labelToDoc(label: SideLabel | null | undefined): JSONContent {
     // own icons still have to follow it — falling straight to the next run here
     // dropped them, and since icon-bearing labels are now RTE-editable that loss
     // would land on the model the moment anyone typed.
+    if (typeof r !== "string" && "icon" in r) {
+      pushNode({ type: "rint", attrs: { icon: r.icon } });
+      continue;
+    }
     if (typeof r !== "string" && "br" in r) {
       pushNode({ type: "hardBreak" });
       continue;
@@ -170,10 +120,6 @@ export function labelToDoc(label: SideLabel | null | undefined): JSONContent {
         if (piece) pushNode(textNode(piece, m));
       });
     }
-    // A run's icons trail its text, so they follow it in the document too.
-    if (typeof r !== "string") {
-      for (const icon of r.icons ?? []) pushNode({ type: "rint", attrs: { icon } });
-    }
   }
 
   return {
@@ -189,7 +135,7 @@ const markOf = (node: JSONContent, type: string) => node.marks?.find((m) => m.ty
 export function docToLabel(doc: JSONContent): SideLabel | undefined {
   // Never a `{ split }`: the document has no node for one, which is why
   // `labelIsRteEditable` keeps split-bearing labels out of the editor entirely.
-  const runs: (string | RunObj | BreakRun)[] = [];
+  const runs: (string | RunObj | BreakRun | IconRun)[] = [];
   const paras = doc.content ?? [];
   paras.forEach((para, pi) => {
     if (pi > 0) runs.push("|"); // paragraph boundary -> BSsplit line break
@@ -209,20 +155,10 @@ export function docToLabel(doc: JSONContent): SideLabel | undefined {
       if (node.type === "rint") {
         const icon = (node.attrs?.icon ?? "") as LabelIcon;
         if (icon === "") continue; // an empty node carries nothing to render
-        // Icons trail a run, so attach to the run just before — that reproduces
-        // `{ text: "Euston", icons: [...] }` exactly instead of splitting it in
-        // two. A plain string run has to be promoted to hold them.
-        const last = runs[runs.length - 1];
-        if (typeof last === "string" && last !== "|") {
-          runs[runs.length - 1] = { text: last, icons: [icon] };
-        } else if (last != null && typeof last === "object" && !("br" in last) && !last.rws) {
-          // An rws run is atomic (its text comes from the wiki), so icons after
-          // one become their own run rather than riding along. Same for a `<br>`:
-          // an icon after a break belongs on the next line, not on the break.
-          last.icons = [...(last.icons ?? []), icon];
-        } else {
-          runs.push({ icons: [icon] });
-        }
+        // Just a run. This used to attach the icon to whatever run came before,
+        // promoting a plain string to hold it and special-casing rws and <br> runs
+        // that can't — all of which existed because icons weren't runs.
+        runs.push({ icon });
         continue;
       }
       if (node.type !== "text" || !node.text) continue;
@@ -261,28 +197,25 @@ export function docToLabel(doc: JSONContent): SideLabel | undefined {
 }
 
 /**
- * What to insert when a logo is picked: the logo node, and a trailing space when text
- * follows it. `after` is the character just past the caret.
+ * Document content for inserting a logo, with the spaces a wiki author would type.
  *
- * Spacing around a logo is AUTHORED, not styled — Wikipedia gives label logos no
- * margin, and our renderer matches, so `{{rint|x}}Euston` really does draw crushed
- * together. A wiki author types the space; a picker has to type it for them.
+ * BOTH sides now. The old version only spaced the trailing side, because a logo used
+ * to become a field on the preceding run and the serializer wrote that boundary space
+ * itself. A logo is a run now, and runs concatenate with nothing between them — so
+ * nothing else will add either space, and inserting after "Euston" would otherwise
+ * give `Euston{{rint|gb|rail}}`.
  *
- * Only a TRAILING space, never a leading one, which is not the symmetry you'd guess:
- *
- *   - A logo dropped straight after text joins that run's `icons`, and `serialize.ts`
- *     writes the boundary space itself (`${s}${s ? " " : ""}${icons}`). Adding one
- *     here too produced `Euston  {{rint|gb|rail}}` — two spaces.
- *   - A logo dropped before text has no run to join, so it becomes its own
- *     `{ icons: [...] }` run, which the serializer writes with no space at all. That
- *     space has to exist as real document content or the words touch.
- *
- * Empty `after` means a boundary or an atom node (another logo, a station link) and
- * needs nothing: consecutive logo nodes merge into one run's `icons`, which the
- * renderer spaces itself.
+ * A space is added only where the neighbouring character isn't already whitespace, so
+ * repeated inserts don't accumulate gaps.
  */
-export function logoInsertContent(icon: LabelIcon, after: string): JSONContent[] {
+export function logoInsertContent(
+  icon: LabelIcon,
+  before: string,
+  after: string,
+): JSONContent[] {
+  const space = { type: "text", text: " " };
   const node: JSONContent = { type: "rint", attrs: { icon } };
-  const followedByText = after !== "" && !/\s/.test(after);
-  return followedByText ? [node, { type: "text", text: " " }] : [node];
+  const needsBefore = before !== "" && !/\s/.test(before);
+  const needsAfter = after !== "" && !/\s/.test(after);
+  return [...(needsBefore ? [space] : []), node, ...(needsAfter ? [space] : [])];
 }
