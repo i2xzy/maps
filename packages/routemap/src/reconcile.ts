@@ -18,6 +18,7 @@
  */
 import type { DiagramRow, RouteDiagram } from "./types";
 import { toWikitext } from "./serialize";
+import { canonicalizeDiagram } from "./migrate";
 
 /** What one row serializes to on its own, provenance honoured. */
 const lineOf = (row: DiagramRow): string => toWikitext({ rows: [row] });
@@ -85,4 +86,32 @@ export function reconcileRows(parsed: RouteDiagram, previous: RouteDiagram | nul
     return reuse ?? row;
   });
   return { ...parsed, rows };
+}
+
+/**
+ * Canonicalize the rows it's SAFE to canonicalize: those carrying no provenance.
+ *
+ * The wikitext parser emits what the text says — string codes and absent cells — while a
+ * canonical document uses the semantic object form. So editing one line in the wikitext
+ * pane reverted that row's cells to strings and nulls while every other row stayed
+ * canonical. This puts the newly parsed rows back in the document's own form.
+ *
+ * A row still holding `src` is left exactly as parsed. Canonicalizing it would change its
+ * model, and provenance compares models — so the row would stop matching its original text
+ * and be exported as the parser's best effort instead of byte-for-byte. Those are precisely
+ * the rows whose text we can't reproduce, so that trade is the wrong way round.
+ *
+ * Run it after `pruneProvenance`, which strips `src` from every row that round-trips — so
+ * in practice most rows are canonicalized and only the handful we can't model keep their
+ * literal form.
+ */
+export function canonicalizeParsedRows(diagram: RouteDiagram): RouteDiagram {
+  return {
+    ...diagram,
+    rows: diagram.rows.map((row) => {
+      if ((row as { src?: string }).src != null) return row;
+      const [only] = canonicalizeDiagram({ ...diagram, rows: [row] }).rows;
+      return only ?? row;
+    }),
+  };
 }

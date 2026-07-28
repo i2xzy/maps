@@ -33,6 +33,7 @@ import {
   canonicalizeDiagram,
   fromRoutemap,
   migrateDiagram,
+  canonicalizeParsedRows,
   needsMigration,
   pruneProvenance,
   reconcileRows,
@@ -379,8 +380,16 @@ export default function EditorPage() {
       // Pruned: a row only keeps its original text when serializing can't reproduce it,
       // which is about a fifth of them. The rest would carry a copy of bytes the
       // serializer already produces.
+      // Reconcile keeps the rows whose line didn't change; prune drops the provenance
+      // that isn't needed; canonicalize puts the newly parsed rows into the document's own
+      // form, so editing a line doesn't revert that row's cells to strings and nulls while
+      // every other row stays canonical.
       setText(
-        formatJson(pruneProvenance(reconcileRows(diagram, parsed.diagram)), 2, paneMaxWidth()),
+        formatJson(
+          canonicalizeParsedRows(pruneProvenance(reconcileRows(diagram, parsed.diagram))),
+          2,
+          paneMaxWidth(),
+        ),
       );
     } catch (e) {
       setWikiError((e as Error).message);

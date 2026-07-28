@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fromWikitext } from "./from-wikitext";
-import { pruneProvenance, reconcileRows } from "./reconcile";
+import { canonicalizeParsedRows, pruneProvenance, reconcileRows } from "./reconcile";
 import { toWikitext } from "./serialize";
 import type { RouteDiagram } from "./types";
 
@@ -97,5 +97,35 @@ describe("pruneProvenance", () => {
   it("leaves a diagram with no provenance alone", () => {
     const authored: RouteDiagram = { rows: [{ left: "Euston", cells: ["KBHFe"] }] };
     expect(pruneProvenance(authored).rows[0]).toBe(authored.rows[0]);
+  });
+});
+
+describe("canonicalizeParsedRows", () => {
+  it("puts a newly parsed row into the document's canonical form", () => {
+    // The parser emits what the text says — string codes, absent cells — so editing one
+    // wikitext line reverted that row to strings and nulls while the rest stayed canonical.
+    const d = canonicalizeParsedRows(pruneProvenance(fromWikitext("STR\n\\BHF")));
+    expect(d.rows[0]).toMatchObject({ cells: [{ kind: "track" }] });
+    expect(d.rows[1]).toMatchObject({ cells: [{ kind: "spacer" }, { kind: "station" }] });
+  });
+
+  it("leaves a provenanced row exactly as parsed", () => {
+    // Canonicalizing changes the model, and provenance compares models — so the row would
+    // stop matching its original text and lose its byte-for-byte export. These are the rows
+    // whose text we can't reproduce, so that's the wrong trade.
+    const src = "{{left|{{rws|X}}}}~~ ~~ ! !\\tSTR red\\c~~ ~~&nbsp; ~~far";
+    const d = canonicalizeParsedRows(pruneProvenance(fromWikitext(src)));
+    expect((d.rows[0] as { src?: string }).src).toBe(src);
+    expect(toWikitext(d)).toBe(src); // still byte-for-byte
+  });
+
+  it("doesn't disturb a row reconcile already kept", () => {
+    const before = canonicalizeParsedRows(pruneProvenance(fromWikitext("A! !STR\nB! !STR")));
+    (before.rows[0] as { left?: unknown }).left = { text: "A", title: "hover" };
+    const merged = canonicalizeParsedRows(
+      pruneProvenance(reconcileRows(fromWikitext(toWikitext(before)), before)),
+    );
+    expect(JSON.stringify(merged.rows[0])).toContain("hover");
+    expect(merged.rows[1]).toMatchObject({ cells: [{ kind: "track" }] });
   });
 });
