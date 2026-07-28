@@ -28,7 +28,9 @@ describe("RouteMap (HTML table)", () => {
   it("renders row labels and a spanning colspan row", () => {
     expect(html).toContain("Delta Junction");
     expect(html).toContain("interchange with National Rail");
-    expect(html).toMatch(/colspan="3"/i); // spans label + icons + label
+    // Seven, because a row is seven columns: the four label cells per side that
+    // Module:Routemap emits (outer/main/dist each side) plus the icon strip.
+    expect(html).toMatch(/colspan="7"/i);
   });
 
   it("wraps a linked icon in an anchor with alt/title", () => {
@@ -216,7 +218,7 @@ describe("RouteMap (HTML table)", () => {
         resolveLogo={(icon) => (typeof icon === "string" ? { url: `/rint/${icon}` } : { url: "" })}
       />,
     );
-    expect(out).toMatch(/colspan="3"/i);
+    expect(out).toMatch(/colspan="7"/i);
     expect(out).toContain("interchange with National Rail");
     expect(out).toContain('src="/rint/gb|rail"'); // colspan logo renders
   });
@@ -443,5 +445,75 @@ describe("RouteMap: selection (editor)", () => {
       />,
     );
     expect(out).toContain("outline:2px solid #3182ce");
+  });
+});
+
+describe("RouteMap label slots", () => {
+  const render = (left: unknown, right: unknown) =>
+    renderToStaticMarkup(
+      <RouteMap
+        diagram={{ rows: [{ left, right, cells: ["BHF"] } as never] }}
+        resolveIcon={(c) => c}
+      />,
+    );
+  /** The <td>s of the single rendered row, in document order. */
+  const cells = (html: string) => [...html.matchAll(/<td[^>]*>.*?<\/td>/gs)].map((m) => m[0]);
+
+  it("keeps the row seven columns wide however many slots are used", () => {
+    // The count is what aligns labels from row to row. An absent `outer` is absorbed
+    // by the main cell's colspan rather than the row losing a column.
+    // `/i` because React's server renderer emits `colSpan`, not `colspan`.
+    const bare = cells(render("Euston", "note"));
+    expect(bare).toHaveLength(5); // RMl, RMl1, icons, RMr1, RMr
+    expect(bare.filter((c) => /colspan="2"/i.test(c))).toHaveLength(2);
+
+    const full = cells(render({ main: "Euston", outer: "L" }, { main: "note", outer: "R" }));
+    expect(full).toHaveLength(7); // both RMl4 and RMr4 now exist
+    expect(full.filter((c) => /colspan="2"/i.test(c))).toHaveLength(0);
+  });
+
+  it("puts `remark` beside `main` in one cell, outward from the icons on each side", () => {
+    const [l, , , , r] = cells(
+      render({ main: "Euston", remark: "terminus" }, { main: "note", remark: "far" }),
+    );
+    // Position, not a regex over the markup between them: left reads remark-then-main
+    // and right main-then-remark, so both run outward from the icons.
+    expect(l!.indexOf("terminus")).toBeLessThan(l!.indexOf("Euston"));
+    expect(r!.indexOf("note")).toBeLessThan(r!.indexOf("far"));
+  });
+
+  it("renders `remark` inline, so it sits beside `main` rather than under it", () => {
+    // Module:Routemap uses a <div> here purely because "HTML Tidy forced the use of
+    // div instead of span", then forces `display:inline` back in the stylesheet. A
+    // block here would drop every remark onto its own line.
+    const html = render({ main: "Euston", remark: "terminus" }, null);
+    expect(html).toMatch(/<span style="display:inline[^"]*"[^>]*>/);
+  });
+
+  it("shrinks dist, remark and outer to 90% but never `main`", () => {
+    // `.RMsi` is 90%; info2 is the only full-size slot.
+    const small = render({ main: "Euston", dist: "0 km", remark: "t", outer: "o" }, null);
+    expect([...small.matchAll(/font-size:90%/g)]).toHaveLength(3);
+
+    const mainOnly = render("Euston", null);
+    expect(mainOnly).not.toMatch(/font-size:\s*90%/i);
+  });
+
+  it("leaves an unused slot's cell genuinely empty", () => {
+    // Not a 90% wrapper round nothing: an empty cell should carry no markup at all.
+    const html = render("Euston", null);
+    expect(html).toContain("></td>");
+    expect(html).not.toMatch(/<span[^>]*><\/span>/);
+  });
+
+  it("aligns `main` toward the icons and `dist` away from them", () => {
+    // Straight from the stylesheet, and NOT symmetric by position: `.RMl` is
+    // text-align right while `.RMl1`, the cell nearer the icons, is left.
+    const html = render({ main: "Euston", dist: "0 km" }, { main: "note", dist: "1" });
+    const [l, l1, , r1, r] = cells(html);
+    expect(l).toMatch(/text-align:right/);
+    expect(l1).toMatch(/text-align:left/);
+    expect(r1).toMatch(/text-align:right/);
+    expect(r).toMatch(/text-align:left/);
   });
 });

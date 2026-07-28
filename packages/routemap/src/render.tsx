@@ -111,6 +111,45 @@ const labelCell: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+/**
+ * The seven label cells of a row, styled as `Template:Routemap/styles.css` styles
+ * them. A row is always seven columns wide — `.RMl4`, `.RMl`, `.RMl1`, `.RMir`,
+ * `.RMr1`, `.RMr`, `.RMr4` — and the main cells absorb an absent outer cell with a
+ * colspan rather than the row losing a column, which is what keeps labels lined up
+ * from row to row.
+ *
+ * The alignments are NOT symmetric by position, which is easy to get wrong: `main`
+ * hugs the icon strip while `dist` hugs away from it, and the outer remarks hug the
+ * table's outside edges.
+ */
+const SLOT_CELL: Record<"outer" | "main" | "dist", Record<"left" | "right", CSSProperties>> = {
+  // .RMl4 / .RMr4 — leftmost and rightmost.
+  outer: {
+    left: { ...labelCell, padding: "0 3px 0 0", textAlign: "left" },
+    right: { ...labelCell, padding: "0 0 0 3px", textAlign: "right" },
+  },
+  // .RMl / .RMr — holds `main` and, sharing the cell, `remark`.
+  main: {
+    left: { ...labelCell, padding: 0, textAlign: "right" },
+    right: { ...labelCell, padding: 0, textAlign: "left" },
+  },
+  // .RMl1 / .RMr1 — nearest the icons, and aligned away from them.
+  dist: {
+    left: { ...labelCell, padding: "0 3px", textAlign: "left" },
+    right: { ...labelCell, padding: "0 3px", textAlign: "right" },
+  },
+};
+
+/**
+ * `.RMsi` — the 90% wrapper the module puts round `dist`, `remark` and `outer`.
+ *
+ * A span, and explicitly `display: inline`. The module uses a div here and the
+ * stylesheet forces it back inline with the comment "HTML Tidy forced the use of div
+ * instead of span" — so inline is the intent, and it matters: `remark` shares a cell
+ * with `main` and has to sit BESIDE it, not below.
+ */
+const smallSlot: CSSProperties = { display: "inline", fontSize: "90%" };
+
 type TextStyle = { fontStyle?: "italic"; fontWeight?: "bold"; fontSize?: string };
 
 /**
@@ -527,10 +566,28 @@ export function RouteMap({
       <tbody>
         {layout.rows.map((row) => {
           const rowSel: Selection = { kind: "row", row: row.index };
+          /** One slot's content: `.RMsi`-wrapped when small, nothing when absent. */
+          const slot = (
+            label: NormalizedSide | null,
+            side: "left" | "right",
+            small: boolean,
+          ): ReactNode => {
+            if (label == null) return null;
+            const el = (
+              <Label
+                label={label}
+                side={side}
+                resolveHref={resolveHref}
+                resolveRws={resolveRws}
+                resolveLogo={resolveLogo}
+              />
+            );
+            return small ? <span style={smallSlot}>{el}</span> : el;
+          };
           if (row.colspan != null) {
             return (
               <tr key={row.index} {...rowProps(row.index)} style={{ ...cursor, ...ring(rowSel) }}>
-                <td colSpan={3} style={{ ...labelCell, textAlign: "center", padding: "4px 8px" }}>
+                <td colSpan={7} style={{ ...labelCell, textAlign: "center", padding: "4px 8px" }}>
                   <Label label={row.colspan} side="colspan" resolveHref={resolveHref} resolveRws={resolveRws} resolveLogo={resolveLogo} />
                 </td>
               </tr>
@@ -539,9 +596,16 @@ export function RouteMap({
 
           return (
             <tr key={row.index} {...rowProps(row.index)} style={{ ...cursor, ...ring(rowSel) }}>
-              <td style={{ ...labelCell, textAlign: "right" }}>
-                <Label label={row.left.main} side="left" resolveHref={resolveHref} resolveRws={resolveRws} resolveLogo={resolveLogo} />
+              {/* .RMl4 — present only when `outer` is; the .RMl colspan covers it. */}
+              {row.left.outer ? <td style={SLOT_CELL.outer.left}>{slot(row.left.outer, "left", true)}</td> : null}
+              {/* .RMl — `remark` PRECEDES `main` here and follows it on the right, so
+                  the pair always reads outward from the icons. */}
+              <td colSpan={row.left.outer ? 1 : 2} style={SLOT_CELL.main.left}>
+                {row.left.remark ? <>{slot(row.left.remark, "left", true)} </> : null}
+                {slot(row.left.main, "left", false)}
               </td>
+              {/* .RMl1 */}
+              <td style={SLOT_CELL.dist.left}>{slot(row.left.dist, "left", true)}</td>
               <td
                 style={{
                   padding: 0,
@@ -566,9 +630,15 @@ export function RouteMap({
                   </span>
                 ))}
               </td>
-              <td style={{ ...labelCell, textAlign: "left" }}>
-                <Label label={row.right.main} side="right" resolveHref={resolveHref} resolveRws={resolveRws} resolveLogo={resolveLogo} />
+              {/* .RMr1 */}
+              <td style={SLOT_CELL.dist.right}>{slot(row.right.dist, "right", true)}</td>
+              {/* .RMr — `main` then `remark`, mirroring the left cell. */}
+              <td colSpan={row.right.outer ? 1 : 2} style={SLOT_CELL.main.right}>
+                {slot(row.right.main, "right", false)}
+                {row.right.remark ? <> {slot(row.right.remark, "right", true)}</> : null}
               </td>
+              {/* .RMr4 */}
+              {row.right.outer ? <td style={SLOT_CELL.outer.right}>{slot(row.right.outer, "right", true)}</td> : null}
             </tr>
           );
         })}
