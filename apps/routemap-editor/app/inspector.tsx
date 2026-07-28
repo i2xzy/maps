@@ -37,6 +37,7 @@ import {
   isColspanRow,
   isFieldVisible,
   previewOptions,
+  retargetKind,
   safeIconCode,
   slotOf,
   withSlot,
@@ -97,8 +98,15 @@ const moveAt = <T,>(a: T[], i: number, dir: -1 | 1): T[] => {
 };
 
 const newIcon = (): CellIcon => ({ kind: "track" });
-/** A fresh overlay layer, as a CODE — a stack of codes shouldn't grow one object. */
-const newLayer = (): CellIcon => safeIconCode(newIcon() as IconObject) ?? newIcon();
+/**
+ * A fresh layer, in the semantic object form.
+ *
+ * This used to emit a CODE, on the reasoning that a stack of codes shouldn't grow one
+ * object. That reasoning expired when Format started canonicalizing cells to objects: the
+ * document's own convention is objects now, so a code here made the new layer the odd one
+ * out among its neighbours.
+ */
+const newLayer = (): CellIcon => newIcon();
 const newCell = (): Cell => newIcon();
 const newRow = (): DiagramRow => ({ cells: [newCell()] });
 
@@ -269,10 +277,9 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
     }
     onChange(next);
   };
-  const pickKind = (k: IconKind) => {
-    const first = iconSubtypes(k)[0];
-    onChange(first ? { kind: k, subtype: first } : ({ kind: k } as IconObject));
-  };
+  // Keeping the fields the new kind still accepts is model knowledge, so it lives beside
+  // `fieldsFor` in the package rather than inline here — and is unit-tested there.
+  const pickKind = (k: IconKind) => onChange(retargetKind(icon, k, safeIconCode));
 
   const code = safeIconCode(icon);
   const subtypes = iconSubtypes(icon.kind);
@@ -360,15 +367,26 @@ function IconLayerEditor({ icon, onChange }: { icon: CellIcon; onChange: (icon: 
       );
     }
   }
-  // Nothing semantic to edit: a code we don't model (`WASSERq`, `SKRZ-Bo`, a bare
-  // width prefix like `d`). Show the thumbnail so the layer is still identifiable.
+  // A code we don't model (`WASSERq`, `SKRZ-Bo`, a parenthesised or oddly-suffixed
+  // variant). The thumbnail keeps the layer identifiable, and Replace is the way out:
+  // with no JSON pane in production, a cell offering NO control at all was a dead end —
+  // you could delete it, but not change it.
   const code = typeof icon === "string" ? icon : "code" in icon ? icon.code : null;
   return (
-    <Stack gap="1">
-      <Thumb code={code} size={20} />
-      <Text fontSize="xs" color="fg.muted" truncate>
-        {code ?? "(Raw cell — edit in JSON)"}
+    <Stack gap="1.5">
+      <HStack gap="1">
+        <Thumb code={code} size={20} />
+        <Text fontFamily="mono" fontSize="xs" truncate>
+          {code ?? "(No icon)"}
+        </Text>
+      </HStack>
+      <Text fontSize="xs" color="fg.muted">
+        This icon isn’t one the controls understand. It renders and exports correctly — edit
+        it as wikitext, or replace it.
       </Text>
+      <Button size="xs" variant="outline" alignSelf="flex-start" onClick={() => onChange(newLayer())}>
+        Replace
+      </Button>
     </Stack>
   );
 }

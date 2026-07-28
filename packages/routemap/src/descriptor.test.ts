@@ -8,7 +8,15 @@ import {
   type IconKind,
   type IconObject,
 } from "./icon";
-import { FIELDS, fieldSpec, fieldsFor, isFieldVisible, previewOptions, safeIconCode } from "./descriptor";
+import {
+  FIELDS,
+  fieldSpec,
+  fieldsFor,
+  isFieldVisible,
+  previewOptions,
+  retargetKind,
+  safeIconCode,
+} from "./descriptor";
 
 // A minimal valid icon per modelled kind (the differential test's baseline).
 const BASE: Record<string, IconObject> = {
@@ -124,4 +132,58 @@ describe("descriptor: differential drift vs iconToCode", () => {
       }
     }
   }
+});
+
+describe("retargetKind", () => {
+  it("keeps the fields the new kind still accepts", () => {
+    // The form used to rebuild `{ kind }` from nothing, so changing a disused tunnel track
+    // to a station threw away disused, tunnel and its colour — quietly undoing work that
+    // was visible on screen.
+    const before: IconObject = {
+      kind: "track",
+      state: "disused",
+      formation: "tunnel",
+      colour: "yellow",
+    };
+    expect(retargetKind(before, "station")).toMatchObject({
+      kind: "station",
+      state: "disused",
+      formation: "tunnel",
+      colour: "yellow",
+    });
+  });
+
+  it("drops a field the new kind has no place for", () => {
+    // `corner` belongs to a track, not a station, and carrying it would emit a code the
+    // new kind can't mean.
+    const out = retargetKind({ kind: "track", corner: 3 } as IconObject, "station");
+    expect(out).not.toHaveProperty("corner");
+  });
+
+  it("takes the new kind's first subtype rather than the old one's", () => {
+    const out = retargetKind({ kind: "symbol", subtype: "ferry" } as IconObject, "station");
+    expect(out).toMatchObject({ kind: "station" });
+    expect((out as { subtype?: string }).subtype).not.toBe("ferry");
+  });
+
+  it("never carries the raw `code` passthrough, which would override everything", () => {
+    const out = retargetKind({ kind: "track", code: "WASSERq" } as IconObject, "station");
+    expect(out).not.toHaveProperty("code");
+  });
+
+  it("falls back to the bare kind when the carried set won't encode", () => {
+    // Better a plain station than a cell that renders as nothing.
+    const out = retargetKind({ kind: "track", state: "disused" } as IconObject, "station", () => null);
+    expect(out).toEqual({ kind: "station", subtype: "through" });
+  });
+
+  it("still produces a valid code for every kind", () => {
+    const rich: IconObject = { kind: "track", state: "disused", formation: "tunnel", colour: "red" };
+    for (const kind of ["track", "station", "junction", "crossing", "end", "symbol"] as const) {
+      const out = retargetKind(rich, kind, (i) => {
+        try { return iconToCode(i); } catch { return null; }
+      });
+      expect(() => iconToCode(out), kind).not.toThrow();
+    }
+  });
 });

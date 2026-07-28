@@ -18,6 +18,7 @@ import {
   ICON_STATES,
   ICON_SYSTEMS,
   ICON_WIDTHS,
+  iconSubtypes,
   iconToCode,
   type IconKind,
   type IconObject,
@@ -389,4 +390,37 @@ export function previewOptions(icon: IconObject, field: keyof IconObject): Field
   const spec = fieldSpec(field);
   if (!spec?.values) return [];
   return spec.values.map((value) => ({ value, code: safeIconCode({ ...icon, [field]: value }) }));
+}
+
+/**
+ * Change an icon's kind, keeping every field the NEW kind still accepts.
+ *
+ * A form that rebuilt `{ kind }` from nothing threw away state, formation, width and
+ * colour on every kind change — quietly undoing work that was visible on screen. The
+ * field descriptor already knows which fields a kind takes, so the carry-over is exactly
+ * that set.
+ *
+ * `subtype` is never carried: the old kind's subtypes don't exist on the new one, so the
+ * new kind's first subtype is used instead. `code` isn't either — it's the passthrough
+ * escape hatch and would override everything.
+ *
+ * `encode` lets the caller reject a combination that doesn't produce a valid code, in
+ * which case the bare kind is returned rather than a cell that renders as nothing.
+ */
+export function retargetKind(
+  icon: IconObject,
+  kind: IconKind,
+  encode?: (icon: IconObject) => string | null,
+): IconObject {
+  const first = iconSubtypes(kind)[0];
+  const base = (first ? { kind, subtype: first } : { kind }) as IconObject;
+  const keep = new Set(fieldsFor(kind).map((f) => String(f.field)));
+  const carried = { ...base } as Record<string, unknown>;
+  for (const [key, value] of Object.entries(icon)) {
+    if (key === "kind" || key === "subtype" || key === "code") continue;
+    if (value !== undefined && keep.has(key)) carried[key] = value;
+  }
+  const candidate = carried as unknown as IconObject;
+  if (encode && encode(candidate) == null) return base;
+  return candidate;
 }

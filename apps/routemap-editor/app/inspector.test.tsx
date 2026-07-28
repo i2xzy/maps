@@ -136,15 +136,20 @@ describe("Inspector: cell selection", () => {
     expect((model().rows![0] as { cells: unknown[] }).cells[0]).toBe("BHF");
   });
 
-  it("leaves a code it cannot model semantically alone", () => {
-    // `WASSERq` decodes to the raw `{ code }` escape hatch, so there is nothing for
-    // the controls to edit — it keeps the read-only fallback rather than being
-    // coerced into a shape that would lose it.
+  it("leaves a code it cannot model semantically alone, but offers a way out", () => {
+    // `WASSERq` decodes to the raw `{ code }` escape hatch, so there is nothing for the
+    // controls to edit — it keeps the code rather than being coerced into a shape that
+    // would lose it. But offering NO control at all was a dead end: with no JSON pane in
+    // production you could delete the cell and not change it.
     renderWithChakra(
       <Controlled initial={{ rows: [{ cells: ["WASSERq"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
     );
     expect(screen.queryByText("Kind")).toBeNull();
     expect(screen.getByText("WASSERq")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Replace" }));
+    expect((model().rows![0] as { cells: unknown[] }).cells[0]).toEqual({ kind: "track" });
+    expect(screen.getByText("Kind")).toBeTruthy(); // now editable
   });
 
   it("shows a placeholder, not a broken image, when a preview has no file", () => {
@@ -164,9 +169,11 @@ describe("Inspector: cell selection", () => {
       <Controlled initial={{ rows: [{ cells: ["BHF"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
     );
     fireEvent.click(screen.getByRole("button", { name: /Overlay/ }));
-    // The existing icon becomes the base; the new one layers over it.
-    // The new layer is a code too, so a stack of codes doesn't grow a lone object.
-    expect((model().rows![0] as { cells: unknown[] }).cells[0]).toEqual(["BHF", "STR"]);
+    // The existing icon becomes the base; the new one layers over it. The new layer is the
+    // semantic object form, which is the document's convention now that Format canonicalizes
+    // cells — a bare code here would make it the odd one out among its neighbours. The base
+    // keeps whatever shape it already had.
+    expect((model().rows![0] as { cells: unknown[] }).cells[0]).toEqual(["BHF", { kind: "track" }]);
     expect(screen.getByText("Base")).toBeTruthy();
     expect(screen.getByText("Overlay 1")).toBeTruthy();
 
