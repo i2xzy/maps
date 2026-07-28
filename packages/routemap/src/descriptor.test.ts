@@ -12,6 +12,7 @@ import {
   FIELDS,
   fieldSpec,
   fieldsFor,
+  defaultIcon,
   isFieldVisible,
   previewOptions,
   retargetKind,
@@ -171,10 +172,11 @@ describe("retargetKind", () => {
     expect(out).not.toHaveProperty("code");
   });
 
-  it("falls back to the bare kind when the carried set won't encode", () => {
-    // Better a plain station than a cell that renders as nothing.
+  it("falls back to the kind's default when the carried set won't encode", () => {
+    // Better a plain station than a cell that renders as nothing. No forced subtype: bare
+    // BHF is a real icon, so `defaultIcon` leaves it alone.
     const out = retargetKind({ kind: "track", state: "disused" } as IconObject, "station", () => null);
-    expect(out).toEqual({ kind: "station", subtype: "through" });
+    expect(out).toEqual({ kind: "station" });
   });
 
   it("still produces a valid code for every kind", () => {
@@ -185,5 +187,55 @@ describe("retargetKind", () => {
       });
       expect(() => iconToCode(out), kind).not.toThrow();
     }
+  });
+});
+
+describe("defaultIcon", () => {
+  it("gives every kind a code that exists as a real BSicon", () => {
+    // Checked against Commons: STR, BHF, ABZgl, KRZ, ÜST, SHI2l, HUB, ENDE, BOOT all exist.
+    const expected: Record<string, string> = {
+      track: "STR",
+      station: "BHF",
+      junction: "ABZgl",
+      crossing: "KRZ",
+      crossover: "ÜST",
+      shift: "SHI2l",
+      hub: "HUB",
+      end: "ENDE",
+      symbol: "BOOT",
+      spacer: "",
+    };
+    for (const [kind, code] of Object.entries(expected)) {
+      expect(safeIconCode(defaultIcon(kind as IconKind)), kind).toBe(code);
+    }
+  });
+
+  it("gives a junction somewhere to branch and a shift somewhere to shift", () => {
+    // `ABZg` and `SHI2` both ENCODE but neither file is on Commons — a junction has to
+    // branch somewhere. `safeIconCode` can't catch that: it checks a code can be built,
+    // not that anyone drew it.
+    expect(defaultIcon("junction")).toMatchObject({ to: "left" });
+    expect(defaultIcon("shift")).toMatchObject({ to: "left" });
+  });
+
+  it("does NOT take the first subtype, which is the wrong icon", () => {
+    // `track`'s first subtype is `walkway` (BL, a footpath) and `junction`'s is `loop`
+    // (WSL). Deriving the default that way meant the picker previewed STR and produced BL.
+    expect(defaultIcon("track")).not.toHaveProperty("subtype");
+    expect(defaultIcon("junction")).not.toHaveProperty("subtype");
+  });
+
+  it("subtypes only the kind with no usable bare form", () => {
+    // `{ kind: "symbol" }` won't even encode, so it's the one kind that needs one.
+    expect(defaultIcon("symbol")).toHaveProperty("subtype");
+    expect(safeIconCode({ kind: "symbol" } as IconObject)).toBeNull();
+  });
+
+  it("is what retargetKind starts from", () => {
+    // One source, so the Kind dropdown's preview and the pick can't disagree.
+    expect(retargetKind({ kind: "track" } as IconObject, "junction")).toMatchObject({
+      kind: "junction",
+      to: "left",
+    });
   });
 });

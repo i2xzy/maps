@@ -393,6 +393,37 @@ export function previewOptions(icon: IconObject, field: keyof IconObject): Field
 }
 
 /**
+ * The minimal icon for a kind — one that exists as a real BSicon file.
+ *
+ * Not derivable, and that's the point. Two things go wrong if you try:
+ *
+ *   - taking the first SUBTYPE gives the wrong thing. `track`'s first subtype is `walkway`
+ *     (BL) and `junction`'s is `loop` (WSL), so a picker previewing `STR` handed you a
+ *     footpath instead. What you saw wasn't what you got.
+ *   - taking the bare kind gives a code that ENCODES but doesn't exist. `{ kind: "junction" }`
+ *     is `ABZg` and `{ kind: "shift" }` is `SHI2`, and neither file is on Commons — a
+ *     junction has to branch somewhere, so it needs a `to`. `safeIconCode` can't catch that;
+ *     it checks that a code can be built, not that anyone drew it.
+ *
+ * So these are curated, and each was checked against Commons.
+ */
+export function defaultIcon(kind: IconKind): IconObject {
+  switch (kind) {
+    // A junction must branch somewhere and a shift must shift somewhere: ABZg and SHI2
+    // don't exist, ABZgl and SHI2l do.
+    case "junction":
+    case "shift":
+      return { kind, to: "left" } as IconObject;
+    // The only kind with no usable bare form — `{ kind: "symbol" }` won't even encode.
+    case "symbol":
+      return { kind, subtype: iconSubtypes(kind)[0] } as IconObject;
+    // STR, BHF, KRZ, ÜST, HUB, ENDE all exist, and a bare spacer is a blank cell.
+    default:
+      return { kind } as IconObject;
+  }
+}
+
+/**
  * Change an icon's kind, keeping every field the NEW kind still accepts.
  *
  * A form that rebuilt `{ kind }` from nothing threw away state, formation, width and
@@ -401,8 +432,8 @@ export function previewOptions(icon: IconObject, field: keyof IconObject): Field
  * that set.
  *
  * `subtype` is never carried: the old kind's subtypes don't exist on the new one, so the
- * new kind's first subtype is used instead. `code` isn't either — it's the passthrough
- * escape hatch and would override everything.
+ * new kind's `defaultIcon` decides. `code` isn't either — it's the passthrough escape hatch
+ * and would override everything.
  *
  * `encode` lets the caller reject a combination that doesn't produce a valid code, in
  * which case the bare kind is returned rather than a cell that renders as nothing.
@@ -412,8 +443,7 @@ export function retargetKind(
   kind: IconKind,
   encode?: (icon: IconObject) => string | null,
 ): IconObject {
-  const first = iconSubtypes(kind)[0];
-  const base = (first ? { kind, subtype: first } : { kind }) as IconObject;
+  const base = defaultIcon(kind);
   const keep = new Set(fieldsFor(kind).map((f) => String(f.field)));
   const carried = { ...base } as Record<string, unknown>;
   for (const [key, value] of Object.entries(icon)) {

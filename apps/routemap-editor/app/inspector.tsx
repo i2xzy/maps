@@ -79,12 +79,7 @@ const NONE = "__none__";
 /** Sentence-case a field caption for display (e.g. "kind" → "Kind"). */
 const capitalize = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-const kindSample = (k: IconKind): IconObject =>
-  k === "symbol"
-    ? { kind: "symbol", subtype: "ferry" }
-    : k === "spacer"
-      ? { kind: "spacer", width: "half" }
-      : ({ kind: k } as IconObject);
+
 
 // ── immutable list helpers ────────────────────────────────────────────────
 const replaceAt = <T,>(a: T[], i: number, v: T): T[] => a.map((x, j) => (j === i ? v : x));
@@ -319,7 +314,15 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
         label="kind"
         value={icon.kind}
         allowNone={false}
-        options={kindOptions.map((k) => ({ value: k, code: safeIconCode(kindSample(k)) }))}
+        // Each option previews the icon PICKING IT WOULD PRODUCE, which depends on the
+        // current one: the kind change carries over the fields the new kind still accepts,
+        // so a track that inherits `to: left` is STRl, not STR. Previewing `defaultIcon`
+        // instead was accurate only for an icon with nothing set — and previewing the first
+        // SUBTYPE, as this used to, showed STR and produced BL, a footpath.
+        options={kindOptions.map((k) => ({
+          value: k,
+          code: safeIconCode(retargetKind(icon, k, safeIconCode)),
+        }))}
         onPick={(v) => v != null && pickKind(v as IconKind)}
       />
       {subtypes.length > 0 && (
