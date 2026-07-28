@@ -34,6 +34,7 @@ import {
   fromRoutemap,
   migrateDiagram,
   needsMigration,
+  reconcileRows,
   toRoutemap,
   toWikitext,
   type RouteDiagram,
@@ -370,7 +371,11 @@ export default function EditorPage() {
         return;
       }
       setWikiError(null);
-      setText(formatJson(diagram, 2, paneMaxWidth()));
+      // Keep the model of rows whose LINE didn't change. Re-parsing every row on every
+      // keystroke degrades any row the parser reads less richly than it was authored —
+      // an italic label spanning several runs comes back as one opaque `{ raw }`, so a
+      // single character typed here used to flatten the whole document.
+      setText(formatJson(reconcileRows(diagram, parsed.diagram), 2, paneMaxWidth()));
     } catch (e) {
       setWikiError((e as Error).message);
     }

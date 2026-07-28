@@ -9,3 +9,4 @@ export * from "./parse";
 export * from "./descriptor";
 export * from "./migrate";
 export * from "./from-wikitext";
+export * from "./reconcile";
