@@ -149,36 +149,55 @@ export function normalizeSlots(
 }
 
 /**
- * The RAW `main` slot of a side, whichever shape the side is written in.
+ * The RAW value of one slot, whichever shape the side is written in.
  *
  * Raw, not normalized: an editor needs the author's own value back to put in a form,
  * not the coerced `{ text }` that `normalizeSlots` produces.
  */
-export function mainSlot(
+export function slotOf(
   side: SideLabel | SideSlots | null | undefined,
+  name: SlotName,
 ): SideLabel | null | undefined {
   if (side == null) return side;
-  if (typeof side === "object" && !Array.isArray(side) && isSideSlots(side)) return side.main;
-  return side as SideLabel;
+  if (typeof side === "object" && !Array.isArray(side) && isSideSlots(side)) return side[name];
+  // A plain label IS `main` — every other slot of such a side is empty.
+  return name === "main" ? (side as SideLabel) : undefined;
 }
 
 /**
- * Replace a side's `main` slot, keeping its existing shape and its other slots.
+ * Set one slot, keeping the side written as simply as it can be.
  *
- * A side written as a plain label stays a plain label. Promoting every edited row to
- * the `{ main: … }` form would rewrite diagrams wholesale on the first keystroke and
- * bury a one-line change in a diff.
+ * Promotes a plain label to the slots form only once a second slot appears, and
+ * demotes back when `main` is the only one left — so adding a remark and removing it
+ * again leaves the JSON exactly as it started, rather than `{ main: … }` for good.
+ * Without the demote the document drifts to the verbose form and never returns.
+ *
+ * Demotion checks that the survivor is `main` specifically. A side holding only
+ * `dist` has to stay an object: written as a plain label it would be read as `main`.
  */
-export function withMainSlot(
+export function withSlot(
   side: SideLabel | SideSlots | null | undefined,
-  main: SideLabel | null | undefined,
+  name: SlotName,
+  value: SideLabel | null | undefined,
 ): SideLabel | SideSlots | null | undefined {
-  if (side != null && typeof side === "object" && !Array.isArray(side) && isSideSlots(side)) {
-    return { ...side, main };
-  }
-  // `undefined` passes through rather than becoming null, so clearing a label removes
-  // the key from the author's JSON instead of leaving `"left": null` behind.
-  return main;
+  const next: SideSlots = {
+    dist: slotOf(side, "dist") ?? undefined,
+    main: slotOf(side, "main") ?? undefined,
+    remark: slotOf(side, "remark") ?? undefined,
+    outer: slotOf(side, "outer") ?? undefined,
+  };
+  next[name] = value ?? undefined;
+
+  // `normalizeSide` already decides emptiness for every SideLabel shape — string,
+  // run array, or object — so reuse it rather than re-deriving the rule here.
+  const filled = SLOT_NAMES.filter((n) => normalizeSide(next[n] ?? null) != null);
+  if (filled.length === 0) return undefined;
+  if (filled.length === 1 && filled[0] === "main") return next.main;
+  // Rebuilt from the filled slots only, so an emptied one leaves no `""` behind and
+  // no `undefined` keys reach the author's JSON.
+  const out: SideSlots = {};
+  for (const n of filled) out[n] = next[n];
+  return out;
 }
 
 /** Whether any slot of a side holds anything. */

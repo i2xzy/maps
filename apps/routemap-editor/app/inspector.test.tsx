@@ -230,25 +230,51 @@ describe("Inspector: cell selection", () => {
 });
 
 describe("Inspector: row selection (labels & colspan)", () => {
-  it("reveals an editor via 'Add … label' and edits both sides", () => {
-    renderWithChakra(<Controlled initial={{ rows: [{ cells: [] }] }} select={{ kind: "row", row: 0 }} />);
-    // Empty labels start as add-buttons, not editors.
-    expect(screen.queryByLabelText("Left label")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Add left label" }));
-    fireEvent.change(screen.getByLabelText("Left label"), { target: { value: "Euston" } });
-    expect(model().rows![0]).toEqual({ cells: [], left: "Euston" });
-    fireEvent.click(screen.getByRole("button", { name: "Add right label" }));
-    fireEvent.change(screen.getByLabelText("Right label"), { target: { value: "note" } });
-    expect(model().rows![0]).toEqual({ cells: [], left: "Euston", right: "note" });
+  it("edits the main label of each side, keeping the plain string shape", () => {
+    renderWithChakra(<Controlled initial={{ rows: [{ left: "Euston", right: "note" }] }} select={{ kind: "row", row: 0 }} />);
+    fireEvent.change(screen.getByLabelText("Left main text"), { target: { value: "Euston Square" } });
+    // A plain label stays a plain string rather than being promoted to { main: … }.
+    expect(model().rows![0]).toEqual({ left: "Euston Square", right: "note" });
+    fireEvent.change(screen.getByLabelText("Right main text"), { target: { value: "changed" } });
+    expect(model().rows![0]).toEqual({ left: "Euston Square", right: "changed" });
   });
 
-  it("shows the editor (not an add-button) when a label already has text, and removes it", () => {
+  it("shows an editor per occupied slot, named by side and slot", () => {
+    // Both sides have a "Main text", so the accessible name has to carry the side too.
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ left: { main: "Euston", dist: "0 km" }, right: "note", cells: [] }] }}
+        select={{ kind: "row", row: 0 }}
+      />,
+    );
+    expect(screen.getByLabelText("Left main text")).toBeTruthy();
+    expect(screen.getByLabelText("Left distance or time")).toBeTruthy();
+    expect(screen.getByLabelText("Right main text")).toBeTruthy();
+    // Unoccupied slots aren't rendered as empty editors; they live in the add menu.
+    expect(screen.queryByLabelText("Left remark")).toBeNull();
+  });
+
+  it("removes a slot, and demotes the side back to a plain label", () => {
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ left: { main: "Euston", remark: "terminus" }, cells: [] }] }}
+        select={{ kind: "row", row: 0 }}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Remove left remark"));
+    // Back to the string it would have been written as, not `{ main: "Euston" }` —
+    // otherwise the JSON drifts to the verbose form the first time anyone adds a slot.
+    expect(model().rows![0]).toEqual({ left: "Euston", cells: [] });
+    expect(screen.queryByLabelText("Left remark")).toBeNull();
+  });
+
+  it("offers the unused slots to add, and drops the whole side when emptied", () => {
     renderWithChakra(<Controlled initial={{ rows: [{ left: "Euston", cells: [] }] }} select={{ kind: "row", row: 0 }} />);
-    expect(screen.queryByRole("button", { name: "Add left label" })).toBeNull();
-    expect(screen.getByLabelText("Left label")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Remove left label"));
+    // One add affordance per side, not one button per empty slot.
+    expect(screen.getAllByRole("button", { name: /^Add label$/ })).toHaveLength(2);
+
+    fireEvent.click(screen.getByLabelText("Remove left main text"));
     expect(model().rows![0]).toEqual({ cells: [] });
-    expect(screen.getByRole("button", { name: "Add left label" })).toBeTruthy();
   });
 
   it("keeps a label carrying a title as a JSON-only fallback (no RTE clobber)", () => {
@@ -304,7 +330,7 @@ describe("Inspector: row selection (labels & colspan)", () => {
     );
     // Icons are a strip beside the editor, not a JSON fallback.
     expect(screen.queryByText(/Rich label — edit in JSON/)).toBeNull();
-    expect(screen.getByLabelText("Left label")).toBeTruthy();
+    expect(screen.getByLabelText("Left main text")).toBeTruthy();
 
     // An uncatalogued code has no name, so the chip falls back to showing it raw.
     fireEvent.click(screen.getByLabelText("Remove not|acode"));
@@ -324,7 +350,7 @@ describe("Inspector: row selection (labels & colspan)", () => {
       />,
     );
     // The icons live outside the document, so a text edit has to re-attach them.
-    fireEvent.change(screen.getByLabelText("Left label"), { target: { value: "Euston station" } });
+    fireEvent.change(screen.getByLabelText("Left main text"), { target: { value: "Euston station" } });
     expect((model().rows![0] as { left?: unknown }).left).toEqual({ text: "Euston station", icons: ["gb|rail"] });
   });
 

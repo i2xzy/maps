@@ -6,6 +6,8 @@ import {
   isWidthPrefix,
   normalizeCell,
   normalizeSide,
+  slotOf,
+  withSlot,
   prefixWidthFraction,
 } from "./normalize";
 
@@ -131,5 +133,58 @@ describe("width prefixes", () => {
     expect(prefixWidthFraction("_")).toBe(1);
     expect(prefixWidthFraction("_d")).toBe(1.5);
     expect(prefixWidthFraction("b")).toBe(2);
+  });
+});
+
+describe("slotOf / withSlot", () => {
+  it("reads a plain label as `main`, and every other slot as empty", () => {
+    expect(slotOf("Euston", "main")).toBe("Euston");
+    expect(slotOf("Euston", "dist")).toBeUndefined();
+    expect(slotOf("Euston", "remark")).toBeUndefined();
+  });
+
+  it("reads each slot of a slots object", () => {
+    const side = { dist: "0 km", main: "Euston" };
+    expect(slotOf(side, "dist")).toBe("0 km");
+    expect(slotOf(side, "main")).toBe("Euston");
+    expect(slotOf(side, "outer")).toBeUndefined();
+  });
+
+  it("keeps a plain label plain when only `main` is edited", () => {
+    // Promoting on every keystroke would rewrite the document wholesale and bury a
+    // one-word change in a diff.
+    expect(withSlot("Euston", "main", "Euston Square")).toBe("Euston Square");
+  });
+
+  it("promotes to the slots form when a second slot appears", () => {
+    expect(withSlot("Euston", "remark", "terminus")).toEqual({
+      main: "Euston",
+      remark: "terminus",
+    });
+  });
+
+  it("demotes back to a plain label when `main` is the last one left", () => {
+    // Add a remark, remove it, and the JSON is byte-identical to where it started.
+    const promoted = withSlot("Euston", "remark", "terminus");
+    expect(withSlot(promoted, "remark", undefined)).toBe("Euston");
+  });
+
+  it("does NOT demote a side holding only `dist`", () => {
+    // A lone plain label means `main`, so demoting this would silently move the label
+    // to a different slot and a different table cell.
+    const distOnly = withSlot(null, "dist", "1 km");
+    expect(distOnly).toEqual({ dist: "1 km" });
+    expect(typeof distOnly).toBe("object");
+  });
+
+  it("drops the side entirely once nothing is left", () => {
+    // `undefined`, not null: the key leaves the author's JSON rather than lingering.
+    expect(withSlot("Euston", "main", undefined)).toBeUndefined();
+    expect(withSlot({ main: "Euston", dist: "0" }, "main", "")).toEqual({ dist: "0" });
+  });
+
+  it("treats an empty run array or blank object as empty, not as a filled slot", () => {
+    expect(withSlot({ main: "Euston", remark: [] }, "main", undefined)).toBeUndefined();
+    expect(withSlot("Euston", "remark", { text: "" })).toBe("Euston");
   });
 });

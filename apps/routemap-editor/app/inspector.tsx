@@ -9,6 +9,7 @@ import {
   HStack,
   IconButton,
   Image,
+  Menu,
   Input,
   Portal,
   Select,
@@ -32,12 +33,13 @@ import {
   commonsUrl,
   fieldsFor,
   iconSubtypes,
+  SLOT_NAMES,
   isColspanRow,
   isFieldVisible,
-  mainSlot,
   previewOptions,
   safeIconCode,
-  withMainSlot,
+  slotOf,
+  withSlot,
   type Cell,
   type CellIcon,
   type ColspanRow,
@@ -50,6 +52,8 @@ import {
   type RouteDiagram,
   type Selection,
   type SideLabel,
+  type SideSlots,
+  type SlotName,
 } from "@repo/routemap";
 import { LabelRichEditor } from "./label-editor";
 import { labelIcons, labelIsMultiLine, labelIsRteEditable, setLabelIcons } from "./label-doc";
@@ -478,17 +482,6 @@ function CellEditor({ cell, onChange }: { cell: Cell; onChange: (cell: Cell) => 
   );
 }
 
-/** A label slot with nothing worth editing (so we offer "Add …" instead of an
- *  empty editor). */
-function labelIsEmpty(v: SideLabel | null | undefined): boolean {
-  if (v == null) return true;
-  if (typeof v === "string") return v === "";
-  if (Array.isArray(v)) return v.length === 0;
-  const hasText = typeof v.text === "string" ? v.text !== "" : Array.isArray(v.text) && v.text.length > 0;
-  const hasIcons = Array.isArray(v.icons) ? v.icons.length > 0 : v.icons != null;
-  return !hasText && !hasIcons && v.rws == null;
-}
-
 /**
  * The whole-label logo strip: the `icons` that render on the label's outer edge.
  * Separate from the rich-text editor because their position isn't a position in
@@ -550,46 +543,31 @@ function LabelIconStrip({
 //    representation for it, so editing one would silently drop it. ───────────────
 function LabelSlot({
   side,
+  caption,
   value,
   onChange,
   resolveRws,
   resolveLogo,
 }: {
   side: "left" | "right";
+  /** What this slot is called in the form — the slot's name, not the side's. */
+  caption: string;
   value: SideLabel | null | undefined;
   onChange: (v: SideLabel | undefined) => void;
   resolveRws?: RwsResolver;
   resolveLogo?: LogoResolver;
 }): ReactNode {
-  const empty = labelIsEmpty(value);
   const icons = labelIcons(value);
-  // Reveal the editor once there's content, or when the user clicks "Add". Keyed
-  // by row in the parent, so switching rows re-derives this from the new value.
-  const [open, setOpen] = useState(!empty);
-  useEffect(() => {
-    if (!empty) setOpen(true);
-  }, [empty]);
-
-  if (!open) {
-    return (
-      <Button size="xs" variant="outline" alignSelf="flex-start" onClick={() => setOpen(true)}>
-        <Plus size={ICON} /> Add {side} label
-      </Button>
-    );
-  }
 
   return (
     <Stack gap="1">
       <Flex align="center" justify="space-between">
         <Text fontSize="xs" color="fg.muted">
-          {capitalize(side)} label
+          {caption}
         </Text>
         <MiniBtn
-          title={`Remove ${side} label`}
-          onClick={() => {
-            onChange(undefined);
-            setOpen(false);
-          }}
+          title={`Remove ${side} ${caption.toLowerCase()}`}
+          onClick={() => onChange(undefined)}
         >
           <Trash2 size={ICON} />
         </MiniBtn>
@@ -601,7 +579,7 @@ function LabelSlot({
             // every text edit or the first keystroke would drop them.
             value={value}
             onChange={(v) => onChange(setLabelIcons(v, icons))}
-            ariaLabel={`${capitalize(side)} label`}
+            ariaLabel={`${capitalize(side)} ${caption.toLowerCase()}`}
             resolveRws={resolveRws}
             resolveLogo={resolveLogo}
           />
@@ -641,6 +619,109 @@ function ColspanBody({ row, onChange }: { row: ColspanRow; onChange: (r: Diagram
 
 // ── panel section header ─────────────────────────────────────────────────────
 // `actions` (a toolbar) sits inline with the title on the same line; body below.
+/**
+ * The slots of one side, in the order they appear on the page.
+ *
+ * Outermost-first on the left and innermost-first on the right, so the form reads in
+ * the same direction as the row it's editing — the same reason the serializer orders
+ * its `~~` fields that way.
+ */
+const SLOT_ORDER: Record<"left" | "right", SlotName[]> = {
+  left: ["outer", "remark", "main", "dist"],
+  right: ["dist", "main", "remark", "outer"],
+};
+
+/** The template's own words for each slot; nothing here says `linfo1`. */
+const SLOT_LABEL: Record<SlotName, string> = {
+  dist: "Distance or time",
+  main: "Main text",
+  remark: "Remark",
+  outer: "Outer remark",
+};
+
+/**
+ * One side's labels: `main` plus whichever other slots are in use, and a single menu
+ * to add the rest.
+ *
+ * `main` is always offered because nearly every row uses only that — it's the wiki's
+ * own positional default. Rendering a `LabelSlot` for all four would put four "Add"
+ * buttons on each side and bury the common case behind the rare one.
+ */
+function SideLabels({
+  side,
+  value,
+  onChange,
+  resolveRws,
+  resolveLogo,
+}: {
+  side: "left" | "right";
+  value: SideLabel | SideSlots | null | undefined;
+  onChange: (v: SideLabel | SideSlots | null | undefined) => void;
+  resolveRws?: RwsResolver;
+  resolveLogo?: LogoResolver;
+}): ReactNode {
+  // Slots the user has asked for but not yet typed into. Nothing is written to the
+  // model until there's content — an empty slot would be dropped by `withSlot` the
+  // moment it was added, so it has to be revealed here rather than stored there.
+  // Remounted per row by the parent's `key`, so this can't leak across rows.
+  const [revealed, setRevealed] = useState<ReadonlySet<SlotName>>(new Set());
+  const reveal = (name: SlotName, on: boolean) =>
+    setRevealed((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(name);
+      else next.delete(name);
+      return next;
+    });
+
+  const order = SLOT_ORDER[side];
+  const shown = order.filter((name) => slotOf(value, name) != null || revealed.has(name));
+  // Offered innermost-out, so the slot nearly every row uses comes first. That's a
+  // list of choices rather than a spatial layout, so it doesn't follow SLOT_ORDER.
+  const addable = SLOT_NAMES.filter((name) => !shown.includes(name));
+
+  return (
+    <Stack gap="3">
+      {shown.map((name) => (
+        <LabelSlot
+          key={name}
+          side={side}
+          caption={SLOT_LABEL[name]}
+          value={slotOf(value, name) ?? null}
+          onChange={(v) => {
+            if (v == null) reveal(name, false); // removed: let it go back to the menu
+            onChange(withSlot(value, name, v));
+          }}
+          resolveRws={resolveRws}
+          resolveLogo={resolveLogo}
+        />
+      ))}
+      {addable.length ? (
+        <Menu.Root
+          onSelect={(d) => reveal(d.value as SlotName, true)}
+          positioning={{ placement: "bottom-start" }}
+        >
+          <Menu.Trigger asChild>
+            <Button size="xs" variant="outline" alignSelf="flex-start">
+              <Plus size={ICON} /> Add label
+            </Button>
+          </Menu.Trigger>
+          <Portal>
+            <Menu.Positioner>
+              <Menu.Content>
+                {addable.map((name) => (
+                  <Menu.Item key={name} value={name}>
+                    {SLOT_LABEL[name]}
+                  </Menu.Item>
+                ))}
+              </Menu.Content>
+            </Menu.Positioner>
+          </Portal>
+        </Menu.Root>
+      ) : null}
+    </Stack>
+  );
+}
+
 function Section({ title, actions, children }: { title: string; actions?: ReactNode; children?: ReactNode }): ReactNode {
   return (
     <Stack gap="1.5">
@@ -752,29 +833,28 @@ export function Inspector({
   } else if (selection.kind === "row") {
     const grid = row as GridRow;
     body = (
-      <Section title="Labels">
-        <Stack gap="3">
-          {/* The `main` slot only. A row can hold four labels per side, but the form
-              edits the one nearly every row uses, and `withMainSlot` leaves the other
-              three — and the side's written shape — exactly as the author left them. */}
-          <LabelSlot
+      <>
+        <Section title="Left label">
+          <SideLabels
             key={`left-${i}`}
             side="left"
-            value={mainSlot(grid.left) ?? null}
-            onChange={(v) => setRow({ ...grid, left: withMainSlot(grid.left, v) })}
+            value={grid.left}
+            onChange={(v) => setRow({ ...grid, left: v })}
             resolveRws={resolveRws}
             resolveLogo={resolveLogo}
           />
-          <LabelSlot
+        </Section>
+        <Section title="Right label">
+          <SideLabels
             key={`right-${i}`}
             side="right"
-            value={mainSlot(grid.right) ?? null}
-            onChange={(v) => setRow({ ...grid, right: withMainSlot(grid.right, v) })}
+            value={grid.right}
+            onChange={(v) => setRow({ ...grid, right: v })}
             resolveRws={resolveRws}
             resolveLogo={resolveLogo}
           />
-        </Stack>
-      </Section>
+        </Section>
+      </>
     );
   } else if (isColspanRow(row)) {
     // A cell selection landed on a colspan row (e.g. the row type changed under a
