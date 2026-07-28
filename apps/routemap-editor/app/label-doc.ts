@@ -17,9 +17,17 @@
  * carry one rather than dropping it on the first keystroke.
  */
 import type { JSONContent } from "@tiptap/react";
-import type { BreakRun, IconRun, LabelIcon, SideLabel, SplitRun, TextRun } from "@repo/routemap";
+import type {
+  BreakRun,
+  IconRun,
+  LabelIcon,
+  RawRun,
+  SideLabel,
+  SplitRun,
+  TextRun,
+} from "@repo/routemap";
 
-type RunObj = Exclude<TextRun, string | SplitRun | BreakRun | IconRun>;
+type RunObj = Exclude<TextRun, string | SplitRun | BreakRun | IconRun | RawRun>;
 
 /** Runs the document can hold: splits can't round-trip, `<br>` can (a hardBreak). */
 const docRuns = (runs: TextRun[]): (string | RunObj | BreakRun | IconRun)[] =>
@@ -44,6 +52,9 @@ export function labelIsRteEditable(label: SideLabel | null | undefined): boolean
   // around it, and that distinction is precisely what the document can't hold — so
   // editing one here would flatten it into sugar and move its neighbours.
   if (runs.some((r) => typeof r === "object" && "split" in r)) return false;
+  // Nor can raw wikitext: the document has no node for it, and flattening it to text
+  // would let the serializer read its argument pipes as line breaks.
+  if (runs.some((r) => typeof r === "object" && "raw" in r)) return false;
   if (runs.some((r) => typeof r !== "string" && "title" in r && r.title != null)) return false;
   return Array.isArray(label) || label.title == null;
 }
