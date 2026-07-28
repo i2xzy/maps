@@ -24,8 +24,9 @@ Wikipedia railway articles. Those are normally hand-written wikitext:
 ```
 
 Each glyph is a column of track; `! !` and `~~` separate up to four label slots on each
-side. The editor lets you build that by clicking, with a live preview and the wikitext
-beside it, and **Import** takes a `{{Routemap}}` pasted from any article or template.
+side. The editor lets you build that by clicking, with a live preview beside it — and the
+wikitext panel is editable, so pasting a `{{Routemap}}` from any article or template imports
+it, and rows you don't touch are exported byte-for-byte as they came in.
 
 **Status:** works locally, not deployed yet. The renderer, editor and wikitext importer
 all work; see [What's missing](#whats-missing) for the gaps.

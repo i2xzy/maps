@@ -27,9 +27,10 @@ Measured against a committed fixture of **22 real Wikipedia diagrams (1,036 rows
 
 The first three are asserted as a floor in `from-wikitext.test.ts`, so they can only go up.
 
-Working today: render from JSON, serialize to wikitext, parse wikitext back, import a real
-diagram, edit rows/cells/labels in forms, four label slots per side, a logo picker over the
-whole catalog, licence credits, and static export.
+Working today: render from JSON, serialize to wikitext, parse wikitext back, an editable
+wikitext panel that imports by paste and exports untouched rows byte-for-byte, editing
+rows/cells/labels in forms, four label slots per side, a logo picker over the whole catalog,
+licence credits, and static export.
 
 ---
 
