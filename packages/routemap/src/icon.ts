@@ -236,6 +236,19 @@ const FORMATION: Record<IconFormation, string> = {
   cutting: "C",
   embankment: "D",
 };
+/** Prefix token -> width name, the reverse of `WIDTH`. */
+const WIDTH_BY_CODE: Record<string, IconWidth> = {};
+
+/**
+ * The width a bare prefix token names, or undefined if it isn't one.
+ *
+ * `"b"` is `double`, `"cd"` is `three-quarter`. Used to decode a spacer cell, which is
+ * written as its width prefix and nothing else.
+ */
+export function widthFromCode(token: string): IconWidth | undefined {
+  return WIDTH_BY_CODE[token];
+}
+
 const WIDTH: Record<IconWidth, string> = {
   eighth: "o", // ⅛
   quarter: "c", // ¼
@@ -247,6 +260,8 @@ const WIDTH: Record<IconWidth, string> = {
   sextuple: "bs", // 6×
   octuple: "w", // 8×
 };
+
+for (const [name, code] of Object.entries(WIDTH)) WIDTH_BY_CODE[code] = name as IconWidth;
 
 // Runtime value lists sourced from the maps above — for the field descriptor and
 // the GUI, so enum options can never drift from what the serializer accepts.

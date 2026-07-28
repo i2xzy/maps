@@ -23,6 +23,7 @@
  */
 import {
   iconToCode,
+  widthFromCode,
   type Corner,
   type IconEnd,
   type IconFormation,
@@ -426,6 +427,13 @@ export function codeToIcon(code: string): IconObject {
   // `kind` is irrelevant here (cast past the required field).
   const passthrough = { code } as IconObject;
   if (hasPassthroughMarker(code)) return passthrough;
+
+  // A spacer is written as its width prefix and NOTHING else: `b`, `d`, `cd`. Those are
+  // ~11% of cells in real diagrams, and `iconToCode` has always emitted them — only the
+  // decode was missing, so the round-trip ran one way and the form could never edit one.
+  if (code === "") return { kind: "spacer" };
+  const width = widthFromCode(code);
+  if (width) return { kind: "spacer", width };
   // Greedy decode first, then a pass that force-strips a leading formation letter
   // (finds `DSTR` = D+STR despite the shadowing `DST` root). The round-trip net
   // keeps only an exact re-emit, so trying both passes is always safe.

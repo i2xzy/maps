@@ -110,3 +110,34 @@ describe("codeToIcon (crossover round-trip)", () => {
     },
   );
 });
+
+describe("bare width prefixes are spacers", () => {
+  it("decodes every prefix token to its spacer, round-tripping the code", () => {
+    // `iconToCode` has always emitted these; only the decode was missing, so the
+    // round-trip ran one way and the form could never edit one. ~11% of real cells.
+    const expected: Record<string, string | undefined> = {
+      "": undefined,
+      o: "eighth",
+      c: "quarter",
+      oc: "three-eighth",
+      d: "half",
+      cd: "three-quarter",
+      b: "double",
+      s: "quad",
+      bs: "sextuple",
+      w: "octuple",
+    };
+    for (const [code, width] of Object.entries(expected)) {
+      const icon = codeToIcon(code);
+      expect(icon, code).toEqual(width ? { kind: "spacer", width } : { kind: "spacer" });
+      expect(iconToCode(icon), code).toBe(code);
+    }
+  });
+
+  it("doesn't swallow a real icon that starts with a prefix letter", () => {
+    // `b` is a spacer; `bSTR` is a double-width track.
+    expect(codeToIcon("bSTR")).toMatchObject({ kind: "track", width: "double" });
+    expect(codeToIcon("dSTR")).toMatchObject({ kind: "track", width: "half" });
+    expect(codeToIcon("STR")).toEqual({ kind: "track" });
+  });
+});
