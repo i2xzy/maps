@@ -149,8 +149,10 @@ function migrateSide(side: SideLabel | SideSlots | null | undefined, edge: "left
   }
 
   if (list.length === 0) {
-    // Nothing to move, but a nested run may still have needed it.
-    return runs === inner && !needsMigration(side) ? side : collapse({ ...rest, text: runs });
+    // No logos to move, but the runs may still have been tidied, and a nested run may
+    // itself have needed migrating. An empty result means there was nothing here at
+    // all, so hand the side back rather than inventing `{ text: [] }`.
+    return runs.length === 0 ? side : collapse({ ...rest, text: runs });
   }
 
   const logos = iconRuns(list);
@@ -191,8 +193,26 @@ function migrateRow(row: DiagramRow): DiagramRow {
   return { ...grid, left: migrateSide(grid.left, "left"), right: migrateSide(grid.right, "right") };
 }
 
-/** Migrate a whole diagram. Safe to call on one that is already current. */
+/**
+ * Migrate a whole diagram. Safe to call on one that is already current — that comes
+ * back as the very same object, so a load-time call costs nothing.
+ */
 export function migrateDiagram(diagram: RouteDiagram): RouteDiagram {
   if (!needsMigration(diagram)) return diagram;
+  return { ...diagram, rows: (diagram.rows ?? []).map(migrateRow) };
+}
+
+/**
+ * Canonical form: migrated if it needs it, and tidied either way.
+ *
+ * The difference from `migrateDiagram` is that this doesn't stop early. A document
+ * that's already current still gets its runs tidied — a marks-free `{ text: "a" }`
+ * becomes `"a"`, adjacent strings merge — which is what makes it the right thing for a
+ * Format action, as opposed to something to run behind the user's back on load.
+ *
+ * Meaning-preserving in both halves: every rewrite here emits the same wikitext and
+ * renders the same. Format changes how the JSON reads, never what it says.
+ */
+export function canonicalizeDiagram(diagram: RouteDiagram): RouteDiagram {
   return { ...diagram, rows: (diagram.rows ?? []).map(migrateRow) };
 }

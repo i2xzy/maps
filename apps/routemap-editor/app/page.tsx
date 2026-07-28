@@ -28,6 +28,7 @@ import {
   createRwsResolver,
   expandRint,
   expandRws,
+  canonicalizeDiagram,
   migrateDiagram,
   needsMigration,
   toWikitext,
@@ -360,9 +361,14 @@ export default function EditorPage() {
     const usable = view.scrollDOM.clientWidth - gutterW - 10; // margin for the trailing comma
     return Math.max(40, Math.floor(usable / charW));
   };
+  // Format puts the document in canonical form, not just canonical whitespace: it
+  // brings an old-shape diagram up to date and tidies runs either way (a marks-free
+  // `{ text: "a" }` becomes `"a"`, adjacent strings merge). Every rewrite it makes
+  // emits the same wikitext, so pressing it changes how the JSON reads, never what it
+  // says — the one exception being an old diagram, whose logos it puts BACK.
   const format = () => {
     try {
-      setText(formatJson(JSON.parse(text), 2, paneMaxWidth()));
+      setText(formatJson(canonicalizeDiagram(JSON.parse(text)), 2, paneMaxWidth()));
     } catch {
       // invalid JSON: nothing to format
     }
@@ -488,7 +494,7 @@ export default function EditorPage() {
                       </Box>{" "}
                       field is no longer read.
                     </Box>
-                    <Button size="xs" onClick={() => setText(migrateText(text))}>
+                    <Button size="xs" onClick={format}>
                       Convert
                     </Button>
                   </Box>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { migrateDiagram, needsMigration } from "./migrate";
+import { canonicalizeDiagram, migrateDiagram, needsMigration } from "./migrate";
 import { toWikitext } from "./serialize";
 import type { RouteDiagram } from "./types";
 
@@ -140,5 +140,47 @@ describe("migrateDiagram", () => {
     expect(needsMigration({ rows: [{ left: { text: "X", icons: ["air"] } }] })).toBe(true);
     expect(needsMigration({ rows: [{ right: [{ split: [[{ icons: ["air"] }]] }] }] })).toBe(true);
     expect(needsMigration({ rows: [{ left: "plain", cells: ["STR"] }] })).toBe(false);
+  });
+});
+
+describe("canonicalizeDiagram", () => {
+  const right = (d: RouteDiagram) => (d.rows[0] as { right: unknown }).right;
+  const of = (runs: unknown) =>
+    canonicalizeDiagram({ rows: [{ right: runs, cells: ["BHF"] }] } as never);
+
+  it("tidies a document that is already current", () => {
+    // `migrateDiagram` stops early here and returns the same object, which is right for
+    // a load-time call. Format is a deliberate action, so it goes further.
+    expect(right(of([{ text: "a" }, { text: "b" }, { icon: "air" }]))).toEqual([
+      "ab",
+      { icon: "air" },
+    ]);
+  });
+
+  it("still migrates an old document on the way", () => {
+    expect(right(of([{ text: "X", icons: ["air"] }]))).toEqual(["X ", { icon: "air" }]);
+  });
+
+  it("changes how a CURRENT document reads, never what it says", () => {
+    // The property that makes this safe behind a Format button. Scoped to documents
+    // that are already current: for an old one the wikitext is SUPPOSED to change,
+    // because today's serializer drops its logos entirely. That case is covered by the
+    // migrateDiagram tests, which assert the old output instead.
+    const cases: unknown[] = [
+      [{ text: "a" }, { text: "b" }],
+      [{ text: "X" }, " ", { icon: "air" }, " ", { icon: "bus" }],
+      [{ text: "a|b", italic: true }],
+      [{ rws: "Liverpool|Lime Street" }, " ", { icon: "gb|rail" }],
+      [{ split: [[{ text: "a" }, { text: "b" }], "c"] }],
+      ["keep\\|escaped"],
+    ];
+    for (const runs of cases) {
+      const before = toWikitext({ rows: [{ right: runs, cells: ["BHF"] }] } as never);
+      expect(toWikitext(of(runs)), JSON.stringify(runs)).toBe(before);
+    }
+  });
+
+  it("leaves a plain string label alone", () => {
+    expect(right(of("Euston"))).toBe("Euston");
   });
 });
