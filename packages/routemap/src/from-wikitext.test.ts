@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import corpus from "./__fixtures__/real-diagrams.json";
-import { fromWikitext, parseLabelText } from "./from-wikitext";
+import realTemplates from "./__fixtures__/real-templates.json";
+import { fromRoutemap, fromWikitext, mapParam, parseLabelText, toRoutemap } from "./from-wikitext";
 import { toWikitext } from "./serialize";
 
 /**
@@ -117,5 +118,50 @@ describe("parseLabelText", () => {
     expect(parseLabelText("[[Euston station|Euston]]")).toEqual([
       { text: "Euston", link: "Euston station" },
     ]);
+  });
+});
+
+describe("fromRoutemap / toRoutemap (the {{Routemap}} call)", () => {
+  const templates = realTemplates as Record<string, string>;
+
+  it("rebuilds every real wrapper byte-for-byte", () => {
+    // Not "semantically" — byte-for-byte. A wrapper param is opaque to us, so the only
+    // way to know none was lost or reformatted is that the text is identical. This is
+    // what makes editable wikitext safe: `legend`, `top`, `navbar` and per-page styling
+    // would otherwise be destroyed by one GUI edit.
+    for (const [title, src] of Object.entries(templates)) {
+      const d = fromRoutemap(src);
+      const body = (mapParam(d, "map") ?? "").trim();
+      expect(toRoutemap(d, body), title).toBe(src);
+    }
+  });
+
+  it("keeps params in order, names and spacing verbatim", () => {
+    const d = fromRoutemap("{{Routemap\n|navbar = X\n|title = Y\n|map =\nSTR\n}}");
+    expect(d.map?.params?.map((p) => p.name)).toEqual(["navbar ", "title ", "map "]);
+    // `mapParam` trims the NAME for lookup, but a value keeps every character it had —
+    // including the newline before the next `|`. That is why the wrapper rebuilds
+    // byte-for-byte, so it's asserted rather than trimmed away.
+    expect(mapParam(d, "title")).toBe(" Y\n");
+    expect(d.rows).toHaveLength(1);
+  });
+
+  it("interprets no param, not even title", () => {
+    // A title we "understood" is a title we could silently reformat. It stays text.
+    const d = fromRoutemap("{{Routemap|title=<b>X</b>|map=\nSTR\n}}");
+    expect(mapParam(d, "title")).toBe("<b>X</b>");
+  });
+
+  it("leaves a bare map body working without a wrapper", () => {
+    expect(toWikitext(fromWikitext("STR~~x"))).toBe("STR~~x");
+    expect(fromRoutemap("STR~~x").map).toBeUndefined();
+  });
+
+  it("carries map2 and friends verbatim, though it can't edit their rows yet", () => {
+    // {{Routemap}} takes map2/map3. Preserved as text — lossless, not yet editable.
+    const src = "{{Routemap|map=\nSTR\n|map2=\nBHF\n}}";
+    const d = fromRoutemap(src);
+    expect(mapParam(d, "map2")).toBe("\nBHF\n");
+    expect(toRoutemap(d, "STR")).toBe(src);
   });
 });

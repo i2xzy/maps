@@ -7,7 +7,7 @@ import { computeLayout } from "./layout";
 //   col1:  -   / STRc3 / STR   (branch peels right)
 // plus an overlay stack, a half-width dSTR, and a colspan legend row.
 const diagram: RouteDiagram = {
-  map: { title: "spike branch" },
+  map: { template: "Routemap", params: [{ name: "title", value: "spike branch" }] },
   rows: [
     { cells: ["STR"] },
     { left: "Handsacre Jn", cells: ["ABZrg", "STRc3"] },

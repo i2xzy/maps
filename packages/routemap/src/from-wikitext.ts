@@ -21,6 +21,7 @@ import type {
   Cell,
   CellIcon,
   DiagramRow,
+  MapParam,
   RouteDiagram,
   SideSlots,
   SideLabel,
@@ -70,7 +71,7 @@ function template(s: string): { name: string; args: string[]; length: number } |
       if (depth === 0) {
         const inner = s.slice(2, i - 1);
         const parts = splitTop(inner, "|");
-        return { name: (parts[0] ?? "").trim(), args: parts.slice(1), length: i + 1 };
+        return { name: parts[0] ?? "", args: parts.slice(1), length: i + 1 };
       }
       continue;
     }
@@ -122,7 +123,7 @@ export function parseLabelText(text: string): TextRun[] {
 
     const tpl = template(rest);
     if (tpl) {
-      const name = tpl.name.toLowerCase();
+      const name = tpl.name.trim().toLowerCase();
       if (name === "!") {
         // A literal pipe. The model escapes it so it isn't read as a line break.
         plain += "\\|";
@@ -319,4 +320,69 @@ export function fromWikitext(body: string): RouteDiagram {
     if (row) rows.push(row);
   }
   return { rows };
+}
+
+/* ------------------------------------------------------------------ */
+/* the {{Routemap}} call around the body                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Parse a whole `{{Routemap|…|map=…}}` call.
+ *
+ * Every param is kept verbatim and in order, `map` included as the marker for where the
+ * rows belong. Nothing is interpreted — a `title` this "understood" would be a `title`
+ * it could silently reformat, and the params it has never heard of (`legend`, `top`,
+ * `navbar`, per-page styling) are the ones a wikitext editor would otherwise destroy.
+ */
+export function fromRoutemap(src: string): RouteDiagram {
+  const tpl = template(src.trim());
+  if (!tpl) return fromWikitext(src);
+
+  const params: MapParam[] = [];
+  let body = "";
+  for (const arg of tpl.args) {
+    // The FIRST `=` at bracket depth 0 splits name from value; a value may contain more
+    // (`top=<div style="text-align: center;">`), and a positional param contains none.
+    const eq = splitTop(arg, "=");
+    if (eq.length < 2) {
+      params.push({ name: "", value: arg });
+      continue;
+    }
+    // Name kept VERBATIM: real diagrams write `|navbar = X`, and normalising the space
+    // round the `=` is a diff across every line of every wrapper. Use `mapParam` to look
+    // one up rather than comparing `name` directly.
+    const name = eq[0] as string;
+    const value = arg.slice(name.length + 1);
+    if (name.trim() === "map") body = value;
+    // The map value is stored VERBATIM rather than blanked, so its surrounding newlines
+    // survive — `map=\n<rows>\n}}` is how every real diagram is laid out, and the rows
+    // get spliced between that leading and trailing whitespace on the way out.
+    //
+    // Only `map` is parsed into rows. `{{Routemap}}` also takes `map2`, `map3`… and
+    // those keep their text verbatim here: lossless, but not editable as rows yet.
+    params.push({ name, value });
+  }
+  // `template` keeps whatever followed `{{` verbatim, newline included, because that is
+  // how real diagrams are laid out and a rebuild has to reproduce it.
+  return { ...fromWikitext(body), map: { template: tpl.name, params } };
+}
+
+/** Rebuild the `{{Routemap}}` call. Body-only diagrams come back as bare rows. */
+export function toRoutemap(diagram: RouteDiagram, body: string): string {
+  const meta = diagram.map;
+  if (!meta?.params?.length) return body;
+  const args = meta.params.map((p) => {
+    if (p.name.trim() === "map") {
+      const lead = /^\s*/.exec(p.value)?.[0] ?? "";
+      const trail = /\s*$/.exec(p.value)?.[0] ?? "";
+      return `${p.name}=${lead}${body}${trail}`;
+    }
+    return p.name === "" ? p.value : `${p.name}=${p.value}`;
+  });
+  return `{{${meta.template ?? "Routemap"}${args.map((a) => `|${a}`).join("")}}}`;
+}
+
+/** Look up a wrapper param by name, ignoring the whitespace authors put round the `=`. */
+export function mapParam(diagram: RouteDiagram, name: string): string | undefined {
+  return diagram.map?.params?.find((p) => p.name.trim() === name)?.value;
 }

@@ -8,7 +8,7 @@
  * icon codes so nothing is ever silently dropped.
  *
  *   RouteDiagram
- *     ├─ map?      MapMeta        (title/caption/collapse + verbatim params)
+ *     ├─ map?      MapMeta        (the {{Routemap}} call, params verbatim)
  *     ├─ columns?  number         (max column count; derived if omitted)
  *     └─ rows[]    DiagramRow
  *          ├─ GridRow    { left?, right?, cells: Cell[] }
@@ -298,12 +298,30 @@ export interface ColspanRow {
 export type DiagramRow = GridRow | ColspanRow;
 
 /** Map-level metadata; `params` is a verbatim bag for round-trip fidelity. */
+/** One `{{Routemap}}` parameter exactly as written. */
+export interface MapParam {
+  /** The parameter name, or "" for a positional one. */
+  name: string;
+  /** The value verbatim, including any surrounding whitespace the author left. */
+  value: string;
+}
+
+/**
+ * The `{{Routemap}}` call around a diagram, kept so a pasted template rebuilds unchanged.
+ *
+ * Params are an ordered LIST, not a record, and none of them is interpreted — not even
+ * `title`. Once a user can edit wikitext, a param this doesn't understand is destroyed
+ * on their next GUI edit, and there are many: `legend`, `top`, `bottom`, `navbar`,
+ * per-page styling. Order matters too, because a reordered wrapper is a diff nobody
+ * asked for.
+ *
+ * The param named `map` marks where the row body belongs; its value is ignored and the
+ * serialized rows are substituted there.
+ */
 export interface MapMeta {
-  title?: string;
-  caption?: string;
-  collapse?: boolean;
-  /** Any `{{Routemap}}`/`{{BS-map}}` params not otherwise modelled, kept verbatim. */
-  params?: Record<string, string>;
+  /** The template name as written — "Routemap", "BS-map", "BS-daten"… */
+  template?: string;
+  params?: MapParam[];
 }
 
 /** A complete route diagram. */
