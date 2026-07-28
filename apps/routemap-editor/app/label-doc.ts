@@ -19,9 +19,13 @@
  * carry one rather than dropping it on the first keystroke.
  */
 import type { JSONContent } from "@tiptap/react";
-import type { LabelIcon, SideLabel, TextRun } from "@repo/routemap";
+import type { LabelIcon, SideLabel, SplitRun, TextRun } from "@repo/routemap";
 
-type RunObj = Exclude<TextRun, string>;
+type RunObj = Exclude<TextRun, string | SplitRun>;
+
+/** Splits are filtered before conversion; `labelIsRteEditable` keeps them out. */
+const contentRuns = (runs: TextRun[]): (string | RunObj)[] =>
+  runs.filter((r): r is string | RunObj => typeof r === "string" || !("split" in r));
 
 const asRuns = (text: SideLabel | undefined): TextRun[] => {
   if (text == null) return [];
@@ -34,7 +38,12 @@ const asRuns = (text: SideLabel | undefined): TextRun[] => {
 export function labelIsRteEditable(label: SideLabel | null | undefined): boolean {
   if (label == null || typeof label === "string") return true;
   const runs = Array.isArray(label) ? label : asRuns(label.text as SideLabel | undefined);
-  if (runs.some((r) => typeof r !== "string" && r.title != null)) return false;
+  // A `{ split }` run has no node type in the document. The `|` sugar does (a
+  // paragraph break), but an explicit split stacks lines WITHOUT splitting the label
+  // around it, and that distinction is precisely what the document can't hold — so
+  // editing one here would flatten it into sugar and move its neighbours.
+  if (runs.some((r) => typeof r === "object" && "split" in r)) return false;
+  if (runs.some((r) => typeof r !== "string" && "title" in r && r.title != null)) return false;
   return Array.isArray(label) || label.title == null;
 }
 
@@ -60,7 +69,7 @@ export function labelIsMultiLine(label: SideLabel | null | undefined): boolean {
   const runs = label == null || typeof label === "string" || Array.isArray(label)
     ? asRuns(label ?? undefined)
     : asRuns(label.text as SideLabel | undefined);
-  return runs.some((r) => {
+  return contentRuns(runs).some((r) => {
     const text = typeof r === "string" ? r : (r.text ?? "");
     return /(?<!\\)\|/.test(text);
   });
@@ -99,7 +108,7 @@ interface Marks {
 }
 
 /** A run's text plus its effective marks (run marks OR the label-level default). */
-function runMarks(r: TextRun, lvl: Marks): Marks {
+function runMarks(r: string | RunObj, lvl: Marks): Marks {
   if (typeof r === "string") return lvl;
   return {
     bold: r.bold || lvl.bold,
@@ -132,7 +141,7 @@ export function labelToDoc(label: SideLabel | null | undefined): JSONContent {
   // Build lines of nodes; a `|` in ANY run's text starts a new line.
   const lines: JSONContent[][] = [[]];
   const pushNode = (n: JSONContent) => (lines[lines.length - 1] as JSONContent[]).push(n);
-  for (const r of runs) {
+  for (const r of contentRuns(runs)) {
     // A station link is an atom node; its display is resolved at render time. Its
     // own icons still have to follow it — falling straight to the next run here
     // dropped them, and since icon-bearing labels are now RTE-editable that loss
@@ -168,7 +177,9 @@ const markOf = (node: JSONContent, type: string) => node.marks?.find((m) => m.ty
 /** Convert a TipTap doc back to a `SideLabel` (collapsed to a plain string when
  *  there are no marks/links and a single line). */
 export function docToLabel(doc: JSONContent): SideLabel | undefined {
-  const runs: TextRun[] = [];
+  // Never a `{ split }`: the document has no node for one, which is why
+  // `labelIsRteEditable` keeps split-bearing labels out of the editor entirely.
+  const runs: (string | RunObj)[] = [];
   const paras = doc.content ?? [];
   paras.forEach((para, pi) => {
     if (pi > 0) runs.push("|"); // paragraph boundary -> BSsplit line break

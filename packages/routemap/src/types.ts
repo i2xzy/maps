@@ -122,6 +122,29 @@ export type LabelIcon =
   | { region: string; name?: string; size?: number; alt?: string }
   | { file: string; size?: number; alt?: string };
 
+/** One line of a `{{BSsplit}}`: its runs, or a bare string for a single-run line. */
+export type SplitLine = string | TextRun[];
+
+/**
+ * An explicit `{{BSsplit}}` as a RUN, so it stacks lines without splitting the label
+ * around it.
+ *
+ * The `|`-in-text sugar splits the whole label, which can't express either of the two
+ * things this can:
+ *
+ *   - content BESIDE a split rather than inside it. `[{ icon }, { split: [a, b] }]` is
+ *     `{{rint|…}} {{BSsplit|a|b}}` — the logo outside the stack — where a leading run
+ *     plus sugar would put the logo on the first line, inside it.
+ *   - more than one split in a label, which real diagrams do use (Parit Buntar, and
+ *     the Marunouchi Line).
+ *
+ * Nesting a split inside a split isn't a supported shape. It renders (the inner one is
+ * just a run on one of the outer lines) but nothing in the wild needs it.
+ */
+export interface SplitRun {
+  split: SplitLine[];
+}
+
 /**
  * An inline run of label text. A bare string is plain text; the object form adds:
  *   - `link` — a generic wikilink target ({{[[ ]]}}), resolved by `resolveHref`;
@@ -134,10 +157,12 @@ export type LabelIcon =
  *
  * A `|` anywhere in a run's text is a LINE BREAK (the wiki {{BSsplit}} separator);
  * keep linked/iconed runs atomic and put breaks in plain runs (usually a lone
- * `"|"` element). `\|` is a literal pipe.
+ * `"|"` element). `\|` is a literal pipe. That sugar splits the WHOLE label, which
+ * is what nearly every diagram wants; `{ split }` below is for what it can't reach.
  */
 export type TextRun =
   | string
+  | SplitRun
   | {
       text?: string;
       link?: string | true;

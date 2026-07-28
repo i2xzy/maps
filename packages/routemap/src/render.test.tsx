@@ -517,3 +517,60 @@ describe("RouteMap label slots", () => {
     expect(r).toMatch(/text-align:left/);
   });
 });
+
+describe("RouteMap {{BSsplit}} runs", () => {
+  const render = (right: unknown) =>
+    renderToStaticMarkup(
+      <RouteMap
+        diagram={{ rows: [{ right, cells: ["BHF"] } as never] }}
+        resolveIcon={(c) => c}
+        resolveLogo={() => ({ url: "/logo.svg" })}
+      />,
+    );
+
+  it("stacks a split run's lines in its own table", () => {
+    const html = render([{ split: ["Platform 1", "Platform 2"] }]);
+    expect(html).toContain("inline-table");
+    expect(html).toContain("Platform 1");
+    expect(html).toContain("Platform 2");
+  });
+
+  // React emits a <link rel="preload"> for every image in the document head, so
+  // searching the WHOLE document for the logo url finds that instead of the <img> and
+  // any ordering assertion passes vacuously. Compare inside the row only.
+  const row = (right: unknown) => /<tr[\s\S]*?<\/tr>/.exec(render(right))![0];
+
+  it("keeps a neighbouring logo OUTSIDE the stack", () => {
+    // The whole reason for the run type. The logo must precede the table, not sit in
+    // its first row — that's the difference between `{{rint|x}} {{BSsplit|a|b}}` and
+    // `{{BSsplit|{{rint|x}} a|b}}`.
+    // The logo url, not `<img>` — the row also contains the BHF cell icon.
+    const html = row([{ icons: ["gb|rail"] }, " ", { split: ["a", "b"] }]);
+    expect(html).toContain("/logo.svg");
+    expect(html.indexOf("/logo.svg")).toBeLessThan(html.indexOf("inline-table"));
+  });
+
+  it("puts a logo INSIDE the stack when it's written inside a line", () => {
+    const html = row([{ split: [[{ icons: ["gb|rail"] }, "a"], "b"] }]);
+    expect(html).toContain("/logo.svg");
+    expect(html.indexOf("inline-table")).toBeLessThan(html.indexOf("/logo.svg"));
+  });
+
+  it("renders two independent splits in one label", () => {
+    const html = render([{ split: ["a", "b"] }, " / ", { split: ["c", "d"] }]);
+    expect([...html.matchAll(/inline-table/g)]).toHaveLength(2);
+  });
+
+  it("shrinks a split run to 90% in a side cell, like the `|` sugar does", () => {
+    // Both go through one component, so `.RMsplit`'s rule can't apply to only one.
+    expect(render([{ split: ["a", "b"] }])).toMatch(/font-size:90%/);
+    const colspan = renderToStaticMarkup(
+      <RouteMap
+        diagram={{ rows: [{ type: "colspan", text: [{ split: ["a", "b"] }] } as never] }}
+        resolveIcon={(c) => c}
+      />,
+    );
+    // Scoped to .RMl/.RMr, so a colspan row's split is full size.
+    expect(colspan).not.toMatch(/font-size:\s*90%/);
+  });
+});

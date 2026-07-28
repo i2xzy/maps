@@ -141,3 +141,46 @@ describe("toWikitext label slots", () => {
     );
   });
 });
+
+describe("toWikitext {{BSsplit}} runs", () => {
+  const right = (text: unknown) =>
+    toWikitext({ rows: [{ right: text, cells: ["BHF"] } as never] });
+
+  it("emits an explicit split as the template, keeping neighbours beside it", () => {
+    // The reason this run type exists: a logo OUTSIDE the stack. With `|` sugar the
+    // logo would land on line one, inside it.
+    //
+    // The separating space is its own run. Runs concatenate with nothing between them,
+    // so spacing is the author's to state — same as it is in the wikitext.
+    expect(
+      right([{ icons: ["gb|rail"] }, " ", { split: ["Platform 1", "Platform 2"] }]),
+    ).toBe("BHF~~{{rint|gb|rail}} {{BSsplit|Platform 1|Platform 2}}");
+    expect(right([{ icons: ["gb|rail"] }, { split: ["a", "b"] }])).toBe(
+      "BHF~~{{rint|gb|rail}}{{BSsplit|a|b}}",
+    );
+  });
+
+  it("still lets `|` sugar split the whole label", () => {
+    expect(right("a|b")).toBe("BHF~~{{BSsplit|a|b}}");
+  });
+
+  it("carries formatted runs inside a split line", () => {
+    expect(right([{ split: [[{ text: "x", italic: true }], "y"] }])).toBe(
+      "BHF~~{{BSsplit|''x''|y}}",
+    );
+  });
+
+  it("allows more than one split in a label, which sugar cannot express", () => {
+    // Confirmed on real diagrams (Parit Buntar, Marunouchi Line): sugar splits the
+    // whole label, so two independent stacks in one label need explicit runs.
+    expect(right([{ split: ["a", "b"] }, " / ", { split: ["c", "d"] }])).toBe(
+      "BHF~~{{BSsplit|a|b}} / {{BSsplit|c|d}}",
+    );
+  });
+
+  it("resolves stations and logos nested inside a split", () => {
+    expect(right([{ split: [[{ rws: "Liverpool|Lime Street" }], "note"] }])).toBe(
+      "BHF~~{{BSsplit|{{rws|Liverpool|Lime Street}}|note}}",
+    );
+  });
+});

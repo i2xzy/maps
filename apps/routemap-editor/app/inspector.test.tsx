@@ -231,12 +231,12 @@ describe("Inspector: cell selection", () => {
 
 describe("Inspector: row selection (labels & colspan)", () => {
   it("edits the main label of each side, keeping the plain string shape", () => {
-    renderWithChakra(<Controlled initial={{ rows: [{ left: "Euston", right: "note" }] }} select={{ kind: "row", row: 0 }} />);
+    renderWithChakra(<Controlled initial={{ rows: [{ left: "Euston", right: "note", cells: [] }] }} select={{ kind: "row", row: 0 }} />);
     fireEvent.change(screen.getByLabelText("Left main text"), { target: { value: "Euston Square" } });
     // A plain label stays a plain string rather than being promoted to { main: … }.
-    expect(model().rows![0]).toEqual({ left: "Euston Square", right: "note" });
+    expect(model().rows![0]).toEqual({ left: "Euston Square", right: "note", cells: [] });
     fireEvent.change(screen.getByLabelText("Right main text"), { target: { value: "changed" } });
-    expect(model().rows![0]).toEqual({ left: "Euston Square", right: "changed" });
+    expect(model().rows![0]).toEqual({ left: "Euston Square", right: "changed", cells: [] });
   });
 
   it("shows an editor per occupied slot, named by side and slot", () => {

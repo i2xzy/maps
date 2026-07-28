@@ -258,28 +258,46 @@ interface Fragment {
   italic?: boolean;
 }
 
+/** A split run nested in a line — its own stack of lines, rendered inline. */
+interface SplitPiece {
+  lines: Piece[][];
+}
+/** One thing on a line: a text fragment, or a `{{BSsplit}}` sitting beside it. */
+type Piece = Fragment | SplitPiece;
+
+const isSplitPiece = (p: Piece): p is SplitPiece => "lines" in p;
+
 // Split a run's text on an unescaped `|` (line break); unescape `\|` to a pipe.
 const splitLines = (s: string): string[] =>
   s.split(/(?<!\\)\|/).map((p) => p.replace(/\\\|/g, "|"));
 
 /**
- * Flatten a label's text into lines of inline fragments. Runs concatenate inline;
- * a `|` in any run's text starts a new line (BSsplit). A run's link/title/icons
- * ride along on its fragment; label-level link/title are the per-fragment default.
+ * Flatten a label's text into lines of inline pieces. Runs concatenate inline; a `|`
+ * in any run's text starts a new line (BSsplit sugar). A run's link/title/icons ride
+ * along on its fragment; label-level link/title are the per-fragment default.
+ *
+ * A `{ split }` run is a piece ON a line rather than a break in it, which is the whole
+ * point: whatever sits beside it stays beside it instead of being pushed onto line one.
  */
 function buildLines(
   text: string | TextRun[],
   labelLink?: string | true,
   labelTitle?: string,
-): Fragment[][] {
+): Piece[][] {
   const runs: TextRun[] = typeof text === "string" ? [text] : text;
-  const lines: Fragment[][] = [[]];
+  const lines: Piece[][] = [[]];
   for (const run of runs) {
+    if (typeof run === "object" && "split" in run) {
+      (lines[lines.length - 1] as Piece[]).push({
+        lines: run.split.map((line) => buildLines(line, labelLink, labelTitle).flat()),
+      });
+      continue;
+    }
     const r = typeof run === "string" ? { text: run } : run;
     const pieces = splitLines(r.text ?? "");
     pieces.forEach((piece, i) => {
       if (i > 0) lines.push([]);
-      (lines[lines.length - 1] as Fragment[]).push({
+      (lines[lines.length - 1] as Piece[]).push({
         text: piece,
         link: r.link ?? labelLink,
         rws: r.rws,
@@ -291,6 +309,48 @@ function buildLines(
     });
   }
   return lines;
+}
+
+/**
+ * A `{{BSsplit}}`: lines stacked in an inline-table, tight enough that the track
+ * either side stays connected.
+ *
+ * Shared by the `|` sugar (which splits the whole label) and an explicit `{ split }`
+ * run (which stacks lines beside its neighbours), so the two can't drift apart.
+ */
+function SplitTable({
+  lines,
+  side,
+  renderLine,
+  style,
+}: {
+  lines: Piece[][];
+  side: LabelSide;
+  renderLine: (line: Piece[]) => ReactNode[];
+  style?: CSSProperties;
+}): ReactElement {
+  return (
+    <span
+      style={{
+        display: "inline-table",
+        verticalAlign: "middle",
+        margin: "-3px 0",
+        // `table.routemap .RMl > .RMsplit, .RMr > .RMsplit { font-size: 90% }` — a
+        // {{BSsplit}} in a main side cell is smaller, unconditionally. The rule is
+        // scoped to those cells, so a colspan row's split is not.
+        fontSize: side === "colspan" ? undefined : "90%",
+        ...style,
+      }}
+    >
+      {lines.map((line, i) => (
+        <span key={i} style={{ display: "table-row" }}>
+          <span style={{ display: "table-cell", textAlign: "inherit", lineHeight: 1.05 }}>
+            {renderLine(line)}
+          </span>
+        </span>
+      ))}
+    </span>
+  );
 }
 
 /** One fragment: (optionally linked) text + inline logos right after it. */
@@ -378,35 +438,24 @@ function Label({
   let textNode: ReactNode = null;
   if (hasText) {
     const lines = buildLines(text as string | TextRun[], label?.link, label?.title);
-    const renderLine = (line: Fragment[]) =>
-      line.map((f, i) => renderFragment(f, i, resolveHref, resolveRws, resolveLogo));
+    const renderLine = (line: Piece[]): ReactNode[] =>
+      line.map((piece, i) =>
+        isSplitPiece(piece) ? (
+          // A split BESIDE other content, not around it. Same table as the whole-label
+          // case below — one `.RMsplit`, so it shrinks by the same rule.
+          <SplitTable key={i} lines={piece.lines} side={side} renderLine={renderLine} />
+        ) : (
+          renderFragment(piece, i, resolveHref, resolveRws, resolveLogo)
+        ),
+      );
     const hasStyle = style.fontStyle || style.fontWeight || style.fontSize;
     if (lines.length === 1) {
-      const inner = renderLine(lines[0] as Fragment[]);
+      const inner = renderLine(lines[0] as Piece[]);
       textNode = hasStyle ? <span style={style}>{inner}</span> : <>{inner}</>;
     } else {
-      // Multi-line -> BSsplit inline-table (tight rows so the track stays connected).
+      // `|` sugar split the whole label — the same table, wrapping everything.
       textNode = (
-        <span
-          style={{
-            display: "inline-table",
-            verticalAlign: "middle",
-            margin: "-3px 0",
-            // `table.routemap .RMl > .RMsplit, .RMr > .RMsplit { font-size: 90% }`
-            // — a {{BSsplit}} in a main side cell is smaller, unconditionally. The
-            // rule is scoped to those cells, so a colspan row's split is not.
-            fontSize: side === "colspan" ? undefined : "90%",
-            ...style,
-          }}
-        >
-          {lines.map((line, i) => (
-            <span key={i} style={{ display: "table-row" }}>
-              <span style={{ display: "table-cell", textAlign: "inherit", lineHeight: 1.05 }}>
-                {renderLine(line)}
-              </span>
-            </span>
-          ))}
-        </span>
+        <SplitTable lines={lines} side={side} renderLine={renderLine} style={style} />
       );
     }
   }

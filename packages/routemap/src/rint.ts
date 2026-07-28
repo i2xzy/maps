@@ -12,7 +12,7 @@
  * PD-shape BSicons — a licensing decision for any non-Wikipedia use.
  */
 import type { LabelIcon, RouteDiagram } from "./types";
-import { normalizeSide } from "./normalize";
+import { labelRuns, normalizeSide } from "./normalize";
 import { parseRintExpansion, type RintEntry } from "./rint-expansion";
 
 const DEFAULT_API = "https://en.wikipedia.org/w/api.php";
@@ -186,9 +186,7 @@ export function collectRwsArgs(diagram: RouteDiagram): string[] {
   const seen = new Set<string>();
   const scan = (side: unknown) => {
     const norm = normalizeSide(side as never);
-    if (Array.isArray(norm?.text)) {
-      for (const run of norm.text) if (typeof run !== "string" && run.rws) seen.add(run.rws);
-    }
+    for (const run of labelRuns(norm?.text)) if (run.rws) seen.add(run.rws);
   };
   for (const row of diagram.rows) {
     if ("cells" in row) {
@@ -213,9 +211,7 @@ export function collectRintCodes(diagram: RouteDiagram): string[] {
   const scan = (side: unknown) => {
     const norm = normalizeSide(side as never);
     add(norm?.icons); // whole-label logos
-    if (Array.isArray(norm?.text)) {
-      for (const line of norm.text) if (typeof line !== "string") add(line.icons); // per-line logos
-    }
+    for (const run of labelRuns(norm?.text)) add(run.icons); // per-run logos, splits included
   };
   for (const row of diagram.rows) {
     if ("cells" in row) {

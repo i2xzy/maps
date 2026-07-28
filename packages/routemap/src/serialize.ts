@@ -40,6 +40,14 @@ function iconToWiki(icon: LabelIcon): string {
 /** One inline run -> wiki. */
 function runToWiki(run: TextRun): string {
   if (typeof run === "string") return run;
+  // An explicit split emits the template directly, so whatever sits beside it in the
+  // run list stays beside it — which is the difference from the `|` sugar below.
+  if ("split" in run) {
+    const lines = run.split.map((line) =>
+      typeof line === "string" ? line : line.map(runToWiki).join(""),
+    );
+    return `{{BSsplit|${lines.join("|")}}}`;
+  }
   let s: string;
   if (run.rws) s = `{{rws|${run.rws}}}`;
   else if (run.link != null) {
@@ -65,6 +73,8 @@ function splitRunLines(text: string | TextRun[]): TextRun[][] {
         if (un !== "") (lines[lines.length - 1] as TextRun[]).push(un);
       });
     } else {
+      // Objects (including a `{ split }`) are atomic here: the sugar only breaks
+      // PLAIN strings, so an explicit split stays a single run on its own line.
       (lines[lines.length - 1] as TextRun[]).push(run);
     }
   }

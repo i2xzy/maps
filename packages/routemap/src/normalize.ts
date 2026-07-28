@@ -12,6 +12,7 @@ import type {
   RouteDiagram,
   SideLabel,
   SideSlots,
+  SplitRun,
   TextRun,
 } from "./types";
 import { isGridRow } from "./types";
@@ -99,6 +100,30 @@ export function normalizeSide(side: SideLabel | null | undefined): NormalizedSid
     italic: side.italic,
     bold: side.bold,
   };
+}
+
+/** A run that carries content, as opposed to a `{ split }` or a bare string. */
+type ContentRun = Exclude<TextRun, string | SplitRun>;
+
+/**
+ * Every content-bearing run in a label's text, with `{ split }` runs flattened.
+ *
+ * Anything walking runs has to see INSIDE a split, or a logo or station link nested in
+ * one silently never resolves — the collectors feed the API lookups, so a missed run
+ * renders as a blank rather than as an error.
+ */
+export function labelRuns(text: string | TextRun[] | null | undefined): ContentRun[] {
+  if (text == null || typeof text === "string") return [];
+  const out: ContentRun[] = [];
+  for (const run of text) {
+    if (typeof run === "string") continue;
+    if ("split" in run) {
+      for (const line of run.split) out.push(...labelRuns(typeof line === "string" ? [] : line));
+      continue;
+    }
+    out.push(run);
+  }
+  return out;
 }
 
 /** The slot names, innermost first — the order the RIGHT side is written in. */
