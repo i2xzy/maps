@@ -537,6 +537,8 @@ export function iconToCode(icon: IconObject, ctx?: IconContext): string {
     if (icon.level) s += icon.level === "over" ? "o" : "u"; // KRZo / KRZu / SKRZ-Bo
     if (icon.crosses === "water") s += "W"; // KRZW
   }
+  // A plain line over or under something: STRo / STRu. Same position in the order.
+  if (icon.kind === "track" && icon.level) s += icon.level === "over" ? "o" : "u";
   // Crossover level sits right after the root too (vÜSTol), then to/from below.
   if (icon.kind === "crossover" && icon.level) s += icon.level === "over" ? "o" : "u";
   if (icon.kind === "shift") s += String(icon.by ?? 2); // SHI -> SHI2

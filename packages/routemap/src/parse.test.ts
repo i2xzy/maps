@@ -141,3 +141,24 @@ describe("bare width prefixes are spacers", () => {
     expect(codeToIcon("STR")).toEqual({ kind: "track" });
   });
 });
+
+describe("a plain line over or under something", () => {
+  it("decodes STRo and STRu, which the model already had a field for", () => {
+    // `level` existed but was fenced off to crossings, so the commonest suffix on the
+    // commonest root didn't decode — `STRo` is an overbridge, `STRu` an underbridge.
+    expect(codeToIcon("STRo")).toEqual({ kind: "track", level: "over" });
+    expect(codeToIcon("STRu")).toEqual({ kind: "track", level: "under" });
+  });
+
+  it("combines with formation, state and transverse", () => {
+    for (const code of ["hSTRo", "exSTRo", "tSTRu", "STRoq"]) {
+      const icon = codeToIcon(code);
+      expect(icon, code).toHaveProperty("level");
+      expect(iconToCode(icon), code).toBe(code);
+    }
+  });
+
+  it("leaves a crossing's level alone", () => {
+    expect(codeToIcon("KRZo")).toEqual({ kind: "crossing", level: "over" });
+  });
+});

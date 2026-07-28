@@ -262,7 +262,7 @@ export const FIELDS: readonly FieldSpec[] = [
     field: "level",
     control: "enum",
     values: ["over", "under"],
-    kinds: ["crossing", "crossover"],
+    kinds: ["track", "crossing", "crossover"],
     gated: true,
     sample: { level: "over" },
     disabledWhen: (i) => i.formation === "elevated", // an elevated line is already over

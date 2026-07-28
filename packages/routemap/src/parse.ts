@@ -262,6 +262,10 @@ function tryDecode(code: string, forceFormation: boolean): IconObject | null {
   const enclosed = root.token === "TUNNEL";
   const throughRoot = root.token === "ABZ";
   const crossing = obj.kind === "crossing";
+  // A plain line can also pass over or under something — `STRo` is an overbridge,
+  // `STRu` an underbridge. The model already had `level`; it was just fenced off to
+  // crossings, so the commonest suffix on the commonest root didn't decode.
+  const levelled = crossing || obj.kind === "track";
   const crossover = obj.kind === "crossover";
   const shift = obj.kind === "shift";
   const continuation = obj.continuation === true;
@@ -287,8 +291,8 @@ function tryDecode(code: string, forceFormation: boolean): IconObject | null {
     if (s[0] === "g") s = s.slice(1);
     else obj.through = false;
   }
-  // Crossing grade/water: level o/u then water W.
-  if (crossing) {
+  // Grade separation: level o/u, then water W (crossings only).
+  if (levelled) {
     if (s[0] === "o") {
       obj.level = "over";
       s = s.slice(1);
