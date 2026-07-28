@@ -192,6 +192,18 @@ export interface IconObject {
    *  `crossing` (tKRZo/tKRZu; an elevated line is already over, so `h`-forms
    *  take no `level`) and on a `crossover` (the flying-junction vÜSTol/vÜSTur). */
   level?: "over" | "under";
+  /**
+   * A coloured VARIANT of the icon, appended after a space: `tSTR yellow`, `STRq green`.
+   *
+   * Not to be confused with the leading system prefix, which the header calls a colour
+   * because `u`/`m` select a colour SET. This is a different file — `BSicon STRq green.svg`
+   * exists on Commons alongside `BSicon STRq.svg`.
+   *
+   * An open string rather than an enum: the corpus shows red, blue, maroon, yellow,
+   * saffron, green, grey, brown, cerulean and white, and there are certainly more. A
+   * closed list would push every unlisted colour back to a passthrough string for no gain.
+   */
+  colour?: string;
   /** Length of an enclosed tunnel (`entry: "both"` track): `long` (TUNNEL1…) or
    *  `short` (TUNNEL2…). Defaults to `long`. */
   length?: "long" | "short";
@@ -565,5 +577,7 @@ export function iconToCode(icon: IconObject, ctx?: IconContext): string {
     s += `@${icon.offsetTarget === "auxiliary" ? d : d.toUpperCase()}`; // @F/@G secondary (default), @f/@g auxiliary
   }
   if (icon.lane === "right") s += "-"; // right/top lane: trailing hyphen
+  // A coloured variant is a different FILE, and the colour is the last thing in its name.
+  if (icon.colour) s += ` ${icon.colour}`;
   return s;
 }

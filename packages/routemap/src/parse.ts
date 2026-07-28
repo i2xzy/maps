@@ -438,6 +438,20 @@ export function codeToIcon(code: string): IconObject {
   if (code === "") return { kind: "spacer" };
   const width = widthFromCode(code);
   if (width) return { kind: "spacer", width };
+
+  // A coloured variant: `tSTR yellow`, `STRq green`. Split the colour off and decode the
+  // base, so every combination works without the root table knowing about colours. 18% of
+  // cells in real diagrams carry one. Nothing else in a code contains a space, so a
+  // trailing word after one is always this.
+  const coloured = / ([A-Za-z]+)$/.exec(code);
+  if (coloured) {
+    const base = codeToIcon(code.slice(0, coloured.index));
+    if ("kind" in base) {
+      const withColour = { ...base, colour: coloured[1] } as IconObject;
+      if (iconToCode(withColour) === code) return withColour;
+    }
+    return passthrough;
+  }
   // Greedy decode first, then a pass that force-strips a leading formation letter
   // (finds `DSTR` = D+STR despite the shadowing `DST` root). The round-trip net
   // keeps only an exact re-emit, so trying both passes is always safe.

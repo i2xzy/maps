@@ -257,6 +257,19 @@ export const FIELDS: readonly FieldSpec[] = [
     requires: { offset: "forward" },
     sample: { offsetTarget: "auxiliary" }, // @F -> @f
   },
+  {
+    // A coloured variant is a different FILE (`BSicon STRq green.svg`), so it applies to
+    // whatever has one — not gated, since `iconToCode` appends it whatever the kind.
+    //
+    // The values are the ones real diagrams use, commonest first. The FIELD is an open
+    // string, so a colour outside this list still round-trips; it just isn't offered in the
+    // dropdown, and picking from the list is the only way the form changes it.
+    field: "colour",
+    control: "enum",
+    values: ["red", "blue", "maroon", "yellow", "saffron", "green", "grey", "brown", "cerulean", "white"],
+    kinds: ["track", "station", "junction", "crossing", "crossover", "shift", "symbol", "hub", "end"],
+    sample: { colour: "red" },
+  },
   // ── crossing / crossover ─────────────────────────────────────────────
   {
     field: "level",

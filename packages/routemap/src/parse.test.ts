@@ -162,3 +162,41 @@ describe("a plain line over or under something", () => {
     expect(codeToIcon("KRZo")).toEqual({ kind: "crossing", level: "over" });
   });
 });
+
+describe("coloured variants", () => {
+  it("decodes a colour off any base, and re-encodes it identically", () => {
+    // A coloured variant is a different FILE — `BSicon STRq green.svg` exists alongside
+    // `BSicon STRq.svg`. 18% of cells in real diagrams carry one, which made this the
+    // single biggest decoder gap: cells the form can edit went 58.0% -> 71.2%.
+    const cases: Record<string, object> = {
+      "tSTR yellow": { kind: "track", formation: "tunnel", colour: "yellow" },
+      "STRq green": { kind: "track", transverse: true, colour: "green" },
+      "STRl cerulean": { kind: "track", to: "left", colour: "cerulean" },
+      "exSTR red": { kind: "track", state: "disused", colour: "red" },
+      "BHF maroon": { kind: "station", colour: "maroon" },
+    };
+    for (const [code, expected] of Object.entries(cases)) {
+      expect(codeToIcon(code), code).toMatchObject(expected);
+      expect(iconToCode(codeToIcon(code)), code).toBe(code);
+    }
+  });
+
+  it("takes any colour word, not a fixed list", () => {
+    // Open string on purpose: the corpus shows ten, and there are certainly more. A closed
+    // list would push every unlisted colour back to a passthrough for no gain.
+    expect(codeToIcon("STR chartreuse")).toMatchObject({ kind: "track", colour: "chartreuse" });
+    expect(iconToCode(codeToIcon("STR chartreuse"))).toBe("STR chartreuse");
+  });
+
+  it("leaves a trailing word it can't attach to a base", () => {
+    // `+cerulean` isn't a bare word, and the base of a parenthesised code doesn't decode —
+    // both stay strings rather than being half-understood.
+    expect(codeToIcon("mKRZo +cerulean")).toEqual({ code: "mKRZo +cerulean" });
+    expect(codeToIcon("tPSTR(L)_red")).toEqual({ code: "tPSTR(L)_red" });
+  });
+
+  it("doesn't invent a colour where there is no space", () => {
+    expect(codeToIcon("STR")).toEqual({ kind: "track" });
+    expect(codeToIcon("BHF")).toEqual({ kind: "station" });
+  });
+});

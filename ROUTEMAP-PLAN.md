@@ -20,7 +20,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | …unchanged byte-for-byte | 79.6% |
 | …exported unchanged **in practice**, via per-row provenance | **99.6%** |
 | `{{Routemap}}` wrappers rebuilt byte-for-byte | **100%** (17/17) |
-| BSicon cells the editor's semantic controls can edit | **~58%** |
+| BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
 | tests | 653 package + 86 editor |
@@ -55,25 +55,32 @@ A Wikipedia editor should be able to open an existing diagram, change it, and pa
 ## High priority — MVP blockers
 
 ### Decode the BSicon codes the form can't edit
-**What:** ~54% of cells in real diagrams decode to the raw `{ code }` passthrough, so the
+**What:** ~29% of cells in real diagrams decode to the raw `{ code }` passthrough, so the
 form shows a thumbnail and the code but no controls. They render and round-trip correctly;
 they just aren't editable except as text. Failure families, by share of all cells:
 
 | share | family | examples |
 |---|---|---|
-| 22.5% | unrecognised root/suffix | `SBHF`, `pBHF`, `BST`, `XBHF-L`, `eSHST` |
-| 12.8% | colour suffix | `tSTR red`, `STRq green` |
+| ~13% | unrecognised root/suffix | `SBHF`, `pBHF`, `BST`, `XBHF-L`, `eSHST` |
+| ~~18.4%~~ | ~~colour suffix~~ — **fixed**, took cells 58.0% → 71.2% | `tSTR red`, `STRq green` |
 | ~~11.0%~~ | ~~bare width prefix~~ — **fixed**, took cells 46.1% → 56.1% | `d`, `c`, `bs`, `s`, `cd`, `b` |
 | 4.7% | parenthesised variant | `tPSTR(L)_red` |
 
 **Why:** With no JSON pane in production, a cell the form can't edit is a cell nobody can
 edit. This is the largest single gap between the tool and its purpose.
-**How:** Width prefixes are DONE — `codeToIcon` now decodes a bare prefix to
-`{ kind: "spacer", width }`, which took cell coverage from 46.1% to 56.1%. Next, the
-unrecognised roots: they look like ordinary station/junction variants, so a handful
-of root and prefix additions should cover many codes at once — count which recur before
-adding any. Colour suffixes are a model addition (a code plus a colour), so decide whether
-colour belongs in `IconObject` or stays a passthrough.
+**How:** Two of the four families are DONE, and both were bigger than the labels suggested:
+width prefixes (46.1% → 56.1%) and coloured variants (58.0% → 71.2%). Colour was the single
+best change available — one optional field reaching 18% of cells — and it also unlocked codes
+I had mis-filed as missing roots, `INTACC green` among them.
+
+What's left has a much worse ratio, and the measurement said so before I spent anything on
+it: **448 distinct cores**, with the top 18 reaching only half the failures. Adding the seven
+recurring roots (`KRW`, `SHST`, `KBST`, `WASSER`, `INTACC`, `PORTAL`, `CSTR`) might buy 5–6%,
+each a separate addition. Beyond them it is a very long tail.
+
+So this item is DONE for MVP purposes, on the agreed basis that not every icon needs GUI
+editing: what remains renders correctly, round-trips exactly, and is editable as wikitext.
+Re-open it only if a specific diagram someone cares about is full of one family.
 **Depends on:** Nothing. Each family is independent.
 **Re-measure:** parse the fixture, run every cell through `codeToIcon`, count how many
 yield a `kind`.
