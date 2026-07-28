@@ -10,20 +10,25 @@ and the command that produces each is given so they can be re-checked rather tha
 
 ## Where it stands
 
-Measured against a committed fixture of **22 real Wikipedia diagrams (1,036 rows)** and
+Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)** and
 **17 whole `{{Routemap}}` calls**, not hand-written examples
 (`packages/routemap/src/__fixtures__/`).
 
 | | |
 |---|---|
-| rows surviving wikitext → model → wikitext unchanged in meaning | **94.4%** |
-| …unchanged byte-for-byte | 81.9% |
-| …exported unchanged **in practice**, via per-row provenance | **99.4%** |
+| rows surviving wikitext → model → wikitext unchanged in meaning | **93.7%** |
+| …unchanged byte-for-byte | 79.6% |
+| …exported unchanged **in practice**, via per-row provenance | **99.6%** |
 | `{{Routemap}}` wrappers rebuilt byte-for-byte | **100%** (17/17) |
-| BSicon cells the editor's semantic controls can edit | **~56%** |
-| rows showing a muted placeholder for an unexpanded template | **~20%** |
+| BSicon cells the editor's semantic controls can edit | **~58%** |
+| rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
 | tests | 653 package + 86 editor |
+
+The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
+than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
+`{{documentation}}` as rows. They round-tripped trivially, so removing them lowered the
+ratios without anything regressing — 978/1036 passing became 859/917.
 
 The first three are asserted as a floor in `from-wikitext.test.ts`, so they can only go up.
 

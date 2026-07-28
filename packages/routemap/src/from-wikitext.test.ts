@@ -45,12 +45,19 @@ describe("fromWikitext round-trip", () => {
    * The safety property for editable wikitext: parse then serialize must not change the
    * row. Anything this loses is destroyed the moment a user makes one GUI edit.
    *
-   * A ratchet, not a target. 22 real diagrams, 1,036 rows. Raise the floor as the
-   * remaining classes are closed; never lower it to make a change pass.
+   * A ratchet, not a target. 21 real diagrams, 917 rows. Raise the floor as the remaining
+   * classes are closed; never lower it to make a change pass.
+   *
+   * Lowered ONCE, from 94%, and only because the CORPUS was wrong: the extractor ran to
+   * the end of the page rather than the end of the `{{Routemap}}` call, so 119 lines of
+   * `|map2 =`, `}}<noinclude>` and `{{documentation}}` were being counted as diagram rows.
+   * They round-tripped trivially, so removing them took 119 off both the numerator and the
+   * denominator — 978/1036 became 859/917. Nothing about the parser changed; the ratio just
+   * stopped being flattered by junk.
    */
-  it("preserves at least 94% of real rows, semantically", () => {
+  it("preserves at least 93% of real rows, semantically", () => {
     const kept = rows.filter(({ line }) => norm(roundTrip(line)) === norm(line));
-    expect(kept.length / rows.length).toBeGreaterThan(0.94);
+    expect(kept.length / rows.length).toBeGreaterThan(0.93);
   });
 
   it("never throws on a real row", () => {
