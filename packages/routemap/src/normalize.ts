@@ -11,6 +11,7 @@ import type {
   LabelIcon,
   RouteDiagram,
   SideLabel,
+  BreakRun,
   SideSlots,
   SplitRun,
   TextRun,
@@ -103,7 +104,7 @@ export function normalizeSide(side: SideLabel | null | undefined): NormalizedSid
 }
 
 /** A run that carries content, as opposed to a `{ split }` or a bare string. */
-type ContentRun = Exclude<TextRun, string | SplitRun>;
+type ContentRun = Exclude<TextRun, string | SplitRun | BreakRun>;
 
 /**
  * Every content-bearing run in a label's text, with `{ split }` runs flattened.
@@ -116,7 +117,7 @@ export function labelRuns(text: string | TextRun[] | null | undefined): ContentR
   if (text == null || typeof text === "string") return [];
   const out: ContentRun[] = [];
   for (const run of text) {
-    if (typeof run === "string") continue;
+    if (typeof run === "string" || "br" in run) continue;
     if ("split" in run) {
       for (const line of run.split) out.push(...labelRuns(typeof line === "string" ? [] : line));
       continue;

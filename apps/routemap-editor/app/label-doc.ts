@@ -19,13 +19,19 @@
  * carry one rather than dropping it on the first keystroke.
  */
 import type { JSONContent } from "@tiptap/react";
-import type { LabelIcon, SideLabel, SplitRun, TextRun } from "@repo/routemap";
+import type { BreakRun, LabelIcon, SideLabel, SplitRun, TextRun } from "@repo/routemap";
 
-type RunObj = Exclude<TextRun, string | SplitRun>;
+type RunObj = Exclude<TextRun, string | SplitRun | BreakRun>;
 
 /** Splits are filtered before conversion; `labelIsRteEditable` keeps them out. */
 const contentRuns = (runs: TextRun[]): (string | RunObj)[] =>
   runs.filter((r): r is string | RunObj => typeof r === "string" || !("split" in r));
+
+/** Runs the document can hold: splits can't round-trip, `<br>` can (a hardBreak). */
+const docRuns = (runs: TextRun[]): (string | RunObj | BreakRun)[] =>
+  runs.filter(
+    (r): r is string | RunObj | BreakRun => typeof r === "string" || !("split" in r),
+  );
 
 const asRuns = (text: SideLabel | undefined): TextRun[] => {
   if (text == null) return [];
@@ -141,11 +147,15 @@ export function labelToDoc(label: SideLabel | null | undefined): JSONContent {
   // Build lines of nodes; a `|` in ANY run's text starts a new line.
   const lines: JSONContent[][] = [[]];
   const pushNode = (n: JSONContent) => (lines[lines.length - 1] as JSONContent[]).push(n);
-  for (const r of contentRuns(runs)) {
+  for (const r of docRuns(runs)) {
     // A station link is an atom node; its display is resolved at render time. Its
     // own icons still have to follow it — falling straight to the next run here
     // dropped them, and since icon-bearing labels are now RTE-editable that loss
     // would land on the model the moment anyone typed.
+    if (typeof r !== "string" && "br" in r) {
+      pushNode({ type: "hardBreak" });
+      continue;
+    }
     if (typeof r !== "string" && r.rws) {
       pushNode({ type: "rws", attrs: { args: r.rws } });
     } else {
@@ -179,13 +189,17 @@ const markOf = (node: JSONContent, type: string) => node.marks?.find((m) => m.ty
 export function docToLabel(doc: JSONContent): SideLabel | undefined {
   // Never a `{ split }`: the document has no node for one, which is why
   // `labelIsRteEditable` keeps split-bearing labels out of the editor entirely.
-  const runs: (string | RunObj)[] = [];
+  const runs: (string | RunObj | BreakRun)[] = [];
   const paras = doc.content ?? [];
   paras.forEach((para, pi) => {
     if (pi > 0) runs.push("|"); // paragraph boundary -> BSsplit line break
     for (const node of para.content ?? []) {
       if (node.type === "hardBreak") {
-        runs.push("|");
+        // Shift+Enter is a `<br>`, Enter a {{BSsplit}} line — the distinction those
+        // two keys carry in every editor, and the wiki has both constructs. It used
+        // to push "|" as well, so the two gestures produced the same thing and
+        // nothing produced a <br> at all.
+        runs.push({ br: true });
         continue;
       }
       if (node.type === "rws") {
@@ -201,9 +215,10 @@ export function docToLabel(doc: JSONContent): SideLabel | undefined {
         const last = runs[runs.length - 1];
         if (typeof last === "string" && last !== "|") {
           runs[runs.length - 1] = { text: last, icons: [icon] };
-        } else if (last != null && typeof last === "object" && !last.rws) {
+        } else if (last != null && typeof last === "object" && !("br" in last) && !last.rws) {
           // An rws run is atomic (its text comes from the wiki), so icons after
-          // one become their own run rather than riding along.
+          // one become their own run rather than riding along. Same for a `<br>`:
+          // an icon after a break belongs on the next line, not on the break.
           last.icons = [...(last.icons ?? []), icon];
         } else {
           runs.push({ icons: [icon] });

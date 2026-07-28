@@ -246,3 +246,60 @@ describe("logoInsertContent", () => {
     expect(docToLabel(doc)).toEqual([{ icons: ["gb|rail"] }, " Euston"]);
   });
 });
+
+describe("<br> vs {{BSsplit}} in the document", () => {
+  it("maps a hardBreak to a <br> run, not to a BSsplit line", () => {
+    // Shift+Enter used to push "|" like Enter did, so both gestures produced a split
+    // and nothing produced a <br>. They render at different sizes, so that was a
+    // silent substitution rather than a shortcut.
+    const doc = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "a" }, { type: "hardBreak" }, { type: "text", text: "b" }],
+        },
+      ],
+    };
+    expect(docToLabel(doc)).toEqual(["a", { br: true }, "b"]);
+  });
+
+  it("still maps a paragraph boundary to a BSsplit line", () => {
+    const doc = {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "a" }] },
+        { type: "paragraph", content: [{ type: "text", text: "b" }] },
+      ],
+    };
+    expect(docToLabel(doc)).toEqual(["a", "|", "b"]);
+  });
+
+  it("round-trips a <br> run through the document", () => {
+    const label = ["a", { br: true }, "b"];
+    expect(docToLabel(labelToDoc(label as never))).toEqual(label);
+  });
+
+  it("keeps a <br>-bearing label editable, unlike one holding a split", () => {
+    // A <br> has a node in the document (hardBreak); a split does not.
+    expect(labelIsRteEditable(["a", { br: true }, "b"] as never)).toBe(true);
+    expect(labelIsRteEditable([{ split: ["a", "b"] }] as never)).toBe(false);
+  });
+
+  it("starts a new run for an icon after a break, not on the break itself", () => {
+    const doc = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "a" },
+            { type: "hardBreak" },
+            { type: "rint", attrs: { icon: "gb|rail" } },
+          ],
+        },
+      ],
+    };
+    expect(docToLabel(doc)).toEqual(["a", { br: true }, { icons: ["gb|rail"] }]);
+  });
+});

@@ -258,14 +258,20 @@ interface Fragment {
   italic?: boolean;
 }
 
+/** A `<br>` on a line — a break WITHIN the line, not a new one. */
+interface BreakPiece {
+  br: true;
+}
+
 /** A split run nested in a line — its own stack of lines, rendered inline. */
 interface SplitPiece {
   lines: Piece[][];
 }
 /** One thing on a line: a text fragment, or a `{{BSsplit}}` sitting beside it. */
-type Piece = Fragment | SplitPiece;
+type Piece = Fragment | SplitPiece | BreakPiece;
 
 const isSplitPiece = (p: Piece): p is SplitPiece => "lines" in p;
+const isBreakPiece = (p: Piece): p is BreakPiece => "br" in p;
 
 // Split a run's text on an unescaped `|` (line break); unescape `\|` to a pipe.
 const splitLines = (s: string): string[] =>
@@ -287,6 +293,10 @@ function buildLines(
   const runs: TextRun[] = typeof text === "string" ? [text] : text;
   const lines: Piece[][] = [[]];
   for (const run of runs) {
+    if (typeof run === "object" && "br" in run) {
+      (lines[lines.length - 1] as Piece[]).push({ br: true });
+      continue;
+    }
     if (typeof run === "object" && "split" in run) {
       (lines[lines.length - 1] as Piece[]).push({
         lines: run.split.map((line) => buildLines(line, labelLink, labelTitle).flat()),
@@ -440,7 +450,9 @@ function Label({
     const lines = buildLines(text as string | TextRun[], label?.link, label?.title);
     const renderLine = (line: Piece[]): ReactNode[] =>
       line.map((piece, i) =>
-        isSplitPiece(piece) ? (
+        isBreakPiece(piece) ? (
+          <br key={i} />
+        ) : isSplitPiece(piece) ? (
           // A split BESIDE other content, not around it. Same table as the whole-label
           // case below — one `.RMsplit`, so it shrinks by the same rule.
           <SplitTable key={i} lines={piece.lines} side={side} renderLine={renderLine} />

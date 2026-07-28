@@ -122,6 +122,22 @@ export type LabelIcon =
   | { region: string; name?: string; size?: number; alt?: string }
   | { file: string; size?: number; alt?: string };
 
+/**
+ * A plain `<br>` line break, as plenty of real diagrams use instead of `{{BSsplit}}`.
+ *
+ * NOT interchangeable with a split, which is why it needs its own run. A `{{BSsplit}}`
+ * carries the `.RMsplit` class, and `table.routemap .RMl > .RMsplit` sets `font-size:
+ * 90%` — so a split's lines are SMALLER than the same text broken with `<br>`, which
+ * stays at 100% with the cell's own line-height. Normalising one to the other on
+ * import would visibly resize the label.
+ *
+ * A sample of 20 diagrams that use `<br>` at all had 10 of these against 74 splits, so
+ * splits are the common case and keep the `|` sugar; this is explicit.
+ */
+export interface BreakRun {
+  br: true;
+}
+
 /** One line of a `{{BSsplit}}`: its runs, or a bare string for a single-run line. */
 export type SplitLine = string | TextRun[];
 
@@ -163,6 +179,7 @@ export interface SplitRun {
 export type TextRun =
   | string
   | SplitRun
+  | BreakRun
   | {
       text?: string;
       link?: string | true;

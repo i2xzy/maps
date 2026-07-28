@@ -184,3 +184,27 @@ describe("toWikitext {{BSsplit}} runs", () => {
     );
   });
 });
+
+describe("toWikitext <br> runs", () => {
+  const right = (text: unknown) =>
+    toWikitext({ rows: [{ right: text, cells: ["BHF"] } as never] });
+
+  it("emits a plain <br>, not a {{BSsplit}}", () => {
+    // Real diagrams use both, and they are NOT interchangeable: a split carries
+    // `.RMsplit`, which the stylesheet shrinks to 90% in a side cell, while `<br>`
+    // text stays full size. Normalising either way resizes the label.
+    expect(right(["a", { br: true }, "b"])).toBe("BHF~~a<br>b");
+  });
+
+  it("keeps <br> and {{BSsplit}} distinct in one label", () => {
+    expect(right(["a", { br: true }, "b", { split: ["c", "d"] }])).toBe(
+      "BHF~~a<br>b{{BSsplit|c|d}}",
+    );
+  });
+
+  it("can break a line inside a split", () => {
+    expect(right([{ split: [["a", { br: true }, "b"], "c"] }])).toBe(
+      "BHF~~{{BSsplit|a<br>b|c}}",
+    );
+  });
+});

@@ -574,3 +574,28 @@ describe("RouteMap {{BSsplit}} runs", () => {
     expect(colspan).not.toMatch(/font-size:\s*90%/);
   });
 });
+
+describe("RouteMap <br> runs", () => {
+  const row = (right: unknown) =>
+    /<tr[\s\S]*?<\/tr>/.exec(
+      renderToStaticMarkup(
+        <RouteMap diagram={{ rows: [{ right, cells: ["BHF"] } as never] }} resolveIcon={(c) => c} />,
+      ),
+    )![0];
+
+  it("renders a real <br>, with no split table and no 90%", () => {
+    const html = row(["a", { br: true }, "b"]);
+    expect(html).toContain("<br/>");
+    // The distinction that matters: no `.RMsplit` table means no shrink.
+    expect(html).not.toContain("inline-table");
+    expect(html).not.toMatch(/font-size:\s*90%/);
+  });
+
+  it("shrinks the split but not the <br> in the same label", () => {
+    const html = row(["a", { br: true }, "b", { split: ["c", "d"] }]);
+    expect(html).toContain("<br/>");
+    expect(html).toContain("inline-table");
+    // One 90%, from the split alone.
+    expect([...html.matchAll(/font-size:90%/g)]).toHaveLength(1);
+  });
+});

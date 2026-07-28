@@ -40,6 +40,7 @@ function iconToWiki(icon: LabelIcon): string {
 /** One inline run -> wiki. */
 function runToWiki(run: TextRun): string {
   if (typeof run === "string") return run;
+  if ("br" in run) return "<br>";
   // An explicit split emits the template directly, so whatever sits beside it in the
   // run list stays beside it — which is the difference from the `|` sugar below.
   if ("split" in run) {
