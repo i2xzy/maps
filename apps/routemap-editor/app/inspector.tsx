@@ -11,6 +11,7 @@ import {
   Image,
   Menu,
   Input,
+  Collapsible,
   Portal,
   Select,
   Stack,
@@ -284,6 +285,24 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
   const code = safeIconCode(icon);
   const subtypes = iconSubtypes(icon.kind);
   const fields = fieldsFor(icon.kind).filter((f) => isFieldVisible(f, icon));
+  // Split by whether the field is actually SET. Everything in use stays on screen; the
+  // rest goes behind one disclosure, the same move that calmed the row form.
+  const inUse = fields.filter((f) => icon[f.field] !== undefined);
+  const unset = fields.filter((f) => icon[f.field] === undefined);
+  const control = (f: FieldSpec) =>
+    f.control === "toggle" ? (
+      <BoolCard key={String(f.field)} spec={f} icon={icon} set={set} />
+    ) : (
+      <EnumSelect
+        key={String(f.field)}
+        label={f.label ?? String(f.field)}
+        value={icon[f.field] as string | number | undefined}
+        allowNone
+        disabled={f.disabledWhen?.(icon)}
+        options={previewOptions(icon, f.field).map((o) => ({ value: o.value, code: o.code }))}
+        onPick={(v) => set({ [f.field]: v } as Partial<IconObject>)}
+      />
+    );
   // Keep the current kind selectable even if it's not in the standard list (e.g.
   // an unmodelled `bridge`/`water` cell from JSON), so switching kinds isn't lossy.
   const kindOptions = KINDS.includes(icon.kind) ? KINDS : [...KINDS, icon.kind];
@@ -312,21 +331,25 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
           onPick={(v) => v != null && set({ subtype: String(v) })}
         />
       )}
-      {fields.map((f) =>
-        f.control === "toggle" ? (
-          <BoolCard key={String(f.field)} spec={f} icon={icon} set={set} />
-        ) : (
-          <EnumSelect
-            key={String(f.field)}
-            label={f.label ?? String(f.field)}
-            value={icon[f.field] as string | number | undefined}
-            allowNone
-            disabled={f.disabledWhen?.(icon)}
-            options={previewOptions(icon, f.field).map((o) => ({ value: o.value, code: o.code }))}
-            onPick={(v) => set({ [f.field]: v } as Partial<IconObject>)}
-          />
-        ),
-      )}
+      {inUse.map(control)}
+      {unset.length > 0 ? (
+        <Collapsible.Root>
+          <Collapsible.Trigger asChild>
+            {/* One disclosure, not a grouped taxonomy. A plain track has 23 applicable
+                fields and almost none of them set, so the flat list buried the two that
+                mattered. Discovery is still one click, which a menu of 20 names wouldn't
+                be. */}
+            <Button size="xs" variant="outline" alignSelf="flex-start">
+              <Plus size={ICON} /> {unset.length} more {unset.length === 1 ? "field" : "fields"}
+            </Button>
+          </Collapsible.Trigger>
+          <Collapsible.Content>
+            <Stack gap="1.5" pt="1.5">
+              {unset.map(control)}
+            </Stack>
+          </Collapsible.Content>
+        </Collapsible.Root>
+      ) : null}
     </Stack>
   );
 }
@@ -446,18 +469,16 @@ function StackEditor({
 
 // ── one cell: empty, a single icon, or an overlay stack ───────────────────────
 function CellEditor({ cell, onChange }: { cell: Cell; onChange: (cell: Cell) => void }): ReactNode {
-  // An empty column: offer to turn it into an icon.
+  // An absent cell IS a full-width spacer — that's how it renders and what it serializes
+  // to — so it edits as one. It used to get a different panel entirely ("Empty column /
+  // Add icon"), which meant the same thing in the diagram had two unrelated forms
+  // depending on whether Format had been pressed. Changing Kind here is "add icon", so
+  // the button is redundant.
+  //
+  // Nothing is written until something changes: selecting an empty cell must not rewrite
+  // it into an object.
   if (cell == null) {
-    return (
-      <Stack gap="2">
-        <Text fontSize="xs" color="fg.muted">
-          Empty column.
-        </Text>
-        <Button size="xs" variant="outline" alignSelf="flex-start" onClick={() => onChange(newCell())}>
-          <Plus size={ICON} /> Add icon
-        </Button>
-      </Stack>
-    );
+    return <IconFields icon={{ kind: "spacer" }} onChange={(next) => onChange(next)} />;
   }
   if (Array.isArray(cell)) return <StackEditor stack={cell} onChange={onChange} />;
   if (typeof cell === "object" && "stack" in cell) {

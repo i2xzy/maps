@@ -228,11 +228,15 @@ describe("Inspector: cell selection", () => {
     expect(base).toEqual({ code: "hKRZW", title: "bridge over water" });
   });
 
-  it("turns an empty column into an icon", () => {
+  it("edits an empty column as the spacer it already is", () => {
+    // An absent cell IS a full-width spacer — that's how it renders and what it serializes
+    // to. It used to get a different panel entirely, so the same thing in the diagram had
+    // two unrelated forms depending on whether Format had been pressed.
     renderWithChakra(<Controlled initial={{ rows: [{ cells: [null] }] }} select={{ kind: "cell", row: 0, col: 0 }} />);
-    expect(screen.getByText(/Empty column/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Add icon" }));
-    expect((model().rows![0] as { cells: unknown[] }).cells).toEqual([{ kind: "track" }]);
+    expect(screen.getByText("Kind")).toBeTruthy();
+    expect(screen.queryByText(/Empty column/)).toBeNull();
+    // And selecting it writes nothing: the cell is still null until something changes.
+    expect((model().rows![0] as { cells: unknown[] }).cells).toEqual([null]);
   });
 });
 
