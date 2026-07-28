@@ -20,10 +20,10 @@ Measured against a committed fixture of **22 real Wikipedia diagrams (1,036 rows
 | …unchanged byte-for-byte | 81.9% |
 | …exported unchanged **in practice**, via per-row provenance | **99.4%** |
 | `{{Routemap}}` wrappers rebuilt byte-for-byte | **100%** (17/17) |
-| BSicon cells the editor's semantic controls can edit | **~46%** |
+| BSicon cells the editor's semantic controls can edit | **~56%** |
 | rows showing a muted placeholder for an unexpanded template | **~20%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 623 package + 86 editor |
+| tests | 653 package + 86 editor |
 
 The first three are asserted as a floor in `from-wikitext.test.ts`, so they can only go up.
 
@@ -58,15 +58,14 @@ they just aren't editable except as text. Failure families, by share of all cell
 |---|---|---|
 | 22.5% | unrecognised root/suffix | `SBHF`, `pBHF`, `BST`, `XBHF-L`, `eSHST` |
 | 12.8% | colour suffix | `tSTR red`, `STRq green` |
-| 11.0% | bare width prefix — **a bug** | `d`, `c`, `bs`, `s`, `cd`, `b` |
+| ~~11.0%~~ | ~~bare width prefix~~ — **fixed**, took cells 46.1% → 56.1% | `d`, `c`, `bs`, `s`, `cd`, `b` |
 | 4.7% | parenthesised variant | `tPSTR(L)_red` |
 
 **Why:** With no JSON pane in production, a cell the form can't edit is a cell nobody can
 edit. This is the largest single gap between the tool and its purpose.
-**How:** Width prefixes first — `{ kind: "spacer", width: … }` already exists and
-`iconToCode` emits `"d"`; only `codeToIcon("d")` fails to decode back. That's a
-one-directional round-trip, not a missing feature, and it's 11% of cells for a small fix.
-Then the unrecognised roots: they look like ordinary station/junction variants, so a handful
+**How:** Width prefixes are DONE — `codeToIcon` now decodes a bare prefix to
+`{ kind: "spacer", width }`, which took cell coverage from 46.1% to 56.1%. Next, the
+unrecognised roots: they look like ordinary station/junction variants, so a handful
 of root and prefix additions should cover many codes at once — count which recur before
 adding any. Colour suffixes are a model addition (a code plus a colour), so decide whether
 colour belongs in `IconObject` or stays a passthrough.
