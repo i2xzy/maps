@@ -180,6 +180,19 @@ describe("canonicalizeDiagram", () => {
     }
   });
 
+  it("doesn't array-wrap a text value that was a plain string", () => {
+    // Everything goes through the run pipeline, which returns an array. Assigning that
+    // straight to `text` rewrote `"text": "X"` as `"text": ["X"]` on Format — same value,
+    // written worse, on every label carrying a mark.
+    const row = { left: { text: "Handsacre Junction", italic: true }, cells: ["STR"] };
+    expect(canonicalizeDiagram({ rows: [row] } as never).rows[0]).toEqual(row);
+  });
+
+  it("keeps an array when it holds more than one run", () => {
+    const row = { left: { text: ["a ", { rws: "B" }], italic: true }, cells: ["STR"] };
+    expect(canonicalizeDiagram({ rows: [row] } as never).rows[0]).toEqual(row);
+  });
+
   it("leaves a plain string label alone", () => {
     expect(right(of("Euston"))).toBe("Euston");
   });

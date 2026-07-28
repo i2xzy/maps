@@ -106,6 +106,16 @@ function tidyRuns(runs: TextRun[]): TextRun[] {
 
 const migrateRuns = (runs: TextRun[]): TextRun[] => tidyRuns(runs.flatMap(migrateRun));
 
+/**
+ * A run list as the simplest `text` value: one plain string is that string.
+ *
+ * Everything here goes through the run pipeline, which hands back an array. Assigning that
+ * straight to `text` turned `"text": "Handsacre Junction"` into
+ * `"text": ["Handsacre Junction"]` on Format — the same value, written worse.
+ */
+const asText = (runs: TextRun[]): string | TextRun[] =>
+  runs.length === 1 && typeof runs[0] === "string" ? runs[0] : runs;
+
 /** Text (string or runs) as runs, with any run-level logos moved out. */
 function textAsRuns(text: string | TextRun[] | undefined): TextRun[] {
   if (text == null || text === "") return [];
@@ -153,13 +163,13 @@ function migrateSide(side: SideLabel | SideSlots | null | undefined, edge: "left
     // No logos to move, but the runs may still have been tidied, and a nested run may
     // itself have needed migrating. An empty result means there was nothing here at
     // all, so hand the side back rather than inventing `{ text: [] }`.
-    return runs.length === 0 ? side : collapse({ ...rest, text: runs });
+    return runs.length === 0 ? side : collapse({ ...rest, text: asText(runs) });
   }
 
   const logos = iconRuns(list);
   const gap: TextRun[] = runs.length ? [" "] : [];
   const text = edge === "left" ? [...logos, ...gap, ...runs] : [...runs, ...gap, ...logos];
-  return collapse({ ...rest, text });
+  return collapse({ ...rest, text: asText(text) });
 }
 
 /**
