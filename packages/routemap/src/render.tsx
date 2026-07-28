@@ -164,6 +164,19 @@ type TextStyle = { fontStyle?: "italic"; fontWeight?: "bold"; fontSize?: string 
  * between `{{rint|…}}` and the label text. Which is exactly what a `" "` run is here,
  * so the render and the wikitext agree by construction rather than by coincidence.
  */
+/**
+ * How a label logo is sized and laid out — exported so anything else showing one shows
+ * it at the same size.
+ *
+ * The width precedence and the width-not-height rule both live here because they were
+ * duplicated once and drifted: the editor sized by HEIGHT, which made a wide logo like
+ * National Rail render 1.9x too wide beside the same logo in the diagram.
+ */
+export function labelLogoStyle(icon: LabelIcon, resolved: ResolvedLogo): CSSProperties {
+  const opt = typeof icon === "string" ? undefined : icon;
+  return logoImgStyle(opt?.size ?? resolved.size ?? 14);
+}
+
 const logoImgStyle = (width: number): CSSProperties => ({
   // `inline` is what MediaWiki computes, but it has to be stated: host CSS resets
   // (Chakra's preflight, Tailwind's) set `img { display: block }`, which turns every
@@ -195,10 +208,11 @@ function Logo({
   resolveLogo: (icon: LabelIcon) => ResolvedLogo;
   resolveHref: (ref: string) => string | undefined;
 }): ReactNode {
-  const { url, size, link, alt } = resolveLogo(icon);
+  const resolved = resolveLogo(icon);
+  const { url, link, alt } = resolved;
   if (!url) return null;
   const opt = typeof icon === "string" ? undefined : icon;
-  const img = <img src={url} alt={opt?.alt ?? alt ?? ""} style={logoImgStyle(opt?.size ?? size ?? 14)} />;
+  const img = <img src={url} alt={opt?.alt ?? alt ?? ""} style={labelLogoStyle(icon, resolved)} />;
   // rint logos link to the operator's article, with the article as hover text.
   const href = link ? resolveHref(link) : undefined;
   return href ? (

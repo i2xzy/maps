@@ -15,7 +15,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
 import { Box, Image } from "@chakra-ui/react";
-import { iconFile, rintCode, type LabelIcon, type ResolvedLogo } from "@repo/routemap";
+import { iconFile, labelLogoStyle, rintCode, type LabelIcon, type ResolvedLogo } from "@repo/routemap";
 import { findRintCatalogEntry, rintCatalogLabel } from "@repo/routemap/rint-catalog";
 
 /** Resolves a logo for display. A bare rint code IS a `LabelIcon`, so this is
@@ -40,11 +40,16 @@ function RintNodeView({ node, editor, getPos, selected }: NodeViewProps): ReactN
   const resolve = useContext(LogoResolverContext);
   const icon = (node.attrs.icon ?? "") as LabelIcon;
   const name = iconLabel(icon);
-  const url = name ? resolve?.(icon)?.url : undefined;
+  const resolved = name ? resolve?.(icon) : undefined;
+  const url = resolved?.url;
 
   const select = () => {
     const pos = typeof getPos === "function" ? getPos() : undefined;
-    if (pos != null) editor.commands.setNodeSelection(pos);
+    // Focus, then select. The mousedown handler calls preventDefault to stop the
+    // browser placing a text caret, which also suppressed the focus a contenteditable
+    // would normally take — so the logo highlighted but Backspace went nowhere unless
+    // you happened to have clicked into the text first.
+    if (pos != null) editor.chain().focus().setNodeSelection(pos).run();
   };
 
   return (
@@ -56,7 +61,6 @@ function RintNodeView({ node, editor, getPos, selected }: NodeViewProps): ReactN
         alignItems="center"
         verticalAlign="middle"
         borderRadius="sm"
-        px="0.5"
         cursor="pointer"
         bg={selected ? "blue.subtle" : undefined}
         outline={selected ? "1px solid" : undefined}
@@ -67,8 +71,13 @@ function RintNodeView({ node, editor, getPos, selected }: NodeViewProps): ReactN
           select();
         }}
       >
-        {url ? (
-          <Image src={url} alt={name} height="14px" width="auto" maxWidth="none" />
+        {url && resolved ? (
+          /* The renderer's own sizing, not a lookalike. Sizing by height here made a
+             wide logo (National Rail) 1.9x wider than the same logo in the diagram,
+             because rint's size is a WIDTH bound — and it ignored each logo's own size
+             besides. The wrapper carries no padding for the same reason: it widened
+             every logo by 4px against the diagram. */
+          <Image src={url} alt={name} style={labelLogoStyle(icon, resolved)} />
         ) : (
           /* Unresolved: the renderer silently omits these, but in the editor an
              invisible node is one you can't select to delete. Name it instead. */
