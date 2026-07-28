@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   Box,
   Button,
@@ -55,6 +55,7 @@ import {
   type SlotName,
 } from "@repo/routemap";
 import { LabelRichEditor } from "./label-editor";
+import { useTextBuffer } from "./use-text-buffer";
 import { labelIsRteEditable } from "./label-doc";
 import type { LogoResolver } from "./rint-node";
 import type { RwsResolver } from "./rws-node";
@@ -100,30 +101,6 @@ const newIcon = (): CellIcon => ({ kind: "track" });
 const newLayer = (): CellIcon => safeIconCode(newIcon() as IconObject) ?? newIcon();
 const newCell = (): Cell => newIcon();
 const newRow = (): DiagramRow => ({ cells: [newCell()] });
-
-/**
- * A local text buffer for the label / colspan inputs. Every edit round-trips
- * through the JSON pane (model → formatJson → parse), which re-creates the value
- * on each keystroke; driving the input straight off that can jitter the cursor.
- * This keeps typing instant and only re-syncs when the external value actually
- * changes from something other than our own last edit (e.g. a direct JSON edit).
- */
-function useTextBuffer(external: string, commit: (v: string) => void): [string, (v: string) => void] {
-  const [local, setLocal] = useState(external);
-  const lastExternal = useRef(external);
-  useEffect(() => {
-    if (external !== lastExternal.current) {
-      lastExternal.current = external;
-      setLocal(external);
-    }
-  }, [external]);
-  const onChange = (v: string): void => {
-    lastExternal.current = v; // our own change — don't let the sync effect clobber it
-    setLocal(v);
-    commit(v);
-  };
-  return [local, onChange];
-}
 
 // ── shared bits ────────────────────────────────────────────────────────────
 function Thumb({ code, size = 16 }: { code: string | null; size?: number }): ReactNode {

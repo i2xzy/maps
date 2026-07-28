@@ -21,6 +21,7 @@ import { json, jsonParseLinter } from "@codemirror/lang-json";
 import { linter, lintGutter } from "@codemirror/lint";
 import { formatJson } from "./format-json";
 import { Inspector } from "./inspector";
+import { useTextBuffer } from "./use-text-buffer";
 import { CreditsFooter } from "./credits-footer";
 import {
   RouteMap,
@@ -35,6 +36,7 @@ import {
   mapParam,
   migrateDiagram,
   needsMigration,
+  toRoutemap,
   toWikitext,
   type RouteDiagram,
   type Selection,
@@ -337,11 +339,47 @@ export default function EditorPage() {
   // and the preview boundary, so a transient/partial diagram can't crash the page.
   const wikitext = useMemo(() => {
     try {
-      return parsed.diagram ? toWikitext(parsed.diagram) : "";
+      if (!parsed.diagram) return "";
+      // `toRoutemap` returns the body unchanged when there's no wrapper, so this covers
+      // both a pasted template and a diagram authored as JSON.
+      return toRoutemap(parsed.diagram, toWikitext(parsed.diagram));
     } catch {
       return "";
     }
   }, [parsed.diagram]);
+
+  /**
+   * The wikitext pane is an EDITABLE view of the same diagram, so pasting into it is how
+   * you import and typing in it is how you edit.
+   *
+   * Kept off the model until it parses to something: an empty or half-typed paste would
+   * otherwise wipe the diagram on the way to being finished. The buffer is what stops the
+   * pane being rewritten under the cursor — the model is re-serialized on every keystroke,
+   * and pushing that back into the textarea would fight the caret.
+   *
+   * Per-row provenance is what makes this bearable at all: rows parsed out of this text
+   * carry their original line, so serializing returns the same bytes rather than the
+   * parser's best effort.
+   */
+  const [wikiError, setWikiError] = useState<string | null>(null);
+  const [wikiBuffer, setWikiBuffer] = useTextBuffer(wikitext, (next) => {
+    const src = next.trim();
+    if (!src) {
+      setWikiError(null);
+      return;
+    }
+    try {
+      const diagram = fromRoutemap(src);
+      if (!diagram.rows.length) {
+        setWikiError("No rows yet — paste a {{Routemap}} or its map= rows.");
+        return;
+      }
+      setWikiError(null);
+      setText(formatJson(diagram, 2, paneMaxWidth()));
+    } catch (e) {
+      setWikiError((e as Error).message);
+    }
+  });
 
   // JSON syntax highlighting + inline parse-error markers (gutter + squiggles).
   const extensions = useMemo(() => [json(), lintGutter(), linter(jsonParseLinter())], []);
@@ -584,28 +622,38 @@ export default function EditorPage() {
           <Splitter.Panel id="wiki" p="0" width="100%">
             <Flex direction="column" height="100%" minW="0" width="100%">
               <Flex align="center" justify="space-between" px="3" py="2" borderBottomWidth="1px" borderColor="border">
-                <Heading size="sm">Wiki code (read-only)</Heading>
+                <Heading size="sm">Wiki code</Heading>
                 <Button
                   size="xs"
                   variant="outline"
-                  onClick={() => navigator.clipboard?.writeText(wikitext)}
-                  disabled={!wikitext}
+                  // The BUFFER, not the derived text: after typing something that doesn't
+                  // parse yet, those differ, and copying what isn't on screen is a trap.
+                  onClick={() => navigator.clipboard?.writeText(wikiBuffer)}
+                  disabled={!wikiBuffer}
                 >
                   Copy
                 </Button>
               </Flex>
-              <Box
+              {wikiError ? (
+                <Box px="3" py="1.5" bg="red.subtle" color="red.fg" fontSize="xs">
+                  {wikiError}
+                </Box>
+              ) : null}
+              <Textarea
                 flex="1"
                 minH="0"
-                overflow="auto"
+                borderWidth="0"
+                borderRadius="0"
+                resize="none"
                 p="3"
                 fontFamily="mono"
                 fontSize="xs"
-                whiteSpace="pre-wrap"
-                wordBreak="break-word"
-              >
-                {wikitext}
-              </Box>
+                spellCheck={false}
+                placeholder={"Paste a {{Routemap}} here, or edit the wikitext directly."}
+                value={wikiBuffer}
+                onChange={(e) => setWikiBuffer(e.target.value)}
+                _focusVisible={{ outline: "none" }}
+              />
             </Flex>
           </Splitter.Panel>
         </Splitter.Root>
