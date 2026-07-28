@@ -240,6 +240,11 @@ interface Fragment {
   italic?: boolean;
 }
 
+/** Wikitext we can't render, shown compactly rather than dumped in full. */
+interface RawPiece {
+  raw: string;
+}
+
 /** A logo on a line, where the author put it. */
 interface IconPiece {
   icon: LabelIcon;
@@ -255,11 +260,12 @@ interface SplitPiece {
   lines: Piece[][];
 }
 /** One thing on a line: a text fragment, or a `{{BSsplit}}` sitting beside it. */
-type Piece = Fragment | SplitPiece | BreakPiece | IconPiece;
+type Piece = Fragment | SplitPiece | BreakPiece | IconPiece | RawPiece;
 
 const isSplitPiece = (p: Piece): p is SplitPiece => "lines" in p;
 const isBreakPiece = (p: Piece): p is BreakPiece => "br" in p;
 const isIconPiece = (p: Piece): p is IconPiece => "icon" in p;
+const isRawPiece = (p: Piece): p is RawPiece => "raw" in p;
 
 // Split a run's text on an unescaped `|` (line break); unescape `\|` to a pipe.
 const splitLines = (s: string): string[] =>
@@ -282,9 +288,7 @@ function buildLines(
   const lines: Piece[][] = [[]];
   for (const run of runs) {
     if (typeof run === "object" && "raw" in run) {
-      // Shown literally: we can't expand an arbitrary template client-side, and text
-      // the reader can see beats content that silently isn't there.
-      (lines[lines.length - 1] as Piece[]).push({ text: run.raw });
+      (lines[lines.length - 1] as Piece[]).push({ raw: run.raw });
       continue;
     }
     if (typeof run === "object" && "icon" in run) {
@@ -316,6 +320,37 @@ function buildLines(
     });
   }
   return lines;
+}
+
+/**
+ * Wikitext we don't model — an unrecognised template, usually.
+ *
+ * Truncated, because a quarter of the rows in real diagrams carry one and dumping
+ * `{{BSto|[[Template:X|X]]|to {{rws|Y}}|it=all}}` into a label at full length shoves the
+ * icon strip off screen. Muted so it reads as "not understood" rather than as content,
+ * with the whole thing one hover away.
+ *
+ * The proper fix is to EXPAND these through the API the way {{rint}} and {{rws}} are —
+ * most of them carry real label text. Until then this keeps the diagram legible.
+ */
+function RawText({ raw }: { raw: string }): ReactElement {
+  return (
+    <span
+      title={raw}
+      style={{
+        display: "inline-block",
+        verticalAlign: "middle",
+        maxWidth: "10em",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        opacity: 0.55,
+        fontStyle: "italic",
+      }}
+    >
+      {raw}
+    </span>
+  );
 }
 
 /**
@@ -443,7 +478,9 @@ function Label({
     const lines = buildLines(text as string | TextRun[], label?.link, label?.title);
     const renderLine = (line: Piece[]): ReactNode[] =>
       line.map((piece, i) =>
-        isIconPiece(piece) ? (
+        isRawPiece(piece) ? (
+          <RawText key={i} raw={piece.raw} />
+        ) : isIconPiece(piece) ? (
           <Logo key={i} icon={piece.icon} resolveLogo={resolveLogo} resolveHref={resolveHref} />
         ) : isBreakPiece(piece) ? (
           <br key={i} />

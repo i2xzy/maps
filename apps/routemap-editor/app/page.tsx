@@ -12,6 +12,8 @@ import {
   Portal,
   Select,
   Splitter,
+  Text,
+  Textarea,
   createListCollection,
 } from "@chakra-ui/react";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
@@ -29,6 +31,8 @@ import {
   expandRint,
   expandRws,
   canonicalizeDiagram,
+  fromRoutemap,
+  mapParam,
   migrateDiagram,
   needsMigration,
   toWikitext,
@@ -168,6 +172,9 @@ export default function EditorPage() {
   const [size, setSize] = useState<number[]>(DEFAULT_SIZE);
   const [rightSize, setRightSize] = useState<number[]>(DEFAULT_RIGHT_SIZE);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   // The element clicked in the preview, edited in the side Inspector. Cleared
@@ -366,6 +373,36 @@ export default function EditorPage() {
   // `{ text: "a" }` becomes `"a"`, adjacent strings merge). Every rewrite it makes
   // emits the same wikitext, so pressing it changes how the JSON reads, never what it
   // says — the one exception being an old diagram, whose logos it puts BACK.
+  /**
+   * Import a `{{Routemap}}` from wikitext, as a NEW diagram rather than over the current
+   * one — an import that silently replaced what you had would be unrecoverable.
+   *
+   * Accepts either a whole template or a bare `map=` body: `fromRoutemap` falls through
+   * to the body parser when there's no template call, and someone copying part of an
+   * article will paste either.
+   */
+  const confirmImport = () => {
+    const src = importText.trim();
+    if (!src) return;
+    try {
+      const diagram = fromRoutemap(src);
+      if (!diagram.rows.length) {
+        setImportError("No rows found. Paste a {{Routemap}} call or its map= body.");
+        return;
+      }
+      const name = mapParam(diagram, "title")?.trim() || "Imported diagram";
+      const id = newId();
+      setDiagrams((ds) => [...ds, { id, name, text: formatJson(diagram, 2, paneMaxWidth()) }]);
+      setActiveId(id);
+      setSelection(null);
+      setImportOpen(false);
+      setImportText("");
+      setImportError(null);
+    } catch (e) {
+      setImportError((e as Error).message);
+    }
+  };
+
   const format = () => {
     try {
       setText(formatJson(canonicalizeDiagram(JSON.parse(text)), 2, paneMaxWidth()));
@@ -425,6 +462,9 @@ export default function EditorPage() {
               </Select.Root>
               <Button size="xs" colorPalette="blue" onClick={newDiagram}>
                 New
+              </Button>
+              <Button size="xs" variant="outline" onClick={() => setImportOpen(true)}>
+                Import
               </Button>
             </HStack>
             <HStack gap="2">
@@ -599,6 +639,51 @@ export default function EditorPage() {
                 </Button>
                 <Button colorPalette="blue" onClick={confirmRename} disabled={!renameValue.trim()}>
                   Save
+                </Button>
+              </Dialog.Footer>
+            </Dialog.Content>
+          </Dialog.Positioner>
+        </Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={importOpen} onOpenChange={(e) => setImportOpen(e.open)}>
+        <Portal>
+          <Dialog.Backdrop />
+          <Dialog.Positioner>
+            <Dialog.Content maxW="720px">
+              <Dialog.Header>
+                <Dialog.Title>Import from wikitext</Dialog.Title>
+              </Dialog.Header>
+              <Dialog.Body>
+                <Text fontSize="sm" color="fg.muted" mb="2">
+                  Paste a <Box as="code" fontFamily="mono">{"{{Routemap}}"}</Box> from a
+                  Wikipedia article or template — the whole call, or just its{" "}
+                  <Box as="code" fontFamily="mono">map=</Box> rows.
+                </Text>
+                <Textarea
+                  autoFocus
+                  rows={14}
+                  fontFamily="mono"
+                  fontSize="xs"
+                  value={importText}
+                  placeholder={"{{Routemap\n|title = …\n|map =\nCONTg\nBHF~~Station\n}}"}
+                  onChange={(e) => {
+                    setImportText(e.target.value);
+                    setImportError(null);
+                  }}
+                />
+                {importError ? (
+                  <Text fontSize="xs" color="red.fg" mt="2">
+                    {importError}
+                  </Text>
+                ) : null}
+              </Dialog.Body>
+              <Dialog.Footer>
+                <Button variant="outline" onClick={() => setImportOpen(false)}>
+                  Cancel
+                </Button>
+                <Button colorPalette="blue" onClick={confirmImport} disabled={!importText.trim()}>
+                  Import
                 </Button>
               </Dialog.Footer>
             </Dialog.Content>
