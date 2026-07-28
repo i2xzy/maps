@@ -34,6 +34,7 @@ import {
   fromRoutemap,
   migrateDiagram,
   needsMigration,
+  pruneProvenance,
   reconcileRows,
   toRoutemap,
   toWikitext,
@@ -375,7 +376,12 @@ export default function EditorPage() {
       // keystroke degrades any row the parser reads less richly than it was authored —
       // an italic label spanning several runs comes back as one opaque `{ raw }`, so a
       // single character typed here used to flatten the whole document.
-      setText(formatJson(reconcileRows(diagram, parsed.diagram), 2, paneMaxWidth()));
+      // Pruned: a row only keeps its original text when serializing can't reproduce it,
+      // which is about a fifth of them. The rest would carry a copy of bytes the
+      // serializer already produces.
+      setText(
+        formatJson(pruneProvenance(reconcileRows(diagram, parsed.diagram)), 2, paneMaxWidth()),
+      );
     } catch (e) {
       setWikiError((e as Error).message);
     }

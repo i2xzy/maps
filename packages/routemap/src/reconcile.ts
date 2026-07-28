@@ -19,8 +19,40 @@
 import type { DiagramRow, RouteDiagram } from "./types";
 import { toWikitext } from "./serialize";
 
-/** What one row serializes to on its own. */
+/** What one row serializes to on its own, provenance honoured. */
 const lineOf = (row: DiagramRow): string => toWikitext({ rows: [row] });
+
+/** What one row serializes to from its MODEL alone, ignoring any provenance it carries. */
+const modelLineOf = (row: DiagramRow): string =>
+  toWikitext({ rows: [{ ...row, src: undefined } as DiagramRow] });
+
+/**
+ * Drop `src` from rows that don't need it.
+ *
+ * Provenance only earns its place where a row's own wikitext CAN'T be reproduced by
+ * serializing it. For the ~82% of rows that round-trip byte-exactly, emitting the
+ * serialization and emitting the original are the same bytes, so the field is pure noise —
+ * and it roughly doubles the size of a document.
+ *
+ * Safe because `reconcileRows` falls back to a row's serialization when there's no `src`,
+ * which for a pruned row is by definition the line it came from.
+ */
+export function pruneProvenance(diagram: RouteDiagram): RouteDiagram {
+  return {
+    ...diagram,
+    rows: diagram.rows.map((row) => {
+      const src = (row as { src?: string }).src;
+      if (src == null) return row;
+      let reproduced: string;
+      try {
+        reproduced = modelLineOf(row);
+      } catch {
+        return row; // can't tell — keep it
+      }
+      return reproduced === src.trim() ? ({ ...row, src: undefined } as DiagramRow) : row;
+    }),
+  };
+}
 
 /**
  * Merge a freshly parsed diagram with the one it replaces, keeping unchanged rows.
@@ -45,9 +77,9 @@ export function reconcileRows(parsed: RouteDiagram, previous: RouteDiagram | nul
   }
 
   const rows = parsed.rows.map((row) => {
-    // `src` is the line this row was parsed from — the text to match against.
-    const line = (row as { src?: string }).src;
-    if (line == null) return row;
+    // The line this row came from: its `src` when it has one, and otherwise its own
+    // serialization — which for a pruned row IS the line it was parsed from.
+    const line = (row as { src?: string }).src ?? modelLineOf(row);
     const bucket = available.get(line.trim()) ?? available.get(line);
     const reuse = bucket?.shift();
     return reuse ?? row;
