@@ -229,3 +229,25 @@ describe("{{enlarge}} is a file, not a text wrapper", () => {
     expect(html).not.toContain("{{enlarge|Foo}}");
   });
 });
+
+describe("a File link written straight into a label", () => {
+  it("renders as an image with no resolver and no fetch", () => {
+    // Real diagrams put the transport-mode glyphs in labels as already-expanded wikitext.
+    // Nothing to resolve, so this must work with no `resolveText` at all — the whole
+    // substitution pass used to bail out when none was supplied.
+    const diagram = fromWikitext("A! !STR~~[[File:BSicon TRAM.svg|20px|link=|alt=|TRAM]]");
+    const html = renderToStaticMarkup(<RouteMap diagram={diagram} />);
+    expect(html).toContain("BSicon%20TRAM.svg");
+    expect(html).not.toContain("[[File:");
+  });
+
+  it("leaves an ordinary wikilink alone", () => {
+    // Only File/Image. Swallowing `[[Foo|Bar]]` here would turn a station link into a
+    // broken image.
+    const diagram = fromWikitext("A! !STR~~[[Longsight railway station|Longsight]]");
+    const html = renderToStaticMarkup(<RouteMap diagram={diagram} resolveHref={(r) => `/${r}`} />);
+    expect(html).toContain(">Longsight<");
+    // The row's STR cell is an image, so assert no image was made FROM the link.
+    expect(html).not.toMatch(/<img[^>]*Longsight/);
+  });
+});

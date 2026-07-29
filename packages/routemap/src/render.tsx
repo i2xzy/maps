@@ -487,7 +487,9 @@ function expandRawRuns(
   text: string | TextRun[],
   resolveText?: TextResolver,
 ): string | TextRun[] {
-  if (!resolveText || typeof text === "string") return text;
+  // No early return on a missing resolver: a File link written directly in the label needs
+  // no resolution at all, and skipping the whole pass would keep showing its source.
+  if (typeof text === "string") return text;
   return text.flatMap((run): TextRun[] => {
     if (run == null || typeof run !== "object") return [run];
     if ("split" in run) {
@@ -501,18 +503,26 @@ function expandRawRuns(
     }
     if (!("raw" in run)) return [run];
 
+    // A File link written straight into the label — `[[File:BSicon TRAM.svg|20px|…]]`, which
+    // real diagrams use for the transport-mode glyphs. Already expanded wikitext, so it
+    // needs no fetch and resolves even with no resolver supplied at all.
+    if (/^\[\[\s*(?:File|Image)\s*:/i.test(run.raw.trim())) {
+      const entry = parseRintExpansion(run.raw);
+      if (entry) return [{ icon: { file: entry.file, size: entry.size, alt: entry.alt } }];
+    }
+
     // A file-producing template ({{rmri}}, {{ric}}) expands to the same `[[File:…|Npx]]`
     // shape as {{rint}}, so it becomes a logo run and renders through the existing path.
     // `link=` is dropped: a `{ file }` label icon has nowhere to carry one. {{rmri}} emits
     // an empty link anyway; {{ric}} loses a station link, which still beats grey wikitext.
-    const iconCall = iconTemplateCall(run.raw);
+    const iconCall = resolveText ? iconTemplateCall(run.raw) : null;
     if (iconCall) {
-      const entry = parseRintExpansion(resolveText(iconCall) ?? "");
+      const entry = parseRintExpansion(resolveText!(iconCall) ?? "");
       return entry ? [{ icon: { file: entry.file, size: entry.size, alt: entry.alt } }] : [run];
     }
 
-    const call = textTemplateCall(run.raw);
-    const expanded = call ? resolveText(call) : undefined;
+    const call = resolveText ? textTemplateCall(run.raw) : null;
+    const expanded = call ? resolveText!(call) : undefined;
     return expanded ? parseLabelText(expanded) : [run];
   });
 }
