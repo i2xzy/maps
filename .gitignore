@@ -40,3 +40,6 @@ yarn-error.log*
 # Supabase CLI local state
 supabase/.temp/
 .gstack/
+
+# Crawl cache for scripts/build-bsicon-manifest.mjs (5.6 MB, regenerable)
+.cache/

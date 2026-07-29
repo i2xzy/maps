@@ -119,50 +119,62 @@ Don't build against a dev server someone is using. Verified: a separate `distDir
 
 ## Medium priority
 
-### Hide the fields and options that can't produce a real icon
-**What:** The form offers whatever the MODEL can represent, and the model is generous:
-`previewOptions({kind:"track"}, "curve")` yields `kSTR` and `kkSTR`, neither of which is a
-file. Measured across the 2,638 modellable cells in the fixture:
+### ~~Hide the fields and options that can't produce a real icon~~ — **done**
+**What:** The form offered a control for anything the MODEL can represent, and the model is
+generous: `previewOptions({kind:"track"}, "curve")` yields `kSTR` and `kkSTR`, neither of
+which is a file. Half the form edited nothing.
 
-| | |
-|---|---|
-| fields offered per icon, today | 15.6 |
-| …if filtered to those with a real option | **8.4** (46% hidden) |
-| options inside the SURVIVING fields that are dead | **51%** (66,303 / 129,171) |
+| | before | after |
+|---|---|---|
+| fields offered per icon (fixture average) | 15.6 | **8.6** |
+| dead options inside the surviving fields | 51% | **~0%** |
+| `n more fields` for a plain `STR` | 21 | **14** |
+| …for `ABZrg` | 5 | **1** |
 
-So roughly half the form is choices that can only produce a broken image.
-**Why:** It's the same complaint as the cell decoder, from the other end — not "this cell
-can't be edited" but "these controls edit nothing". It also makes the `n more fields`
-disclosure look worse than it is: most of what it hides was never usable.
-**How:** Existence has to be baked; asking per render is an API call per option per
-keystroke, the trap the `{{rint}}` catalog exists to avoid. Measured sizes for the
-manifest, from a full crawl of Commons:
+**How it shipped:** a Bloom filter over the 172,005 codes that both exist on Commons and
+our encoder can emit, at a 1% false-positive rate — 268 KB of base64, 203 KB gzipped.
+Sized against the alternatives:
 
-| representation | size |
-|---|---|
-| every `BSicon *.svg` on Commons (371,890) | 5.6 MB raw / 1.0 MB gzipped |
-| …restricted to codes our encoder can emit (172,005) | 2.5 MB raw / 442 KB gzipped |
-| …uncoloured only (108,670) | 1.5 MB raw / 275 KB gzipped |
-| projected to (kind, field, value) seen on a real file | 6.1 KB raw / 0.9 KB gzipped |
-| Bloom filter over the 172,005, 5% false positive | ~133 KB |
+| representation | gzipped | fields hidden | dead options removed |
+|---|---|---|---|
+| exact code list | 442 KB | 46% | 51% |
+| **Bloom 1%** | **203 KB** | **45%** | **51%** |
+| Bloom 5% | 132 KB | 40% | 49% |
+| (kind, field, value) table | 0.9 KB | ~0% | ~0% |
 
-The 6.1 KB projection is tempting and **doesn't work**: `curve` appears on *some* real
-track file, so a per-kind table keeps the field that a plain `STR` can't use. The win
-needs per-code answers.
+Two things that look cheaper and aren't. The **0.9 KB projection fails outright**: `curve`
+appears on *some* real track file, so a per-kind table keeps the field a plain `STR` can't
+use. And **Bloom bits don't compress** — they're ~50% dense by design, so unlike the rint
+catalog (363 KB raw → 44 KB gzipped) the raw and wire sizes are nearly the same. Raw it's
+smaller than the exact list; gzipped the gap narrows to 2x.
 
-A Bloom filter is the right shape because its error direction matches the safety rule
-below: it has no false negatives, so it can never hide something real, and a false
-positive merely shows one dead option. Ship it as a static asset (`public/`), fetched
-once and cached, rather than in the bundle — a `Set` of 172,005 strings also costs
-~10–15 MB of heap, which matters on a phone.
-**Safety rule, whichever representation wins:** a field or option that is **currently
-set** is always offered. The manifest is a snapshot and Commons isn't the only source a
-diagram's icons can come from, so absence of evidence must only ever remove a choice
-nobody has made — never make existing content uneditable.
-**Depends on:** Nothing. The generator exists
-(`scripts/build-bsicon-manifest.mjs`, ~12 minutes, 744 API pages).
-**Open:** whether the disclosure can then go. At 8.4 fields average it's arguable, but
-the distribution has a fat tail — 995 of 2,638 icons still show 11–13 fields.
+5% was rejected on measurement, not taste: a dead field survives if *any* of its options
+false-positives, so the error rate is amplified per field — 5% per option cost 5 points of
+field hiding (9.4 fields vs 8.6).
+
+**Why a Bloom filter and not the list:** we only ever ask *membership*, never "list them".
+That's what buys the size, and its error direction is the one we want — no false negatives,
+so it can never hide an icon that really exists.
+**Safety rule, load-bearing:** a field or option **currently set** is always offered,
+whatever the filter says. It's a snapshot with a known error rate and Commons isn't the only
+source a diagram's icons can come from, so absence of evidence only ever removes a choice
+nobody has made. Tested.
+**Left open:** the disclosure stays. At 14 hidden fields for a plain `STR` it still earns
+its place — the hope that contextual filtering would remove the need for it didn't survive
+the measurement, though `ABZrg` going 5 -> 1 shows how much less of a dumping ground it is.
+
+### Enumerating every BSicon (for an icon picker) is a separate problem
+**What:** A Bloom filter answers membership and **cannot be enumerated** — no listing, no
+search, no autocomplete. So it can filter fields and can never power "insert any icon".
+**Why it matters:** 199,885 of the 371,890 real files are codes our encoder can't even
+produce. They render and round-trip fine as a raw `{ code }` cell, so a picker needs no
+model support — just a way in, which the GUI currently lacks entirely ("Replace" swaps an
+unmodellable code *for* a modelled one).
+**How:** the full 371,890-code list is 1.0 MB gzipped — worth loading **only when a picker
+opens**, the same bet the logo picker already makes with its 363 KB catalog. Local rather
+than an API call because Commons' `aiprefix` is prefix-only: typing `BHF` would miss
+`KBHFa`, which is usually what you wanted.
+**Depends on:** nothing. The generator already produces the list (`.cache/`, gitignored).
 
 ### `{{BSsplit}}` written as an explicit run isn't GUI-editable
 **What:** A `{ split }` run makes the whole label fall back to "(Rich label — edit in

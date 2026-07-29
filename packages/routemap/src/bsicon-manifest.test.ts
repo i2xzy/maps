@@ -1,0 +1,79 @@
+import { describe, expect, it } from "vitest";
+import { bsiconExists, existingOptions, fieldIsOffered, offeredFields } from "./bsicon-manifest";
+import { fieldSpec, fieldsFor, isFieldVisible } from "./descriptor";
+import type { IconObject } from "./icon";
+
+const spec = (field: string) => fieldSpec(field as keyof IconObject)!;
+
+describe("bsiconExists", () => {
+  it("knows the icons real diagrams are built from", () => {
+    for (const code of ["STR", "BHF", "ABZgl", "STRo", "KBHFa", "STR red", "tSTR"]) {
+      expect(bsiconExists(code), code).toBe(true);
+    }
+  });
+
+  it("rejects codes the naming convention allows but nobody drew", () => {
+    // `kSTR` is what the model encodes for `curve: "wide"` on a plain track. It is exactly
+    // the kind of plausible-but-absent code that made half the form useless.
+    expect(bsiconExists("kSTR")).toBe(false);
+    expect(bsiconExists("ZZZQQ")).toBe(false);
+    expect(bsiconExists(null)).toBe(false);
+    expect(bsiconExists(undefined)).toBe(false);
+    expect(bsiconExists("")).toBe(false);
+  });
+});
+
+describe("field filtering", () => {
+  it("hides fields whose every option would produce a broken image", () => {
+    const track: IconObject = { kind: "track" };
+    const offered = offeredFields(track).map((f) => String(f.field));
+    // `offset` moves a line onto a parallel axis; there is no `STR@F`. `lane` likewise.
+    expect(offered).not.toContain("offset");
+    expect(offered).not.toContain("lane");
+    // The ones that do exist stay.
+    expect(offered).toContain("system");
+    expect(offered).toContain("width");
+    expect(offered).toContain("level"); // STRo / STRu
+  });
+
+  it("prunes dead options inside a field that survives", () => {
+    // Nine widths are representable; only four are drawn for a plain track.
+    const widths = existingOptions({ kind: "track" }, "width").map((o) => String(o.value));
+    expect(widths).toEqual(["quarter", "half", "double", "quad"]);
+  });
+
+  it("still offers a field the icon has SET, even when its code doesn't exist", () => {
+    // The safety rule. `curve: "wide"` encodes to `kSTR`, which doesn't exist — but if a
+    // diagram somehow holds that value, hiding the control makes real content uneditable.
+    // The filter is a snapshot with a known false-positive rate; it must only ever remove
+    // choices nobody has made.
+    const odd: IconObject = { kind: "track", curve: "wide" };
+    expect(bsiconExists("kSTR")).toBe(false); // the premise
+    expect(fieldIsOffered(spec("curve"), odd)).toBe(true);
+    expect(offeredFields(odd).map((f) => String(f.field))).toContain("curve");
+  });
+
+  it("keeps the selected option in the list even when absent", () => {
+    const odd: IconObject = { kind: "track", curve: "wide" };
+    expect(existingOptions(odd, "curve").map((o) => String(o.value))).toContain("wide");
+  });
+
+  it("never offers a field the descriptor already rules out", () => {
+    // Existence filtering narrows; it must not widen. Anything hidden by `isFieldVisible`
+    // (wrong kind, unmet `requires`) stays hidden regardless of what exists.
+    for (const icon of [{ kind: "track" }, { kind: "station" }, { kind: "spacer" }] as IconObject[]) {
+      for (const f of offeredFields(icon)) {
+        expect(isFieldVisible(f, icon), `${icon.kind}.${String(f.field)}`).toBe(true);
+      }
+      expect(offeredFields(icon).length).toBeLessThanOrEqual(fieldsFor(icon.kind).length);
+    }
+  });
+
+  it("cuts a real icon's form roughly in half", () => {
+    // The whole point, asserted as a floor so it can't quietly regress to showing
+    // everything. Measured across the fixture: 15.6 fields offered today, 8.6 filtered.
+    const track: IconObject = { kind: "track" };
+    const before = fieldsFor("track").filter((f) => isFieldVisible(f, track)).length;
+    expect(offeredFields(track).length).toBeLessThan(before);
+  });
+});

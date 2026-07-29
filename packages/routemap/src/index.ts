@@ -7,6 +7,7 @@ export * from "./serialize";
 export * from "./icon";
 export * from "./parse";
 export * from "./descriptor";
+export * from "./bsicon-manifest";
 export * from "./migrate";
 export * from "./from-wikitext";
 export * from "./reconcile";
