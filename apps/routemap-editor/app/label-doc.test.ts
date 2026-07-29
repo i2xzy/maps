@@ -228,3 +228,37 @@ describe("<br> vs {{BSsplit}} in the document", () => {
     expect(docToLabel(doc)).toEqual(["a", { br: true }, { icon: "gb|rail" }]);
   });
 });
+
+describe("raw wikitext survives the document as an atom", () => {
+  // 280 of 1199 labels in the fixture (23%) used to fall back to "edit in JSON", and
+  // `{ raw }` caused 241 of them. With no JSON pane in production that was a label nobody
+  // could edit — and all-or-nothing, so one {{BSto}} made the plain text around it
+  // unreachable too.
+  const label = ["to ", { raw: "{{BSto|Manchester|Leeds}}" }, " today"];
+
+  it("is editable at all now", () => {
+    expect(labelIsRteEditable(label)).toBe(true);
+    // A split still isn't: its lines are editable text, which an atom can't hold.
+    expect(labelIsRteEditable([{ split: [["a"], ["b"]] }])).toBe(false);
+  });
+
+  it("round-trips through the document unchanged", () => {
+    expect(docToLabel(labelToDoc(label))).toEqual(label);
+  });
+
+  it("keeps its pipes intact rather than flattening them to line breaks", () => {
+    // The reason it must be an atom and not text. Flattened, `{{BSto|a|b}}` reads as three
+    // lines to the serializer, which then wraps the lot in a {{BSsplit}}.
+    const doc = labelToDoc(label);
+    const flat = JSON.stringify(doc);
+    expect(flat).toContain('"type":"raw"');
+    // The wikitext lives in an attribute, never as document text.
+    const texts = (doc.content ?? []).flatMap((p) => (p.content ?? []).filter((n) => n.type === "text"));
+    expect(texts.some((t) => (t.text ?? "").includes("{{"))).toBe(false);
+  });
+
+  it("drops an emptied chip instead of writing an empty run", () => {
+    const doc = { type: "doc", content: [{ type: "paragraph", content: [{ type: "raw", attrs: { raw: "" } }] }] };
+    expect(docToLabel(doc)).toBeUndefined();
+  });
+});

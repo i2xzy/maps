@@ -243,57 +243,43 @@ than an API call because Commons' `aiprefix` is prefix-only: typing `BHF` would 
 `KBHFa`, which is usually what you wanted.
 **Depends on:** nothing. The generator already produces the list (`.cache/`, gitignored).
 
-### `{{BSsplit}}` written as an explicit run isn't GUI-editable
-**What:** A `{ split }` run makes the whole label fall back to "(Rich label — edit in
-JSON)". So does a `{ raw }` run and a label carrying `title`.
-**Why:** With no JSON pane, that's a label nobody can edit — and the fallback is
-all-or-nothing, so one split makes the plain text around it unreachable too.
-**How:** Three options, ascending. (a) Say *why* in the message rather than "Rich label" —
-minutes, fixes nothing, stops it being mysterious. (b) An **atom node** like the logo and
-station chips: the split becomes a selectable block edited via a popover, and the
-surrounding text becomes editable again — about half a day. (c) A ProseMirror **node with
-content** (`split` containing `splitLine`, the way a table contains rows), so the lines are
-edited inline. That is the real answer, TipTap's table extension is the reference, and the
-work is in the edges: caret in and out, Enter/Backspace at line boundaries, whole-node
-selection. None of it is testable under jsdom, so it needs browser-driven tests.
-**Depends on:** Nothing, but hold until the importer says how often explicit splits appear
-in real diagrams. If it's ~1%, (a) is the right answer forever; if it's 15%, skip (b) and go
-straight to (c).
+### Labels that can't be edited in the GUI: 23% -> 3%
+**What:** A label containing a `{ split }`, a `{ raw }` run, or a `title` fell back to
+"Rich label — edit in JSON". With no JSON pane in production that was a label nobody could
+edit, and it was all-or-nothing: one `{{BSto}}` made the plain text around it unreachable too.
 
-### ~~Row properties~~ — **done**, and it was the whole remaining gap
-**What:** The grammar allows one field past the fourth label slot —
-`…~~rinfo4~~rowProps` — and it was being dropped. Real diagrams use it for `fontsize=main`
-(51 rows) and `bg=#003399` (1).
-**Outcome:** modelled as `props` on a grid row, carried verbatim and never interpreted, so
-semantic fidelity is now **917/917 — 100%**, asserted exactly rather than as a ratio.
-**Why it mattered more than 52/917 suggests:** provenance keeps an UNTOUCHED row byte-exact,
-so these survived a paste. But one GUI edit re-serialized the row from the model, and
-anything the model didn't hold was gone — a silently restyled row. That path is now tested in
-the editor, not just the package.
-**Serializer detail worth keeping:** a property forces all four slots to be written, as
-space placeholders if empty, or the property lands in a label slot and silently relabels the
-row. And a placeholder must be a space — `~~~~` is a MediaWiki signature.
+**Measured before deciding** — the number this item was waiting on:
 
-### I misdiagnosed this twice before measuring properly
-Recorded because the pattern keeps recurring. First I classified the 52 failures by grepping
-the line for `*` and concluded "51 are text cells in the icon strip" — `*` merely co-occurs;
-text cells round-trip fine as verbatim strings. Then I generalised from 6 printed examples to
-the whole 51-row class and concluded most of the gap was a measurement artefact. Both wrong.
-Diffing the canonical form of input against output — rather than eyeballing lines — said
-`row property in the 5th field` immediately, and all 52 were one thing.
+| | labels | rows |
+|---|---|---|
+| fell back | 280/1199 (23%) | 229/915 (25%) |
+| cause: `{ raw }` | 241 | |
+| cause: `{ split }` | 39 | |
+| **now** | **39/1199 (3%)** | **36/915 (4%)** |
 
-### The fidelity measurement was unsound, and is now slot-aware
-**What:** `norm` in `from-wikitext.test.ts` trimmed each field and dropped trailing empties.
-On the LEFT that's wrong — fields read backwards from `! !`, so a trailing field is the low
-slot and dropping an empty one shifts everything: `A~~B! !STR` (dist=B, main=A) and
-`A~~B~~! !STR` (main=B, remark=A) squashed to the same string.
-**Outcome:** replaced with a slot-assignment canonicaliser transcribed from the module's
-rules, independent of our parser. Measured both ways: the string version **overstated
-nothing** — so the floor was never lying in the dangerous direction — and understated 6 rows.
-93.7% -> 94.3%, floor raised 93% -> 94%.
-**Trap worth keeping:** the first version of the new instrument dropped fields past the 4th
-slot and reported a flat **100%**. Anything past slot 4 is a row property and has to be
-carried. A measurement that agrees with itself isn't a measurement.
+The plan here used to be a binary — "if ~1% say why in the message forever, if 15% go
+straight to a node-with-content". The breakdown made it neither. A `{ raw }` run is OPAQUE by
+definition, so it needs no editable content, only to exist as something the caret can pass
+and the user can select and delete. That is an ATOM, exactly like the logo and station chips
+that already existed, and it covers 241 of the 280.
+
+**Done:** `raw-node.tsx`, an inline atom rendered as its own wikitext, truncated and muted so
+the chip and the thing on the diagram read as the same object. Verified in a browser: a label
+reading `to {{BSto|Manchester|Leeds}} today` is editable, the chip renders as a node view, and
+typing in the surrounding text preserved the raw run with its pipes intact — no `{{BSsplit}}`
+wrapping, no page errors.
+**Why it must be an atom and not text:** flattened into the document, `{{BSto|a|b}}` reads as
+three lines to the serializer, which then wraps the whole label in a `{{BSsplit}}`. Tested.
+
+### The last 39: `{ split }` needs a node WITH content
+**What:** The remaining 3%. A split's lines are editable text, which an atom can't hold.
+**How:** a ProseMirror node containing `splitLine` children, the way a table contains rows —
+TipTap's table extension is the reference. The work is all in the edges: caret in and out,
+Enter/Backspace at line boundaries, whole-node selection. None of it is testable under jsdom,
+so it needs browser-driven tests.
+**Depends on:** Nothing, but 3% is a far weaker case than 23% was. Worth reconsidering
+whether a simpler affordance — edit the split's lines in a small side panel rather than
+inline — buys most of it for a fraction of the work.
 
 ### Mobile layout
 **What:** The editor is a three-pane splitter at `100dvh`. Unusable on a phone.

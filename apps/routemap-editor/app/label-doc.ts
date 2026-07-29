@@ -29,10 +29,16 @@ import type {
 
 type RunObj = Exclude<TextRun, string | SplitRun | BreakRun | IconRun | RawRun>;
 
-/** Runs the document can hold: splits can't round-trip, `<br>` can (a hardBreak). */
-const docRuns = (runs: TextRun[]): (string | RunObj | BreakRun | IconRun)[] =>
+/**
+ * Runs the document can hold: everything but a split.
+ *
+ * `<br>` is a hardBreak, a logo and a station link are atoms, and so is `{ raw }` — the
+ * filter always let raw runs through, but the return type didn't say so, which is why
+ * putting one back required widening this rather than changing any logic.
+ */
+const docRuns = (runs: TextRun[]): (string | RunObj | BreakRun | IconRun | RawRun)[] =>
   runs.filter(
-    (r): r is string | RunObj | BreakRun | IconRun =>
+    (r): r is string | RunObj | BreakRun | IconRun | RawRun =>
       typeof r === "string" || !("split" in r),
   );
 
@@ -52,9 +58,9 @@ export function labelIsRteEditable(label: SideLabel | null | undefined): boolean
   // around it, and that distinction is precisely what the document can't hold — so
   // editing one here would flatten it into sugar and move its neighbours.
   if (runs.some((r) => typeof r === "object" && "split" in r)) return false;
-  // Nor can raw wikitext: the document has no node for it, and flattening it to text
-  // would let the serializer read its argument pipes as line breaks.
-  if (runs.some((r) => typeof r === "object" && "raw" in r)) return false;
+  // Raw wikitext IS editable now — as an atom node (`raw-node.tsx`), so the text around it
+  // can be edited while the run itself stays an indivisible chip. Flattening it to text is
+  // what we must not do: the serializer would read its argument pipes as line breaks.
   if (runs.some((r) => typeof r !== "string" && "title" in r && r.title != null)) return false;
   return Array.isArray(label) || label.title == null;
 }
@@ -117,6 +123,13 @@ export function labelToDoc(label: SideLabel | null | undefined): JSONContent {
       pushNode({ type: "hardBreak" });
       continue;
     }
+    // Opaque wikitext: an atom, so the caret can pass it and the user can delete it, but
+    // nothing can be typed INTO it. Its text must never be flattened into the document —
+    // the serializer reads pipes in a plain run as line breaks.
+    if (typeof r !== "string" && "raw" in r) {
+      pushNode({ type: "raw", attrs: { raw: r.raw } });
+      continue;
+    }
     if (typeof r !== "string" && r.rws) {
       pushNode({ type: "rws", attrs: { args: r.rws } });
     } else {
@@ -145,8 +158,9 @@ const markOf = (node: JSONContent, type: string) => node.marks?.find((m) => m.ty
  *  there are no marks/links and a single line). */
 export function docToLabel(doc: JSONContent): SideLabel | undefined {
   // Never a `{ split }`: the document has no node for one, which is why
-  // `labelIsRteEditable` keeps split-bearing labels out of the editor entirely.
-  const runs: (string | RunObj | BreakRun | IconRun)[] = [];
+  // `labelIsRteEditable` keeps split-bearing labels out of the editor entirely. A
+  // `{ raw }` DOES round-trip, as the atom chip in `raw-node.tsx`.
+  const runs: (string | RunObj | BreakRun | IconRun | RawRun)[] = [];
   const paras = doc.content ?? [];
   paras.forEach((para, pi) => {
     if (pi > 0) runs.push("|"); // paragraph boundary -> BSsplit line break
@@ -161,6 +175,12 @@ export function docToLabel(doc: JSONContent): SideLabel | undefined {
       }
       if (node.type === "rws") {
         runs.push({ rws: (node.attrs?.args as string) ?? "" });
+        continue;
+      }
+      if (node.type === "raw") {
+        const raw = (node.attrs?.raw as string) ?? "";
+        if (raw === "") continue; // an empty chip carries nothing
+        runs.push({ raw });
         continue;
       }
       if (node.type === "rint") {

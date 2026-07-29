@@ -12,6 +12,7 @@ import type { SideLabel } from "@repo/routemap";
 import { docToLabel, labelToDoc, logoInsertContent } from "./label-doc";
 import { RwsNode, RwsResolverProvider, type RwsResolver } from "./rws-node";
 import { RintNode, LogoResolverProvider, type LogoResolver } from "./rint-node";
+import { RawNode } from "./raw-node";
 import { RintPickerPopover } from "./rint-picker";
 
 // Labels only take the wiki's bold/italic + links; block/list nodes are turned
@@ -33,6 +34,7 @@ const labelExtensions = [
   }),
   RwsNode,
   RintNode,
+  RawNode,
 ];
 
 const key = (v: SideLabel | null | undefined): string => JSON.stringify(v ?? null);
