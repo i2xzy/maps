@@ -1,9 +1,37 @@
-import { describe, expect, it } from "vitest";
-import { bsiconExists, existingOptions, fieldIsOffered, offeredFields } from "./bsicon-manifest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  bsiconExists,
+  existingOptions,
+  fieldIsOffered,
+  loadBsiconFilter,
+  offeredFields,
+} from "./bsicon-manifest";
 import { fieldSpec, fieldsFor, isFieldVisible } from "./descriptor";
 import type { IconObject } from "./icon";
 
 const spec = (field: string) => fieldSpec(field as keyof IconObject)!;
+
+// The filter is fetched on demand so it stays out of the page's first-load chunk, so a
+// test that wants exact answers has to ask for it.
+beforeAll(() => loadBsiconFilter());
+
+describe("before the filter loads", () => {
+  it("offers everything rather than hiding it", async () => {
+    // Deliberately the same direction as the staleness rule: a slow load shows an
+    // unfiltered form for a moment, never a form missing controls that work. Asserted on a
+    // fresh module so the shared `beforeAll` load doesn't mask it.
+    vi.resetModules(); // a fresh module instance, with its own unloaded filter
+    const fresh = await import("./bsicon-manifest");
+    expect(fresh.bsiconFilterLoaded()).toBe(false);
+    expect(fresh.bsiconExists("kSTR")).toBe(true); // absent, but not known absent yet
+    expect(fresh.offeredFields({ kind: "track" }).length).toBe(
+      fieldsFor("track").filter((f) => isFieldVisible(f, { kind: "track" })).length,
+    );
+    await fresh.loadBsiconFilter();
+    expect(fresh.bsiconFilterLoaded()).toBe(true);
+    expect(fresh.bsiconExists("kSTR")).toBe(false);
+  });
+});
 
 describe("bsiconExists", () => {
   it("knows the icons real diagrams are built from", () => {

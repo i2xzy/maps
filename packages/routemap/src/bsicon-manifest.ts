@@ -19,25 +19,49 @@
  * icon actually sets would make real content uneditable — far worse than showing one dead
  * option. So absence of evidence only ever removes a choice nobody has made.
  */
-import { BSICON_BLOOM, BSICON_BLOOM_K, BSICON_BLOOM_M } from "./bsicon-manifest.data";
 import { bloomFromBase64, bloomHas } from "./bloom";
 import type { Bloom } from "./bloom";
 import { fieldsFor, isFieldVisible, previewOptions, safeIconCode } from "./descriptor";
 import type { FieldOption, FieldSpec } from "./descriptor";
 import type { IconObject } from "./icon";
 
-/** Decoded on first ask — 175 KB of base64 needn't be unpacked to import this module. */
+/**
+ * Loaded on demand, NOT imported.
+ *
+ * A static import put the whole 268 KB of base64 in the page's first-load chunk, and base64
+ * of ~50%-dense bits doesn't compress — so it was 280 KB of an 834 KB gzipped first load,
+ * a third of the payload, for something not needed until a cell is selected.
+ *
+ * Until it arrives `bsiconExists` answers TRUE, which is the same direction as the
+ * staleness rule: an unknown code is offered rather than hidden, so a slow load shows the
+ * unfiltered form for a moment instead of hiding controls that work.
+ */
 let filter: Bloom | undefined;
+let loading: Promise<void> | undefined;
+
+/** Start (or join) loading the filter. Resolves once `bsiconExists` is exact. */
+export function loadBsiconFilter(): Promise<void> {
+  loading ??= import("./bsicon-manifest.data").then((data) => {
+    filter = bloomFromBase64(data.BSICON_BLOOM, data.BSICON_BLOOM_M, data.BSICON_BLOOM_K);
+  });
+  return loading;
+}
+
+/** Whether answers are exact yet. False means everything is offered. */
+export function bsiconFilterLoaded(): boolean {
+  return filter !== undefined;
+}
 
 /**
  * Whether Commons has a file for this code.
  *
- * `false` is certain (Bloom filters have no false negatives); `true` is ~95% reliable. A
- * code we can't even encode is `false`.
+ * `false` is certain (Bloom filters have no false negatives); `true` is ~99% reliable. A
+ * code we can't even encode is `false`. Before `loadBsiconFilter()` resolves everything is
+ * `true` — see above for why that's the safe direction.
  */
 export function bsiconExists(code: string | null | undefined): boolean {
   if (!code) return false;
-  filter ??= bloomFromBase64(BSICON_BLOOM, BSICON_BLOOM_M, BSICON_BLOOM_K);
+  if (!filter) return true; // not loaded yet — offer it rather than hide it
   return bloomHas(filter, code);
 }
 

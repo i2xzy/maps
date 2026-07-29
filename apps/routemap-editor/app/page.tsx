@@ -33,6 +33,7 @@ import {
   expandRint,
   expandRws,
   expandTextTemplates,
+  loadBsiconFilter,
   canonicalizeDiagram,
   fromRoutemap,
   migrateDiagram,
@@ -341,6 +342,22 @@ export default function EditorPage() {
   );
   const textMap = useExpanded(textCalls, expandTextTemplates);
   const resolveText = useMemo(() => createTextResolver(textMap), [textMap]);
+
+  // The BSicon existence filter is 268 KB that doesn't compress, and it's only needed once
+  // a cell is selected — so it's fetched after first paint rather than bundled, which took
+  // the gzipped first load from 834 KB to 629 KB. Started on mount rather than on first
+  // selection so it has arrived by the time anyone clicks a cell; until it does, the form
+  // offers every field, which is the safe direction.
+  const [, setFilterReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    loadBsiconFilter().then(() => {
+      if (!cancelled) setFilterReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   // Editor: link references resolve to Wikipedia articles. (The HS2 app would map
   // the same references to its own internal urls instead.)
   const resolveHref = (ref: string) =>

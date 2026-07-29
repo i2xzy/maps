@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 711 package + 87 editor |
+| tests | 712 package + 87 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -127,16 +127,36 @@ the icon path falling back to the placeholder when an expansion holds no file.
 
 ### Deploy
 **What:** Vercel, on the free Hobby tier (explicitly non-commercial, which matches).
-**Why:** Item 3 of MVP. The static export already builds.
-**How:** Root directory set to `apps/routemap-editor`; no extraction from the monorepo
-needed. `output: "export"` is already set, so the same `out/` works on Toolforge or Pages
-later if Vercel ever stops suiting.
-**Depends on:** The two items above, by judgement rather than necessity — deploying a tool
-that can't edit half the cells invites a first impression that's hard to undo.
-**Trap:** `next build` deletes `.next/static/development` even with a separate `distDir`,
-so it breaks a running `next dev` and the dev server needs `.next` cleared and a restart.
-Don't build against a dev server someone is using. Verified: a separate `distDir` does
-**not** fix this.
+**Why:** Item 3 of MVP. Nothing else matters if nobody can reach it.
+**Status:** the artefact is verified, the publish is not done. `next build` produces a
+working `out/`, and served statically it was driven end to end: 14 icon cells render, the
+existence filter applies after its deferred chunk arrives (a plain cell hides 14 fields, not
+the unfiltered 21), a `{{tram}}` station link resolves from the static page over CORS, and
+the console is clean.
+**How:** Vercel project with root directory `apps/routemap-editor`; framework preset Next.js;
+no monorepo extraction needed. `output: "export"` is set, so the same `out/` also works on
+Toolforge or Pages if Vercel stops suiting.
+**Payload, measured on the real build:**
+
+| | gzipped |
+|---|---|
+| first load | **629 KB** |
+| …of which Chakra + lucide | 241 KB |
+| BSicon filter, deferred after first paint | 203 KB |
+
+The filter was a static import until it was measured: 268 KB of base64 that doesn't compress
+sat in the page chunk, a third of an 834 KB first load, for something not needed until a cell
+is selected. Fetched after first paint instead, first load is 629 KB. It's started on mount
+rather than on first selection so it has arrived before anyone clicks a cell — and until it
+does, `bsiconExists` answers `true`, so the form is briefly unfiltered rather than briefly
+missing controls that work.
+
+629 KB is still heavy for editors on slow connections, and it's now mostly framework rather
+than data. Worth revisiting, but not a blocker.
+**Trap:** `next build` deletes `.next/static/development` even with a separate `distDir`, so
+it breaks a running `next dev` and the dev server needs `.next` cleared and a restart. Don't
+build against a dev server someone is using. Verified: a separate `distDir` does **not** fix
+this.
 
 ---
 
