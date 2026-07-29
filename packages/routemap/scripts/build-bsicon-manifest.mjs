@@ -6,7 +6,7 @@
  * generous: `previewOptions({kind:"track"}, "curve")` produces `kSTR` and `kkSTR`. Neither
  * file exists. Measured across the 2,638 modellable cells in the real-diagram fixture,
  * filtering to fields with at least one option that resolves to a real file takes 15.6
- * offered fields per icon down to 8.4, and 51% of the options inside the surviving fields
+ * offered fields per icon down to 8.6, and 51% of the options inside the surviving fields
  * are dead too. Half the form edits nothing.
  *
  * Existence can't be asked per render — that's an API call per option per keystroke, the
@@ -24,10 +24,14 @@
  *   2. REDUCE to a Bloom filter over the codes our ENCODER can emit. Both halves matter:
  *      - The form only ever asks `bloomHas(iconToCode(...))`, so a code the encoder cannot
  *        produce can never be asked about. That's 172,005 of 371,890 — a 54% cut for free.
- *      - Membership is the only question, never "list them", so bits suffice: ~134 KB of
+ *      - Membership is the only question, never "list them", so bits suffice: 268 KB of
  *        filter against 2.5 MB of source and ~10–15 MB of heap for the strings.
  *      A Bloom filter cannot have false negatives, so it can never hide an icon that
  *      really exists; it can only keep a dead one, which is the status quo.
+ *
+ *      The default 1% false-positive rate is measured, not taste. A dead field survives if
+ *      ANY of its options false-positives, so the rate is amplified per field: 5% cost 5
+ *      points of field hiding (9.4 fields per icon against 8.6) to save 71 KB.
  *
  * Imports the real `codeToIcon`/`iconToCode`/`bloom` from src (hence
  * `--experimental-strip-types`) so the filter cannot be built against a different
@@ -35,7 +39,7 @@
  *
  * Usage:
  *   node --experimental-strip-types scripts/build-bsicon-manifest.mjs [--from raw.txt]
- *                                   [--out src/bsicon-manifest.data.ts] [--fpr 0.05]
+ *                                   [--out src/bsicon-manifest.data.ts] [--fpr 0.01]
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { register } from "node:module";
@@ -123,7 +127,7 @@ function reachable(code) {
 async function main() {
   const out = resolve(here, "..", arg("out", "src/bsicon-manifest.data.ts"));
   const rawPath = resolve(here, "..", arg("from", "") || ".cache/bsicon-codes.txt");
-  const fpr = Number(arg("fpr", "0.05"));
+  const fpr = Number(arg("fpr", "0.01"));
 
   let all;
   if (arg("from", null)) {
