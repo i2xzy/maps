@@ -16,14 +16,14 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 
 | | |
 |---|---|
-| rows surviving wikitext → model → wikitext unchanged in meaning | **94.3%** |
+| rows surviving wikitext → model → wikitext unchanged in meaning | **100%** (917/917) |
 | …unchanged byte-for-byte | 79.6% |
 | …exported unchanged **in practice**, via per-row provenance | **99.6%** |
 | `{{Routemap}}` wrappers rebuilt byte-for-byte | **100%** (17/17) |
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 712 package + 87 editor |
+| tests | 715 package + 88 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -236,22 +236,27 @@ selection. None of it is testable under jsdom, so it needs browser-driven tests.
 in real diagrams. If it's ~1%, (a) is the right answer forever; if it's 15%, skip (b) and go
 straight to (c).
 
-### Text cells in the icon strip — 51 of the 52 remaining round-trip failures
-**What:** A cell in the icon strip can hold TEXT rather than an icon, marked `*`, with a
-width prefix and cell properties around it:
-`w\c\\STRc2 maroon\KINTACC3 maroon\bs*{{rws|Cheshunt}} {{rint|gb|rail}}!_align=bl`
-**Why:** This is now essentially the *whole* remaining gap. 52 of 917 rows fail the
-round-trip and **51 of them are this one feature**; the 52nd is a single `bg=#003399` row
-property. Closing it would take semantic fidelity from 94.3% to ~99.9%.
+### ~~Row properties~~ — **done**, and it was the whole remaining gap
+**What:** The grammar allows one field past the fourth label slot —
+`…~~rinfo4~~rowProps` — and it was being dropped. Real diagrams use it for `fontsize=main`
+(51 rows) and `bg=#003399` (1).
+**Outcome:** modelled as `props` on a grid row, carried verbatim and never interpreted, so
+semantic fidelity is now **917/917 — 100%**, asserted exactly rather than as a ratio.
+**Why it mattered more than 52/917 suggests:** provenance keeps an UNTOUCHED row byte-exact,
+so these survived a paste. But one GUI edit re-serialized the row from the model, and
+anything the model didn't hold was gone — a silently restyled row. That path is now tested in
+the editor, not just the package.
+**Serializer detail worth keeping:** a property forces all four slots to be written, as
+space placeholders if empty, or the property lands in a label slot and silently relabels the
+row. And a placeholder must be a space — `~~~~` is a MediaWiki signature.
 
-It also matters more than the ratio suggests: provenance protects rows nobody touches, so
-these survive today — but the moment a user makes one GUI edit to such a row, the text cell
-is dropped. That's the failure mode this whole item exists to prevent.
-**How:** unknown yet — the next step is to diff one and see exactly what's lost, then decide
-between modelling it (`{ text, width, align }`) and carrying the cell verbatim. Verbatim is
-probably enough: the GUI can't edit it either way, and preserving it is the actual
-requirement.
-**Depends on:** Nothing.
+### I misdiagnosed this twice before measuring properly
+Recorded because the pattern keeps recurring. First I classified the 52 failures by grepping
+the line for `*` and concluded "51 are text cells in the icon strip" — `*` merely co-occurs;
+text cells round-trip fine as verbatim strings. Then I generalised from 6 printed examples to
+the whole 51-row class and concluded most of the gap was a measurement artefact. Both wrong.
+Diffing the canonical form of input against output — rather than eyeballing lines — said
+`row property in the 5th field` immediately, and all 52 were one thing.
 
 ### The fidelity measurement was unsound, and is now slot-aware
 **What:** `norm` in `from-wikitext.test.ts` trimmed each field and dropped trailing empties.

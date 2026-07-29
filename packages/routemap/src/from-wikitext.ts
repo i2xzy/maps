@@ -333,6 +333,18 @@ function rightSlots(fields: string[]): SideSlots {
   return out;
 }
 
+/**
+ * The row-property field: everything past the fourth slot, rejoined as it was written.
+ *
+ * Rejoined rather than taken as `fields[4]` so a property containing `~~` — which we have no
+ * grammar for and can't rule out — comes back whole instead of truncated.
+ */
+function rowProps(fields: string[]): string | undefined {
+  if (fields.length <= 4) return undefined;
+  const rest = fields.slice(4).join("~~").trim();
+  return rest === "" ? undefined : rest;
+}
+
 /** A side with only `main` is written as that label; otherwise as slots. */
 function sideValue(slots: SideSlots): SideLabel | SideSlots | undefined {
   const filled = SLOT_NAMES.filter((n) => slots[n] !== undefined);
@@ -357,8 +369,10 @@ function parseRow(line: string): DiagramRow | null {
   const row: DiagramRow = { cells };
   const l = sideValue(leftSlots(left));
   const r = sideValue(rightSlots(rightFields.slice(1)));
+  const props = rowProps(rightFields.slice(1));
   if (l !== undefined) row.left = l;
   if (r !== undefined) row.right = r;
+  if (props !== undefined) row.props = props;
   return row;
 }
 

@@ -278,6 +278,18 @@ export interface GridRow {
    * where the round-trip is already faithful — and it's the ~6% of rows that DON'T
    * round-trip that most need protecting.
    */
+  /**
+   * The row-property field, carried verbatim and never interpreted.
+   *
+   * The grammar allows one field past the fourth label slot on each side:
+   * `rowProps~~linfo4~~…! !icons~~rinfo1~~…~~rinfo4~~rowProps`. Real diagrams use it for
+   * `fontsize=main` and `bg=#003399`, and dropping it was the ENTIRE remaining round-trip
+   * gap — 52 of 917 rows.
+   *
+   * Opaque on purpose, the same rule as wrapper params: we can't enumerate what the module
+   * accepts here, so re-emitting the exact text is the only way to be sure none was lost.
+   */
+  props?: string;
   src?: string;
   /**
    * The left labels: a `SideLabel` for the common one-label case (it becomes `main`,

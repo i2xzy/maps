@@ -3,6 +3,7 @@ import corpus from "./__fixtures__/real-diagrams.json";
 import realTemplates from "./__fixtures__/real-templates.json";
 import { fromRoutemap, fromWikitext, mapParam, parseLabelText, toRoutemap } from "./from-wikitext";
 import { toWikitext } from "./serialize";
+import type { GridRow } from "./types";
 
 /**
  * A row reduced to explicit SLOT ASSIGNMENTS — what the row MEANS, not how it's spelled.
@@ -79,8 +80,11 @@ describe("fromWikitext round-trip", () => {
    * A ratchet, not a target. 21 real diagrams, 917 rows. Raise the floor as the remaining
    * classes are closed; never lower it to make a change pass.
    *
-   * Now 865/917 = 94.3%, and the 52 that fail are ONE feature plus one straggler: 51 are a
-   * text cell (`*text`) inside the icon strip, 1 is a row property (`bg=#003399`).
+   * Now 917/917. The last 52 were all one thing — the row-property field past the fourth
+   * slot (`fontsize=main`, `bg=#003399`) — which is modelled as `props` and re-emitted
+   * verbatim. Asserted EXACTLY rather than as a ratio: a claim of "no row is lost" should
+   * fail the moment one is. If the corpus grows and a new row fails, that is worth seeing,
+   * not rounding away.
    *
    * Lowered ONCE, from 94%, and only because the CORPUS was wrong: the extractor ran to
    * the end of the page rather than the end of the `{{Routemap}}` call, so 119 lines of
@@ -90,9 +94,37 @@ describe("fromWikitext round-trip", () => {
    * by junk. Raised to 94% when `norm` became slot-aware — see above; that was the
    * instrument getting more honest, not the parser improving.
    */
-  it("preserves at least 94% of real rows, semantically", () => {
-    const kept = rows.filter(({ line }) => norm(roundTrip(line)) === norm(line));
-    expect(kept.length / rows.length).toBeGreaterThan(0.94);
+  it("preserves every real row, semantically", () => {
+    const lost = rows.filter(({ line }) => norm(roundTrip(line)) !== norm(line));
+    expect(lost.map(({ title, line }) => `${title}: ${line}`)).toEqual([]);
+  });
+
+  it("carries the row-property field verbatim, in place", () => {
+    // The whole of the last round-trip gap. `fontsize=main` sits past the fourth slot, so
+    // every slot before it has to be written as a placeholder or the property lands in a
+    // label slot instead — which would silently restyle or relabel the row.
+    const line = String.raw`\STR~~ ~~Ocean~~ ~~ ~~bg=#003399`;
+    const row = fromWikitext(line).rows[0]!;
+    // A side with only `main` collapses to the plain label, not a slots object.
+    expect(row).toMatchObject({ props: "bg=#003399", right: "Ocean" });
+    expect(roundTrip(line)).toBe(line);
+  });
+
+  it("writes four placeholders for a row that has only properties", () => {
+    // Nothing but a property: the four slots still have to be spelled out. And a placeholder
+    // is a SPACE — `~~~~` is a MediaWiki signature.
+    const line = String.raw`\STR~~ ~~ ~~ ~~ ~~fontsize=main`;
+    expect(fromWikitext(line).rows[0]).toMatchObject({ props: "fontsize=main" });
+    expect(roundTrip(line)).toBe(line);
+    expect(roundTrip(line)).not.toContain("~~~~");
+  });
+
+  it("does not mistake a fourth slot for a property", () => {
+    // `outer` is slot four; only a FIFTH field is a property. Off by one here would eat a
+    // label.
+    const row = fromWikitext(String.raw`\STR~~a~~b~~c~~d`).rows[0]! as GridRow;
+    expect(row.right).toMatchObject({ dist: "a", main: "b", remark: "c", outer: "d" });
+    expect(row.props).toBeUndefined();
   });
 
   it("never throws on a real row", () => {

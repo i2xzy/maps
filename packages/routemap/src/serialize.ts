@@ -164,16 +164,24 @@ const SLOT_FIELDS: Record<SlotName, number> = { main: 1, dist: 2, remark: 3, out
  * rendered page. The single-field case is `main` alone, matching the wiki's own
  * positional default rather than falling out of the general rule.
  */
-function slotFields(slots: NormalizedSlots, dir: "left" | "right"): string[] {
+function slotFields(
+  slots: NormalizedSlots,
+  dir: "left" | "right",
+  props?: string,
+): string[] {
   let count = 0;
   for (const name of SLOT_NAMES) if (slots[name]) count = Math.max(count, SLOT_FIELDS[name]);
-  if (count === 0) return [];
+  // A row property sits past the fourth slot, so every slot before it has to be written —
+  // as a placeholder if empty — or the property lands in a label slot instead.
+  if (props) count = 4;
+  if (count === 0) return props ? [" ", " ", " ", " ", props] : [];
   const inner = [slots.dist, slots.main, slots.remark, slots.outer];
   const ordered = count === 1 ? [slots.main] : inner.slice(0, count);
   // A placeholder is a SPACE, never empty: four consecutive tildes are a MediaWiki
   // signature, and the module trims every field so a space still reads as absent.
   const fields = ordered.map((slot) => sideToWiki(slot ?? null) || " ");
-  return dir === "left" ? fields.reverse() : fields;
+  if (dir === "left") return fields.reverse();
+  return props ? [...fields, props] : fields;
 }
 
 function rowToWiki(row: RouteDiagram["rows"][number], ctx?: IconContext): string {
@@ -188,7 +196,7 @@ function rowToWiki(row: RouteDiagram["rows"][number], ctx?: IconContext): string
     return `-colspan-1\n${sideToWiki(norm)}`;
   }
   const left = slotFields(normalizeSlots(row.left), "left");
-  const right = slotFields(normalizeSlots(row.right), "right");
+  const right = slotFields(normalizeSlots(row.right), "right", row.props);
   const cells = (row.cells ?? []).map((c) => cellToWiki(c, ctx)).join("\\");
   return (
     (left.length ? `${left.join("~~")}! !` : "") +

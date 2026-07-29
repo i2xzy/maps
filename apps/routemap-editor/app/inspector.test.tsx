@@ -283,6 +283,25 @@ describe("Inspector: row selection (labels & colspan)", () => {
     expect(model().rows![0]).toEqual({ left: "Euston Square", right: "changed", cells: [] });
   });
 
+  it("keeps a row's properties when its label is edited in the GUI", () => {
+    // The point of modelling `props` at all. Provenance keeps an UNTOUCHED row byte-exact,
+    // so `fontsize=main` survived a paste — but the moment someone edited the row through
+    // the form it was re-serialized from the model, and anything the model didn't hold was
+    // gone. A restyled row with no indication why.
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ left: "Euston", props: "fontsize=main", cells: ["STR"] }] }}
+        select={{ kind: "row", row: 0 }}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Left main text"), { target: { value: "Euston Square" } });
+    expect(model().rows![0]).toEqual({
+      left: "Euston Square",
+      props: "fontsize=main",
+      cells: ["STR"],
+    });
+  });
+
   it("shows an editor per occupied slot, named by side and slot", () => {
     // Both sides have a "Main text", so the accessible name has to carry the side too.
     renderWithChakra(
