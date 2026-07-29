@@ -8,6 +8,7 @@
     "./rint-catalog": "./src/rint-catalog.ts"
   },
   "scripts": {
+    "build-bsicon-manifest": "node scripts/build-bsicon-manifest.mjs",
     "build-rint-catalog": "node --experimental-strip-types scripts/build-rint-catalog.mjs",
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",

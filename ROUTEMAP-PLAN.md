@@ -119,6 +119,51 @@ Don't build against a dev server someone is using. Verified: a separate `distDir
 
 ## Medium priority
 
+### Hide the fields and options that can't produce a real icon
+**What:** The form offers whatever the MODEL can represent, and the model is generous:
+`previewOptions({kind:"track"}, "curve")` yields `kSTR` and `kkSTR`, neither of which is a
+file. Measured across the 2,638 modellable cells in the fixture:
+
+| | |
+|---|---|
+| fields offered per icon, today | 15.6 |
+| …if filtered to those with a real option | **8.4** (46% hidden) |
+| options inside the SURVIVING fields that are dead | **51%** (66,303 / 129,171) |
+
+So roughly half the form is choices that can only produce a broken image.
+**Why:** It's the same complaint as the cell decoder, from the other end — not "this cell
+can't be edited" but "these controls edit nothing". It also makes the `n more fields`
+disclosure look worse than it is: most of what it hides was never usable.
+**How:** Existence has to be baked; asking per render is an API call per option per
+keystroke, the trap the `{{rint}}` catalog exists to avoid. Measured sizes for the
+manifest, from a full crawl of Commons:
+
+| representation | size |
+|---|---|
+| every `BSicon *.svg` on Commons (371,890) | 5.6 MB raw / 1.0 MB gzipped |
+| …restricted to codes our encoder can emit (172,005) | 2.5 MB raw / 442 KB gzipped |
+| …uncoloured only (108,670) | 1.5 MB raw / 275 KB gzipped |
+| projected to (kind, field, value) seen on a real file | 6.1 KB raw / 0.9 KB gzipped |
+| Bloom filter over the 172,005, 5% false positive | ~133 KB |
+
+The 6.1 KB projection is tempting and **doesn't work**: `curve` appears on *some* real
+track file, so a per-kind table keeps the field that a plain `STR` can't use. The win
+needs per-code answers.
+
+A Bloom filter is the right shape because its error direction matches the safety rule
+below: it has no false negatives, so it can never hide something real, and a false
+positive merely shows one dead option. Ship it as a static asset (`public/`), fetched
+once and cached, rather than in the bundle — a `Set` of 172,005 strings also costs
+~10–15 MB of heap, which matters on a phone.
+**Safety rule, whichever representation wins:** a field or option that is **currently
+set** is always offered. The manifest is a snapshot and Commons isn't the only source a
+diagram's icons can come from, so absence of evidence must only ever remove a choice
+nobody has made — never make existing content uneditable.
+**Depends on:** Nothing. The generator exists
+(`scripts/build-bsicon-manifest.mjs`, ~12 minutes, 744 API pages).
+**Open:** whether the disclosure can then go. At 8.4 fields average it's arguable, but
+the distribution has a fat tail — 995 of 2,638 icons still show 11–13 fields.
+
 ### `{{BSsplit}}` written as an explicit run isn't GUI-editable
 **What:** A `{ split }` run makes the whole label fall back to "(Rich label — edit in
 JSON)". So does a `{ raw }` run and a label carrying `title`.
@@ -206,6 +251,10 @@ Each of these cost real time.
 - **A pipe inside an object run is a line break to the serializer.** Preserving unknown
   wikitext as plain text turned `{{BSto|a|b}}` into `{{BSsplit|{{BSto|a|b}}}}`. Hence
   `{ raw }`. A literal pipe emits `{{!}}`.
+- **`Category:BSicon` holds 13 files.** The icons aren't enumerable by category — they're
+  spread over hundreds of descriptive subcategories with no root that lists them. The
+  `BSicon ` *filename* prefix via `list=allimages` is the actual convention, and there are
+  **371,890** of them, which is 10x what the category structure suggests.
 - **`imagerepository`, not `missing`,** tells you whether a Commons file exists. Trusting
   `missing` cut the catalog from 1,126 entries to 29 while every survivor looked valid.
 - **`pnpm format` reformats whole files.** The repo has no prettier config and isn't
