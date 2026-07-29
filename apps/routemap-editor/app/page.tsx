@@ -26,10 +26,13 @@ import {
   RouteMap,
   collectRintCodes,
   collectRwsArgs,
+  collectTextTemplates,
   createLogoResolver,
   createRwsResolver,
+  createTextResolver,
   expandRint,
   expandRws,
+  expandTextTemplates,
   canonicalizeDiagram,
   fromRoutemap,
   migrateDiagram,
@@ -328,6 +331,16 @@ export default function EditorPage() {
   );
   const rwsMap = useExpanded(rwsArgs, expandRws);
   const resolveRws = useMemo(() => createRwsResolver(rwsMap), [rwsMap]);
+
+  // The station-link templates a pasted diagram is full of — {{tram}}, {{stnlnk}}, {{stl}}
+  // — which are 47% of the muted placeholders in real diagrams. Same reasoning as {{rws}}:
+  // the argument names any station, so there's nothing finite to pre-bake. Unlike {{rws}}
+  // these share ONE request per batch of 50, so a diagram with 60 of them costs 2 calls.
+  const textCalls = useStableList(
+    useMemo(() => (parsed.diagram ? collectTextTemplates(parsed.diagram) : []), [parsed.diagram]),
+  );
+  const textMap = useExpanded(textCalls, expandTextTemplates);
+  const resolveText = useMemo(() => createTextResolver(textMap), [textMap]);
   // Editor: link references resolve to Wikipedia articles. (The HS2 app would map
   // the same references to its own internal urls instead.)
   const resolveHref = (ref: string) =>
@@ -566,6 +579,7 @@ export default function EditorPage() {
                       resolveLogo={resolveLogo}
                       resolveHref={resolveHref}
                       resolveRws={resolveRws}
+                      resolveText={resolveText}
                       selection={selection}
                       onSelect={setSelection}
                     />

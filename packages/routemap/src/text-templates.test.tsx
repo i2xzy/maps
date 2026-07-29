@@ -1,0 +1,107 @@
+import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { RouteMap } from "./render";
+import { collectTextTemplates, createTextResolver, TEXT_TEMPLATES, textTemplateCall } from "./rint";
+import { fromWikitext } from "./from-wikitext";
+import diagrams from "./__fixtures__/real-diagrams.json";
+
+describe("textTemplateCall", () => {
+  it("recognises the station-link family and normalises the call", () => {
+    expect(textTemplateCall("{{tram|Derker}}")).toBe("tram|Derker");
+    expect(textTemplateCall("{{ stnlnk | Leeds }}")).toBe("stnlnk | Leeds");
+  });
+
+  it("leaves the layout family alone", () => {
+    // {{BSto}} and friends expand to HTML we can't render, so the placeholder is better
+    // than the expansion. Deliberately not expandable.
+    expect(textTemplateCall("{{BSto|a|b}}")).toBe(null);
+    expect(textTemplateCall("{{left|x}}")).toBe(null);
+    expect(textTemplateCall("plain text")).toBe(null);
+    expect(textTemplateCall("{{tram|x}} trailing")).toBe(null); // not a bare call
+  });
+});
+
+describe("collectTextTemplates", () => {
+  it("finds station links in every slot, not just main", () => {
+    // `normalizeSide` only understands a plain SideLabel, so a slots-based side used to
+    // hide everything but `main` from the collectors.
+    const diagram = fromWikitext("{{stl|Outer}}~~{{tram|Remark}}~~{{stnlnk|Main}}! !STR");
+    expect(collectTextTemplates(diagram).sort()).toEqual(["stl|Outer", "stnlnk|Main", "tram|Remark"]);
+  });
+
+  it("finds one nested inside a {{BSsplit}}", () => {
+    const diagram = fromWikitext("A! !STR~~{{BSsplit|{{tram|Derker}}|second}}");
+    expect(collectTextTemplates(diagram)).toContain("tram|Derker");
+  });
+
+  it("reports what the real diagrams need, deduplicated", () => {
+    const calls = new Set<string>();
+    for (const body of Object.values(diagrams as Record<string, string>)) {
+      for (const call of collectTextTemplates(fromWikitext(body))) calls.add(call);
+    }
+    // Enough to be worth batching, few enough to fit in a couple of requests.
+    expect(calls.size).toBeGreaterThan(40);
+  });
+});
+
+describe("rendering a resolved station link", () => {
+  const diagram = fromWikitext("A! !STR~~{{tram|Derker}}");
+
+  it("renders the expansion as a real link, not a muted placeholder", () => {
+    const html = renderToStaticMarkup(
+      <RouteMap
+        diagram={diagram}
+        resolveText={createTextResolver({ "tram|Derker": "[[Derker tram stop|Derker]]" })}
+        resolveHref={(ref) => `https://en.wikipedia.org/wiki/${ref.replace(/ /g, "_")}`}
+      />,
+    );
+    expect(html).toContain("Derker_tram_stop");
+    expect(html).toContain(">Derker<");
+    // The placeholder styling is gone: no italic-muted span holding the raw wikitext.
+    expect(html).not.toContain("{{tram|Derker}}");
+  });
+
+  it("keeps the placeholder when nothing resolves", () => {
+    // Not fetched yet, or the request failed. Must degrade to today's behaviour rather
+    // than rendering nothing — the label still has to say something.
+    const html = renderToStaticMarkup(<RouteMap diagram={diagram} />);
+    expect(html).toContain("{{tram|Derker}}");
+  });
+
+  it("resolves a station link nested in a split", () => {
+    const nested = fromWikitext("A! !STR~~{{BSsplit|{{tram|Derker}}|below}}");
+    const html = renderToStaticMarkup(
+      <RouteMap
+        diagram={nested}
+        resolveText={createTextResolver({ "tram|Derker": "[[Derker tram stop|Derker]]" })}
+      />,
+    );
+    expect(html).toContain(">Derker<");
+    expect(html).toContain("below");
+  });
+});
+
+describe("guarding against a misclassified template", () => {
+  it("refuses an expansion that is markup rather than label text", async () => {
+    // `{{BSsrws}}` reads like a station link and expands to a <table> with templatestyles.
+    // It was in TEXT_TEMPLATES on the strength of its name until the expansions were
+    // actually checked. Names are not evidence; this is the backstop for the next one.
+    expect(textTemplateCall("{{BSsrws|Manchester|Piccadilly}}")).toBe(null);
+
+    const { expandTextTemplates } = await import("./rint");
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({ expandtemplates: { wikitext: '<table class="x">markup</table>' } }),
+      )) as typeof fetch;
+    try {
+      // Force a name through the whitelist to prove the fetch-side guard fires too.
+      TEXT_TEMPLATES.add("madeup");
+      const out = await expandTextTemplates(["madeup|x"]);
+      expect(out["madeup|x"]).toBeUndefined();
+    } finally {
+      TEXT_TEMPLATES.delete("madeup");
+      globalThis.fetch = original;
+    }
+  });
+});

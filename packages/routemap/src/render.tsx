@@ -27,7 +27,8 @@ import {
 import type { LabelIcon, RouteDiagram, TextRun } from "./types";
 import { computeLayout, type PlacedCell } from "./layout";
 import { isWidthPrefix, prefixWidthFraction, type NormalizedSide } from "./normalize";
-import { createLogoResolver, type ResolvedLogo, type RwsEntry } from "./rint";
+import { createLogoResolver, textTemplateCall, type ResolvedLogo, type RwsEntry } from "./rint";
+import { parseLabelText } from "./from-wikitext";
 
 /**
  * A selected element in a diagram, for the editor's click-to-inspect flow:
@@ -40,6 +41,14 @@ import { createLogoResolver, type ResolvedLogo, type RwsEntry } from "./rint";
 export type Selection =
   | { kind: "cell"; row: number; col: number }
   | { kind: "row"; row: number };
+
+/**
+ * `tram|Derker` -> the wikitext `{{tram|Derker}}` expands to.
+ *
+ * Keyed by the CALL rather than the raw run so the same station link written two ways
+ * (`{{ tram | Derker }}`) resolves once — `textTemplateCall` normalises it.
+ */
+export type TextResolver = (call: string) => string | undefined;
 
 export interface RouteMapProps {
   diagram: RouteDiagram;
@@ -54,6 +63,10 @@ export interface RouteMapProps {
   /** {{rws}} args -> { target, display } (for `rws` runs). Build from `expandRws`.
    *  Wiki-side only; unresolved rws runs render nothing. */
   resolveRws?: (args: string) => RwsEntry | undefined;
+  /** `tram|Derker` -> `[[Derker tram stop|Derker]]` — the station-link templates that
+   *  would otherwise render as a muted placeholder (47% of them in real diagrams).
+   *  Build from `expandTextTemplates`; unresolved keeps the placeholder. */
+  resolveText?: TextResolver;
   /** Icon row height in px (Wikipedia's default is 20). */
   cellSize?: number;
   /** Currently selected element, highlighted in the render. Editor-only. */
@@ -330,8 +343,10 @@ function buildLines(
  * icon strip off screen. Muted so it reads as "not understood" rather than as content,
  * with the whole thing one hover away.
  *
- * The proper fix is to EXPAND these through the API the way {{rint}} and {{rws}} are —
- * most of them carry real label text. Until then this keeps the diagram legible.
+ * The station-link family IS expanded now (`resolveText`, from `expandTextTemplates`) —
+ * that's 47% of the placeholders in real diagrams. What still lands here is the layout
+ * family ({{BSto}}, {{left}}, {{enlarge}}), which expands to HTML we can't render, so
+ * showing the source is genuinely better than showing its expansion.
  */
 function RawText({ raw }: { raw: string }): ReactElement {
   return (
@@ -451,18 +466,53 @@ function renderFragment(
  * whole-label icon list — which is what let two different models serialize to the same
  * wikitext. `italic`/`bold` style the whole label; a logo keeps its own size.
  */
+/**
+ * Replace resolvable `{ raw }` runs with the runs their expansion parses to.
+ *
+ * Done here, before `buildLines`, rather than in `RawText` — a station link expands to
+ * `[[target|display]]`, and feeding that back through the normal run pipeline means links,
+ * marks and splits all keep working with no second rendering path to maintain.
+ *
+ * Unresolved (not fetched yet, or the request failed) leaves the run exactly as it was, so
+ * this can only ever improve on the placeholder.
+ */
+function expandRawRuns(
+  text: string | TextRun[],
+  resolveText?: TextResolver,
+): string | TextRun[] {
+  if (!resolveText || typeof text === "string") return text;
+  return text.flatMap((run): TextRun[] => {
+    if (run == null || typeof run !== "object") return [run];
+    if ("split" in run) {
+      return [
+        {
+          split: run.split.map((line) =>
+            typeof line === "string" ? line : (expandRawRuns(line, resolveText) as TextRun[]),
+          ),
+        },
+      ];
+    }
+    if (!("raw" in run)) return [run];
+    const call = textTemplateCall(run.raw);
+    const expanded = call ? resolveText(call) : undefined;
+    return expanded ? parseLabelText(expanded) : [run];
+  });
+}
+
 function Label({
   label,
   side,
   resolveHref,
   resolveRws,
   resolveLogo,
+  resolveText,
 }: {
   label?: NormalizedSide | null;
   side: LabelSide;
   resolveHref: (ref: string) => string | undefined;
   resolveRws: (args: string) => RwsEntry | undefined;
   resolveLogo: (icon: LabelIcon) => ResolvedLogo;
+  resolveText?: TextResolver;
 }): ReactNode {
   const text = label?.text;
   const hasText = text != null && text !== "" && (typeof text === "string" || text.length > 0);
@@ -475,7 +525,11 @@ function Label({
 
   let textNode: ReactNode = null;
   if (hasText) {
-    const lines = buildLines(text as string | TextRun[], label?.link, label?.title);
+    const lines = buildLines(
+      expandRawRuns(text as string | TextRun[], resolveText),
+      label?.link,
+      label?.title,
+    );
     const renderLine = (line: Piece[]): ReactNode[] =>
       line.map((piece, i) =>
         isRawPiece(piece) ? (
@@ -596,6 +650,7 @@ export function RouteMap({
   resolveLogo = defaultResolveLogo,
   resolveHref = defaultResolveHref,
   resolveRws = defaultResolveRws,
+  resolveText,
   cellSize = 20,
   selection = null,
   onSelect,
@@ -676,6 +731,7 @@ export function RouteMap({
                 resolveHref={resolveHref}
                 resolveRws={resolveRws}
                 resolveLogo={resolveLogo}
+                resolveText={resolveText}
               />
             );
             return small ? <span style={smallSlot}>{el}</span> : el;
@@ -684,7 +740,14 @@ export function RouteMap({
             return (
               <tr key={row.index} {...rowProps(row.index)} style={{ ...cursor, ...ring(rowSel) }}>
                 <td colSpan={7} style={{ ...labelCell, textAlign: "center", padding: "4px 8px" }}>
-                  <Label label={row.colspan} side="colspan" resolveHref={resolveHref} resolveRws={resolveRws} resolveLogo={resolveLogo} />
+                  <Label
+                    label={row.colspan}
+                    side="colspan"
+                    resolveHref={resolveHref}
+                    resolveRws={resolveRws}
+                    resolveLogo={resolveLogo}
+                    resolveText={resolveText}
+                  />
                 </td>
               </tr>
             );

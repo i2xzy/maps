@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 693 package + 87 editor |
+| tests | 702 package + 87 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -85,22 +85,46 @@ Re-open it only if a specific diagram someone cares about is full of one family.
 **Re-measure:** parse the fixture, run every cell through `codeToIcon`, count how many
 yield a `kind`.
 
-### Expand the templates the parser can't model
-**What:** ~20% of rows contain a `{ raw }` run rendering as a muted, truncated placeholder.
-**Why:** A fifth of every real diagram shows grey wikitext where a label should be. It
-reads as broken even though nothing is lost.
-**How:** Expand through `action=expandtemplates`, the way `{{rint}}` and `{{rws}}` already
-are — `expandTemplate`, the in-flight promise cache and the resolver pattern all exist.
-Measured which are worth it: **station links expand to plain wikilinks we already parse**
-(`{{tram}}` 45, `{{stnlnk}}` 31, `{{stl}}` 19, `{{BSsrws}}` 9 — `{{tram|Derker}}` becomes
-`[[Derker tram stop|Derker]]`), while **layout templates expand to HTML we can't render**
-(`{{BSto}}` 33, `{{left}}` 14, `{{right}}` 4). Expand the first group, keep the placeholder
-for the second. Parse the expansion with `parseLabelText` and do **not** recurse — a
-placeholder inside an expansion is fine.
+### ~~Expand the templates the parser can't model~~ — station links done
+**What:** Rows carrying a `{ raw }` run render a muted, truncated placeholder where label
+text should be.
+
+| | before | after |
+|---|---|---|
+| placeholders in the fixture | 260 | **147** |
+| rows showing one | 205/915 (22%) | **115/915 (13%)** |
+| API requests for a whole diagram | would be 113 | **3** |
+
+**How:** the station-link family expands to plain wikilinks the parser already handles, so
+`resolveText` substitutes the expansion into the runs *before* `buildLines` — links, marks
+and splits then work through the existing path with no second rendering branch. Unresolved
+(not fetched, or the request failed) leaves the placeholder, so it can only improve on it.
+
+Batched: many calls share ONE `expandtemplates` request, joined by a separator that passes
+through untouched, and the split is only trusted when the arity matches. That's the
+difference between 113 requests and 3 — `{{rws}}` still does one per instance and could
+adopt the same trick.
+
+**What's deliberately left:** the layout family — `{{BSto}}` 38, `{{enlarge}}` 12,
+`{{left}}` 14, `{{float}}` 6, `{{0}}` 6, `{{right}}` 4 — expands to HTML we can't render, so
+the placeholder is genuinely better than the expansion. And the route-icon family
+(`{{rmri}}` 22, `{{rcb}}` 13, `{{ric}}` 4 = 15%) is the same shape as `{{rint}}` and belongs
+in the generated catalog, not here — that's the next real win.
+**Trap:** `{{BSsrws}}` reads exactly like a station link and expands to a `<table>` with
+templatestyles. It was in the whitelist on the strength of its name until each expansion was
+actually checked. Names are not evidence — hence the guard that rejects any expansion
+containing markup.
+
+### `collectRwsArgs` and `collectRintCodes` miss everything outside the `main` slot
+**What:** Both call `normalizeSide`, which takes a `SideLabel` — so a slots-based side
+(`{ dist, main, remark, outer }`) returns null and only `main` is ever scanned.
+**Why:** A `{{rint}}` logo or `{{rws}}` station link in a `remark` or `dist` slot is never
+fetched, so it renders as nothing at all. Silent.
+**How:** `rawRunsIn` in `rint.ts` already walks sides correctly (all four slots, and into
+`{{BSsplit}}` lines); the two older collectors should share it. Held back from the
+station-link change because it alters what those two fetch and deserves its own fixture
+case proving a remark-slot logo resolves.
 **Depends on:** Nothing.
-**Caveat:** This adds an API call per distinct template instance. The catalog exists
-precisely to avoid that for logos; consider whether the common station-link templates
-deserve the same treatment before shipping it.
 
 ### Deploy
 **What:** Vercel, on the free Hobby tier (explicitly non-commercial, which matches).

@@ -12,7 +12,7 @@
  * PD-shape BSicons — a licensing decision for any non-Wikipedia use.
  */
 import type { LabelIcon, RouteDiagram } from "./types";
-import { labelRuns, normalizeSide } from "./normalize";
+import { labelRuns, normalizeSide, SLOT_NAMES } from "./normalize";
 import { parseRintExpansion, type RintEntry } from "./rint-expansion";
 
 const DEFAULT_API = "https://en.wikipedia.org/w/api.php";
@@ -220,6 +220,172 @@ export function collectRintCodes(diagram: RouteDiagram): string[] {
     } else {
       scan({ text: row.text }); // a colspan row's logos are runs in its text
     }
+  }
+  return [...seen];
+}
+
+/* ------------------------------------------------------------------ */
+/* Text-producing templates in labels ({{tram}}, {{stnlnk}}, …)        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Templates worth expanding, because they resolve to label TEXT we can already parse.
+ *
+ * Measured over the 21-diagram fixture: 205 of 915 rows (22%) render a muted `{ raw }`
+ * placeholder, 260 in total across 30 distinct constructs. They fall into three families,
+ * and only one of them is worth expanding:
+ *
+ *   - STATION LINKS — `{{tram}}` 45, `{{stl}}` 34, `{{stnlnk}}` 32, `{{stn}}` 2 = 113,
+ *     **43% of all placeholders**. Each becomes a plain wikilink:
+ *     `{{tram|Derker}}` -> `[[Derker tram stop|Derker]]`,
+ *     `{{stl|Sofia Metro|Mladost 1}}` -> `[[Mladost 1 Metro Station|Mladost 1]]`.
+ *     `{{BSsrws}}` (9) LOOKS like one of these and is not: it expands to a `<table>` with
+ *     templatestyles, so it belongs to the layout family below. Verified by expanding each
+ *     name rather than inferring from what it's called.
+ *   - LAYOUT — `{{BSto}}` 38, `{{enlarge}}` 12, `{{left}}` 14, `{{float}}` 6, `{{0}}` 6,
+ *     `{{right}}` 4 = ~85, 33%. These expand to HTML we can't render, so expanding them
+ *     would trade a readable placeholder for a wall of markup. Left alone deliberately.
+ *   - ROUTE ICONS — `{{rmri}}` 22, `{{rcb}}` 13, `{{ric}}` 4 = 39, 15%. Same shape as
+ *     `{{rint}}`, so these belong in the generated catalog, not here.
+ *
+ * Adding a name is a one-line change, but check which family it's in first.
+ */
+export const TEXT_TEMPLATES = new Set(["tram", "stl", "stnlnk", "stn"]);
+
+/**
+ * The expandable call inside a `{ raw }` run, or null if it isn't one.
+ *
+ * `{{tram|Derker}}` -> `tram|Derker`, ready to be re-wrapped for the API.
+ */
+export function textTemplateCall(raw: string): string | null {
+  const text = raw.trim();
+  if (!text.startsWith("{{") || !text.endsWith("}}")) return null;
+  const name = /^\{\{\s*([^|}]+)/.exec(text)?.[1]?.trim().toLowerCase();
+  return name && TEXT_TEMPLATES.has(name) ? text.slice(2, -2).trim() : null;
+}
+
+/**
+ * A separator that survives `expandtemplates` untouched.
+ *
+ * Literal text passes through the API unchanged, so this lets many template calls share
+ * ONE request. That matters: a diagram with 20 station links would otherwise cost 20
+ * round trips per page load, against the 2 the {{rint}} catalog got us down to.
+ *
+ * No `%`, `#` or `&` in it. Those all survive `encodeURIComponent` correctly, but they make
+ * the request unreadable in a network log and invite a double-decode bug in anything that
+ * inspects it — which is exactly what happened the first time.
+ */
+const SEP = "@ROUTEMAP-SPLIT@";
+const BATCH = 50; // calls per request
+
+/** call -> expanded wikitext. Module-level, so a repeat visit never re-fetches. */
+const textCache = new Map<string, string>();
+/** call -> the in-flight batch it belongs to, so React's double-invoke doesn't double-fetch. */
+const textPending = new Map<string, Promise<void>>();
+
+async function fetchBatch(api: string, calls: string[]): Promise<void> {
+  const text = await expandTemplate(api, calls.map((c) => `{{${c}}}`).join(SEP));
+  const parts = text.split(SEP);
+  // Only trust the split when the arity matches. A failed request returns "", and a
+  // template that somehow emitted the separator would shift every label onto the wrong
+  // row — silently. Mismatched means unresolved, which stays retryable.
+  if (parts.length !== calls.length) return;
+  calls.forEach((call, i) => {
+    const value = parts[i]?.trim();
+    // Only keep expansions that are label TEXT. `{{BSsrws}}` was misfiled here on the
+    // strength of its name and expands to a `<table>` — rendering that into a label is
+    // worse than the placeholder it replaced, so markup is rejected rather than trusted.
+    if (value && !/[<>]/.test(value)) textCache.set(call, value);
+  });
+}
+
+/**
+ * Expand a set of text-template calls, batched. Returns call -> expanded wikitext.
+ *
+ * Unresolved calls are simply absent, and the caller keeps showing the placeholder — the
+ * same contract as `expandRws`, and for the same reason: a network failure must not be
+ * remembered as "no such thing".
+ */
+export async function expandTextTemplates(
+  calls: string[],
+  opts: { apiBase?: string } = {},
+): Promise<Record<string, string>> {
+  const api = opts.apiBase ?? DEFAULT_API;
+  const wanted = [...new Set(calls)];
+  const missing = wanted.filter((c) => !textCache.has(c) && !textPending.has(c));
+  const batches: Promise<void>[] = [];
+  for (let i = 0; i < missing.length; i += BATCH) {
+    const chunk = missing.slice(i, i + BATCH);
+    const pending = fetchBatch(api, chunk).finally(() => {
+      for (const call of chunk) textPending.delete(call);
+    });
+    for (const call of chunk) textPending.set(call, pending);
+    batches.push(pending);
+  }
+  // Await our own batches AND any already in flight that we're waiting on.
+  await Promise.all([...batches, ...wanted.map((c) => textPending.get(c)).filter(Boolean)]);
+
+  const out: Record<string, string> = {};
+  for (const call of wanted) {
+    const value = textCache.get(call);
+    if (value) out[call] = value;
+  }
+  return out;
+}
+
+/** Build a `resolveText(call)` for RouteMap from an expandTextTemplates result map. */
+export function createTextResolver(
+  texts: Record<string, string> = {},
+): (call: string) => string | undefined {
+  return (call) => texts[call];
+}
+
+/**
+ * Every `{ raw }` run in a label, splits and all four slots included.
+ *
+ * Can't use `labelRuns`: it drops `raw` runs on purpose, since its callers want content.
+ * Can't use `normalizeSide` alone either — it takes a `SideLabel`, so a slots-based side
+ * (`{ dist, main, remark, outer }`) comes back null and everything but `main` is missed.
+ * That gap is why `collectRwsArgs` and `collectRintCodes` don't see a logo in a remark
+ * slot; recorded in ROUTEMAP-PLAN.md rather than changed here, because fixing them alters
+ * what those two fetch and deserves its own fixture case.
+ */
+function rawRunsIn(side: unknown, out: string[]): void {
+  if (side == null || typeof side !== "object") return;
+  const walk = (runs: unknown): void => {
+    if (!Array.isArray(runs)) return;
+    for (const run of runs) {
+      if (run == null || typeof run !== "object") continue;
+      if ("raw" in run && typeof run.raw === "string") out.push(run.raw);
+      // A station link can sit inside a {{BSsplit}} line.
+      else if ("split" in run && Array.isArray(run.split)) for (const line of run.split) walk(line);
+    }
+  };
+  const asRuns = (text: unknown) => (typeof text === "string" ? [] : text);
+  if (Array.isArray(side)) return walk(side);
+  const obj = side as Record<string, unknown>;
+  if (SLOT_NAMES.some((name) => name in obj)) {
+    for (const name of SLOT_NAMES) rawRunsIn(obj[name], out);
+    return;
+  }
+  walk(asRuns(obj.text));
+}
+
+/** Every distinct expandable template call in a diagram's labels. */
+export function collectTextTemplates(diagram: RouteDiagram): string[] {
+  const raws: string[] = [];
+  for (const row of diagram.rows) {
+    if ("cells" in row) {
+      rawRunsIn(row.left, raws);
+      rawRunsIn(row.right, raws);
+    } else {
+      rawRunsIn({ text: row.text }, raws);
+    }
+  }
+  const seen = new Set<string>();
+  for (const raw of raws) {
+    const call = textTemplateCall(raw);
+    if (call) seen.add(call);
   }
   return [...seen];
 }
