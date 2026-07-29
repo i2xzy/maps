@@ -35,7 +35,7 @@ import {
   type RwsEntry,
 } from "./rint";
 import { parseRintExpansion } from "./rint-expansion";
-import { parseLabelText } from "./from-wikitext";
+import { parseLabelText, template } from "./from-wikitext";
 
 /**
  * A selected element in a diagram, for the editor's click-to-inspect flow:
@@ -509,6 +509,33 @@ function expandRawRuns(
     if (/^\[\[\s*(?:File|Image)\s*:/i.test(run.raw.trim())) {
       const entry = parseRintExpansion(run.raw);
       if (entry) return [{ icon: { file: entry.file, size: entry.size, alt: entry.alt } }];
+    }
+
+    // `{{BSto|line1|line2|linkTarget}}` — a "to <destinations>" label. It expands to exactly
+    // the `.RMsplit` two-row table we already model, so it's built from the ARGUMENTS: no
+    // API call, and nothing to pick out of HTML. The model keeps its `{ raw }`, so the
+    // wikitext still round-trips byte for byte.
+    //
+    // Measured against the live template, because the name misleads on both counts: the
+    // THIRD positional arg is a link target applied to BOTH lines, not a third line, and
+    // `it=all` and `it=none` produce identical output — so `it=` is ignored here rather than
+    // guessed at. Line 2 is italic; line 1's 105% is not modelled.
+    const bsto = /^\{\{\s*bsto\s*\|/i.test(run.raw.trim()) ? template(run.raw.trim()) : null;
+    if (bsto) {
+      const positional = bsto.args.filter((a) => !/^\s*[a-z][\w-]*\s*=/i.test(a));
+      const [first = "", second = "", link] = positional;
+      const line = (body: string, italic: boolean): TextRun[] => {
+        const runs = parseLabelText(body.trim());
+        if (!italic && !link) return runs;
+        return runs.map((r) =>
+          typeof r === "string"
+            ? ({ text: r, ...(italic ? { italic: true } : {}), ...(link ? { link } : {}) } as TextRun)
+            : "text" in r
+              ? ({ ...r, ...(italic ? { italic: true } : {}), ...(link && !r.link ? { link } : {}) } as TextRun)
+              : r,
+        );
+      };
+      return [{ split: [line(first, false), line(second, true)] }];
     }
 
     // A file-producing template ({{rmri}}, {{ric}}) expands to the same `[[File:…|Npx]]`

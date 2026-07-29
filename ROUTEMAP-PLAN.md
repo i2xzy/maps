@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 716 package + 88 editor |
+| tests | 722 package + 88 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -91,8 +91,8 @@ text should be.
 
 | | before | after |
 |---|---|---|
-| placeholders in the fixture | 260 | **109** |
-| rows showing one | 205/915 (22%) | **93/915 (10%)** |
+| placeholders in the fixture | 260 | **67** (74% resolved) |
+| rows showing one | 205/915 (22%) | **58/915 (6%)** |
 | API requests for a whole diagram | would be 129 | **3** |
 
 **How:** two families expand to something we can already render, and they share one batched
@@ -114,30 +114,32 @@ adopt the same trick.
 path. `link=` is dropped — a `{ file }` label icon has nowhere to put one; `{{rmri}}` emits
 an empty link anyway, and `{{ric}}` losing a station link still beats grey wikitext.
 
-**What remains, 109 placeholders across 93 rows (10%),** measured and grouped by what each
-one actually EXPANDS to rather than what it's named:
+**`{{BSto}}` is done, built from its arguments.** It expands to exactly the `.RMsplit`
+two-row table we already model, so the renderer constructs that from the ARGS — **no API
+call at all** — while the model keeps its `{ raw }` so the wikitext still round-trips byte for
+byte. Verified in a browser: 0 `expandtemplates` requests for four `{{BSto}}` rows, computed
+fontStyle italic on line 2 and normal on line 1, empty second line handled.
+
+Measured against the live template, because the name misleads twice over: the **third
+positional arg is a link target applied to both lines**, not a third line, and **`it=all` and
+`it=none` expand identically** — so `it=` is ignored rather than guessed at. Line 1's 105% is
+not modelled; the 90% split styling is.
+
+**What remains, 67 placeholders across 58 rows (6%):**
 
 | count | template | expands to | verdict |
 |---|---|---|---|
-| 38 | `{{BSto}}` | `<table class="RMsplit">`, 2 rows | mappable — see below |
 | 14 + 4 | `{{left}}`, `{{right}}` | `<div style="float:…">X</div>` | wrapper; content is the label |
 | 13 | `{{rcb}}` | `<span>` with inline colours | needs a styled-badge component |
-| 12 | (not a template) | `[[File:…]]` written directly in a label | — |
 | 9 | `{{BSsrws}}` | `<table>` + templatestyles | layout, keep the placeholder |
-| 6 | `{{0}}` | hidden-zero digit-width spacer | wrapper; render a space |
-| 6 | `{{float{{!}}` | — | a `{{!}}`-escaped pipe our splitter mis-reads |
-| 3 | `{{pad}}` | padding span | wrapper; render a space |
+| 8 | bare wikitext | mixed | inspect individually |
+| 6 | `{{float}}` | float span | wrapper |
+| 6 | `{{0}}` | hidden-zero digit-width spacer | render a space |
+| 6 | '''stl-call''' | a station link inside bold marks | the call isn't bare, so it stays raw |
 
-**`{{BSto}}` is the next real win, and the research is half done.** It expands to exactly the
-`.RMsplit` two-row table we already model as a `{ split }` run, and because we hold the raw
-wikitext we can build that from its ARGUMENTS — no API call and no HTML parsing. Line 1 is
-105%, line 2 is italic.
-
-But do not assume the args are lines. Measured: `{{BSto|a|b|c}}` renders `[[c|a]]` and
-`[[c|b]]` — **the third positional arg is a LINK TARGET applied to both lines**, not a third
-line. `{{BSto|a}}` gives line 2 as an italic `&nbsp;`. Real usage also passes `it=all`
-(`{{BSto|[[Template:X|X]]|to {{rws|Y}}|it=all}}`), whose exact effect is still unmeasured —
-the API rate-limited before that call landed. Finish that one question before implementing.
+The cheapest next one is a marked call like '''`{{stl|…}}`''' (6): the template is already
+expandable, it just isn't a BARE call, so `textTemplateCall` rejects it. Unwrapping the marks
+and re-applying them to the expansion would do it.
 
 **Trap, twice over:** `{{BSsrws}}` reads exactly like a station link and expands to a `<table>` with
 templatestyles. It was in the whitelist on the strength of its name until each expansion was

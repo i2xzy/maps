@@ -12,6 +12,7 @@ import {
   textTemplateCall,
 } from "./rint";
 import { fromWikitext } from "./from-wikitext";
+import { toWikitext } from "./serialize";
 import diagrams from "./__fixtures__/real-diagrams.json";
 
 describe("textTemplateCall", () => {
@@ -249,5 +250,47 @@ describe("a File link written straight into a label", () => {
     expect(html).toContain(">Longsight<");
     // The row's STR cell is an image, so assert no image was made FROM the link.
     expect(html).not.toMatch(/<img[^>]*Longsight/);
+  });
+});
+
+describe("{{BSto}} becomes the split it expands to", () => {
+  const html = (line: string) =>
+    renderToStaticMarkup(<RouteMap diagram={fromWikitext(line)} resolveHref={(r) => `/${r}`} />);
+
+  it("stacks the two lines, second italic, with no fetch", () => {
+    const out = html("A! !STR~~{{BSto|Manchester|Leeds}}");
+    expect(out).toContain("Manchester");
+    expect(out).toContain("Leeds");
+    // Our renderer builds the .RMsplit table with inline styles rather than the class, so
+    // assert the structure that matters: a stacked inline-table at 90%, not a <br>.
+    expect(out).toContain("display:inline-table");
+    expect(out).toContain("font-size:90%");
+    expect(out).not.toContain("<br");
+    expect(out).toMatch(/italic[^<]*"?>Leeds|font-style:italic/);
+    expect(out).not.toContain("{{BSto");
+  });
+
+  it("treats the third positional arg as a link on BOTH lines", () => {
+    // Measured against the live template. Reading it as a third line — the obvious guess
+    // from the name — would render the target as visible text.
+    const out = html("A! !STR~~{{BSto|Manchester|Leeds|Some Article}}");
+    expect(out).toContain('href="/Some Article"');
+    expect(out).not.toContain(">Some Article<");
+  });
+
+  it("ignores it=, which the live template ignores too", () => {
+    // `it=all` and `it=none` expand identically, so it is not an italics switch despite the
+    // name. Real diagrams pass `it=all`, and it must not be mistaken for a positional arg.
+    const withIt = html("A! !STR~~{{BSto|Manchester|Leeds|it=all}}");
+    expect(withIt).toContain("Manchester");
+    expect(withIt).not.toContain("it=all");
+    expect(withIt).not.toContain('href="/it=all"');
+  });
+
+  it("still round-trips the wikitext unchanged", () => {
+    // Substituted at render only. The model keeps `{ raw }`, so nothing about export moves.
+    const line = "A! !STR~~{{BSto|Manchester|Leeds}}";
+    const d = fromWikitext(line);
+    expect(toWikitext({ ...d, rows: d.rows.map((r) => ({ ...r, src: undefined })) })).toBe(line);
   });
 });

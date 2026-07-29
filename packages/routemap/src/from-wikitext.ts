@@ -57,7 +57,13 @@ function splitTop(s: string, sep: string): string[] {
 }
 
 /** One `{{name|args}}` at the very start of `s`, or null. */
-function template(s: string): { name: string; args: string[]; length: number } | null {
+/**
+ * A `{{name|arg|arg}}` call at the start of `s`, with bracket-aware argument splitting.
+ *
+ * Exported because the renderer builds `{{BSto}}`'s two-line split from its ARGUMENTS
+ * rather than from its HTML expansion — no API call, and nothing to parse out of a table.
+ */
+export function template(s: string): { name: string; args: string[]; length: number } | null {
   if (!s.startsWith("{{")) return null;
   let depth = 0;
   for (let i = 0; i < s.length; i++) {
