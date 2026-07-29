@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 702 package + 87 editor |
+| tests | 711 package + 87 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -91,11 +91,15 @@ text should be.
 
 | | before | after |
 |---|---|---|
-| placeholders in the fixture | 260 | **147** |
-| rows showing one | 205/915 (22%) | **115/915 (13%)** |
-| API requests for a whole diagram | would be 113 | **3** |
+| placeholders in the fixture | 260 | **121** |
+| rows showing one | 205/915 (22%) | **103/915 (11%)** |
+| API requests for a whole diagram | would be 129 | **3** |
 
-**How:** the station-link family expands to plain wikilinks the parser already handles, so
+**How:** two families expand to something we can already render, and they share one batched
+request because the renderer — not the fetch — decides how to read each expansion.
+
+*Station links* (`{{tram}}`, `{{stl}}`, `{{stnlnk}}`, `{{stn}}`, 113 placeholders) become
+plain wikilinks the parser already handles, so
 `resolveText` substitutes the expansion into the runs *before* `buildLines` — links, marks
 and splits then work through the existing path with no second rendering branch. Unresolved
 (not fetched, or the request failed) leaves the placeholder, so it can only improve on it.
@@ -105,15 +109,21 @@ through untouched, and the split is only trusted when the arity matches. That's 
 difference between 113 requests and 3 — `{{rws}}` still does one per instance and could
 adopt the same trick.
 
+*File links* (`{{rmri}}`, `{{ric}}`, 26) expand to the same `[[File:…|Npx]]` shape as
+`{{rint}}`, so `parseRintExpansion` reads them and they render through the existing logo
+path. `link=` is dropped — a `{ file }` label icon has nowhere to put one; `{{rmri}}` emits
+an empty link anyway, and `{{ric}}` losing a station link still beats grey wikitext.
+
 **What's deliberately left:** the layout family — `{{BSto}}` 38, `{{enlarge}}` 12,
 `{{left}}` 14, `{{float}}` 6, `{{0}}` 6, `{{right}}` 4 — expands to HTML we can't render, so
-the placeholder is genuinely better than the expansion. And the route-icon family
-(`{{rmri}}` 22, `{{rcb}}` 13, `{{ric}}` 4 = 15%) is the same shape as `{{rint}}` and belongs
-in the generated catalog, not here — that's the next real win.
-**Trap:** `{{BSsrws}}` reads exactly like a station link and expands to a `<table>` with
+the placeholder is genuinely better than the expansion. `{{rcb}}` (13) sits alongside the file
+templates in real diagrams and belongs to neither family — it expands to a `<span>` carrying
+inline styles, so rendering it would need a styled-badge component.
+**Trap, twice over:** `{{BSsrws}}` reads exactly like a station link and expands to a `<table>` with
 templatestyles. It was in the whitelist on the strength of its name until each expansion was
-actually checked. Names are not evidence — hence the guard that rejects any expansion
-containing markup.
+actually checked, and `{{rcb}}` sits with `{{rmri}}`/`{{ric}}` and is equally unlike them.
+Names are not evidence — hence the guard that rejects any expansion containing markup, and
+the icon path falling back to the placeholder when an expansion holds no file.
 
 ### Deploy
 **What:** Vercel, on the free Hobby tier (explicitly non-commercial, which matches).

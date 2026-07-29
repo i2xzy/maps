@@ -282,16 +282,40 @@ export function collectRintCodes(diagram: RouteDiagram): string[] {
 export const TEXT_TEMPLATES = new Set(["tram", "stl", "stnlnk", "stn"]);
 
 /**
+ * Templates that expand to a FILE link rather than label text.
+ *
+ * `{{rmri|u}}` -> `[[File:Arrow Blue Up 001.svg|10px|alt=Up arrow|link=]]` and
+ * `{{ric|Kolkata Metro|orange}}` -> `[[File:Kolkata Metro Orange Line.svg|16px|link=…]]` —
+ * the same shape `{{rint}}` produces, so `parseRintExpansion` already reads them and they
+ * render through the existing logo path. 26 of the fixture's placeholders, 10%.
+ *
+ * `{{rcb}}` (13) belongs to neither family despite sitting alongside these in real
+ * diagrams: it expands to a `<span>` carrying inline styles, not a file. Checked by
+ * expanding it, which is the only way to know — see the {{BSsrws}} note above.
+ */
+export const ICON_TEMPLATES = new Set(["rmri", "ric"]);
+
+/**
  * The expandable call inside a `{ raw }` run, or null if it isn't one.
  *
  * `{{tram|Derker}}` -> `tram|Derker`, ready to be re-wrapped for the API.
  */
-export function textTemplateCall(raw: string): string | null {
+function templateCall(raw: string, names: Set<string>): string | null {
   const text = raw.trim();
   if (!text.startsWith("{{") || !text.endsWith("}}")) return null;
   const name = /^\{\{\s*([^|}]+)/.exec(text)?.[1]?.trim().toLowerCase();
-  return name && TEXT_TEMPLATES.has(name) ? text.slice(2, -2).trim() : null;
+  return name && names.has(name) ? text.slice(2, -2).trim() : null;
 }
+
+/** The call inside a `{ raw }` run if it's a text-producing template, else null. */
+export const textTemplateCall = (raw: string): string | null => templateCall(raw, TEXT_TEMPLATES);
+
+/** The call inside a `{ raw }` run if it's a file-producing template, else null. */
+export const iconTemplateCall = (raw: string): string | null => templateCall(raw, ICON_TEMPLATES);
+
+/** Either family — what the collector fetches and the renderer substitutes. */
+export const expandableCall = (raw: string): string | null =>
+  textTemplateCall(raw) ?? iconTemplateCall(raw);
 
 /**
  * A separator that survives `expandtemplates` untouched.
@@ -369,12 +393,17 @@ export function createTextResolver(
   return (call) => texts[call];
 }
 
-/** Every distinct expandable template call in a diagram's labels. */
+/**
+ * Every distinct expandable template call in a diagram's labels, both families.
+ *
+ * One list, because they share one batched request — the renderer decides how to read each
+ * expansion, so the fetch doesn't need to care which family a call belongs to.
+ */
 export function collectTextTemplates(diagram: RouteDiagram): string[] {
   const seen = new Set<string>();
   eachLabelRun(diagram, (run) => {
     if ("raw" in run && run.raw) {
-      const call = textTemplateCall(run.raw);
+      const call = expandableCall(run.raw);
       if (call) seen.add(call);
     }
   });

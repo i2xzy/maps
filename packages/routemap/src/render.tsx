@@ -27,7 +27,14 @@ import {
 import type { LabelIcon, RouteDiagram, TextRun } from "./types";
 import { computeLayout, type PlacedCell } from "./layout";
 import { isWidthPrefix, prefixWidthFraction, type NormalizedSide } from "./normalize";
-import { createLogoResolver, textTemplateCall, type ResolvedLogo, type RwsEntry } from "./rint";
+import {
+  createLogoResolver,
+  iconTemplateCall,
+  textTemplateCall,
+  type ResolvedLogo,
+  type RwsEntry,
+} from "./rint";
+import { parseRintExpansion } from "./rint-expansion";
 import { parseLabelText } from "./from-wikitext";
 
 /**
@@ -493,6 +500,17 @@ function expandRawRuns(
       ];
     }
     if (!("raw" in run)) return [run];
+
+    // A file-producing template ({{rmri}}, {{ric}}) expands to the same `[[File:…|Npx]]`
+    // shape as {{rint}}, so it becomes a logo run and renders through the existing path.
+    // `link=` is dropped: a `{ file }` label icon has nowhere to carry one. {{rmri}} emits
+    // an empty link anyway; {{ric}} loses a station link, which still beats grey wikitext.
+    const iconCall = iconTemplateCall(run.raw);
+    if (iconCall) {
+      const entry = parseRintExpansion(resolveText(iconCall) ?? "");
+      return entry ? [{ icon: { file: entry.file, size: entry.size, alt: entry.alt } }] : [run];
+    }
+
     const call = textTemplateCall(run.raw);
     const expanded = call ? resolveText(call) : undefined;
     return expanded ? parseLabelText(expanded) : [run];

@@ -6,6 +6,8 @@ import {
   collectRwsArgs,
   collectTextTemplates,
   createTextResolver,
+  expandableCall,
+  iconTemplateCall,
   TEXT_TEMPLATES,
   textTemplateCall,
 } from "./rint";
@@ -149,5 +151,62 @@ describe("collectors see every slot, not just main", () => {
       typeof collectRwsArgs
     >[0];
     expect(collectRwsArgs(colspan)).toEqual(["Edinburgh|Waverley"]);
+  });
+});
+
+describe("file-producing templates render as logos", () => {
+  it("turns {{rmri}} into an image, not a placeholder", () => {
+    const diagram = fromWikitext("A! !STR~~{{rmri|u}}");
+    const html = renderToStaticMarkup(
+      <RouteMap
+        diagram={diagram}
+        resolveText={createTextResolver({
+          "rmri|u": "[[File:Arrow Blue Up 001.svg|10px|alt=Up arrow|link=]]",
+        })}
+      />,
+    );
+    // Spaces, not underscores: parseRintExpansion normalises MediaWiki titles, so the url
+    // is percent-encoded rather than underscore-joined.
+    expect(html).toContain("Arrow%20Blue%20Up%20001.svg");
+    expect(html).toContain('alt="Up arrow"');
+    expect(html).not.toContain("{{rmri|u}}");
+  });
+
+  it("carries the size the template asked for", () => {
+    const diagram = fromWikitext("A! !STR~~{{ric|Kolkata Metro|orange}}");
+    const html = renderToStaticMarkup(
+      <RouteMap
+        diagram={diagram}
+        resolveText={createTextResolver({
+          "ric|Kolkata Metro|orange": "[[File:Kolkata Metro Orange Line.svg|16px|link=X]]",
+        })}
+      />,
+    );
+    expect(html).toMatch(/width="16"|width:16px|16px/);
+  });
+
+  it("keeps the placeholder when the expansion holds no file", () => {
+    // {{rcb}} expands to a styled <span>, so there's nothing to draw. Degrading to the
+    // placeholder is the point — an empty label would lose the content entirely.
+    const diagram = fromWikitext("A! !STR~~{{rmri|u}}");
+    const html = renderToStaticMarkup(
+      <RouteMap diagram={diagram} resolveText={createTextResolver({ "rmri|u": "<span>M2</span>" })} />,
+    );
+    expect(html).toContain("{{rmri|u}}");
+  });
+
+  it("classifies each family and excludes the one that only looks related", () => {
+    expect(iconTemplateCall("{{rmri|u}}")).toBe("rmri|u");
+    expect(iconTemplateCall("{{ric|Kolkata Metro|orange}}")).toBe("ric|Kolkata Metro|orange");
+    expect(iconTemplateCall("{{tram|Derker}}")).toBe(null); // text family, not icon
+    expect(iconTemplateCall("{{rcb|Sofia Metro|M2|croute}}")).toBe(null); // a styled span
+    expect(expandableCall("{{tram|Derker}}")).toBe("tram|Derker");
+    expect(expandableCall("{{rmri|u}}")).toBe("rmri|u");
+    expect(expandableCall("{{BSto|a|b}}")).toBe(null);
+  });
+
+  it("collects both families in one list, so they share one request", () => {
+    const diagram = fromWikitext("{{rmri|u}}! !STR~~{{tram|Derker}}");
+    expect(collectTextTemplates(diagram).sort()).toEqual(["rmri|u", "tram|Derker"]);
   });
 });
