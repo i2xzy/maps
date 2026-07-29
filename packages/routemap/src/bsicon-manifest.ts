@@ -23,7 +23,9 @@ import { bloomFromBase64, bloomHas } from "./bloom";
 import type { Bloom } from "./bloom";
 import { fieldsFor, isFieldVisible, previewOptions, safeIconCode } from "./descriptor";
 import type { FieldOption, FieldSpec } from "./descriptor";
+import { iconToCode } from "./icon";
 import type { IconObject } from "./icon";
+import { codeToIcon } from "./parse";
 
 /**
  * Loaded on demand, NOT imported.
@@ -63,6 +65,31 @@ export function bsiconExists(code: string | null | undefined): boolean {
   if (!code) return false;
   if (!filter) return true; // not loaded yet — offer it rather than hide it
   return bloomHas(filter, code);
+}
+
+/**
+ * Whether we can be SURE Commons has no file for this code.
+ *
+ * Not the same as `!bsiconExists(code)`, and the difference bit. The filter's keys are the
+ * codes that exist AND our encoder can emit, so absence only means "missing" for a code the
+ * encoder could have produced. `WASSERq` is a real file our encoder can't build, so it was
+ * never a key — and reading its absence as "no such file" told users their perfectly good
+ * code was broken.
+ *
+ * Outside the encoder's range this returns `false`: we have nothing to say, and saying
+ * nothing is the only honest answer. Use this to validate a code a USER typed; `bsiconExists`
+ * is for codes we generated ourselves and therefore know are in range.
+ */
+export function bsiconKnownMissing(code: string | null | undefined): boolean {
+  if (!code) return false;
+  let icon: IconObject;
+  try {
+    icon = codeToIcon(code);
+  } catch {
+    return false;
+  }
+  if (!("kind" in icon) || iconToCode(icon) !== code) return false; // outside our range
+  return !bsiconExists(code);
 }
 
 /**

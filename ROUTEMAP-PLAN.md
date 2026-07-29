@@ -271,6 +271,39 @@ wrapping, no page errors.
 **Why it must be an atom and not text:** flattened into the document, `{{BSto|a|b}}` reads as
 three lines to the serializer, which then wraps the whole label in a `{{BSsplit}}`. Tested.
 
+### ~~No way to type an icon code in the GUI~~ — **done**
+**What:** The BSicon code was read-only text. "Replace" could take you AWAY from an unmodelled
+code, but nothing could take you TO one — so the ~200,000 real BSicons our encoder can't
+build were reachable only through the wikitext pane.
+**Done:** one editable code field per cell layer, at the layer level rather than inside
+`IconFields`. A typed code goes through `codeToIcon`, so a code the model understands lights
+up the controls below while anything else stays a code — the same rule the paste path uses.
+
+Two things it fixed on the way:
+- **One shape, one rule.** The field first lived inside `IconFields` for modelled cells and
+  outside it for unmodelled ones, so typing `BHF` produced a bare string from one and
+  `{ kind: "station" }` from the other. Now a typed code is always a code, and a
+  `{ code, title }` ref keeps its metadata.
+- **The existence warning was wrong,** and wrong in the worst direction — see below.
+
+### Trap: `!bsiconExists(code)` does NOT mean "no such file"
+The filter's keys are the codes that exist **and our encoder can emit**. So absence only
+means "missing" for a code inside the encoder's range. `WASSERq` is a real icon on Commons
+that our encoder can't build, so it was never a key — and the first version of the code field
+read its absence as "no file on Commons", telling users their perfectly good code was broken.
+
+`bsiconKnownMissing` is the honest question: outside the encoder's range it answers `false`,
+because we have nothing to say. `bsiconExists` is only safe for codes we generated ourselves.
+A wrong warning is worse than no warning.
+
+### Dev-only: a hydration warning on load
+React logs "Hydration failed…" on a plain dev-server load, with no interaction. Not from the
+code field (it predates it and appears before anything is selected), and **absent from the
+production build** — `next build` output served statically produces no pageerrors and no
+console output at all. Chakra/Ark generate ids and the tests already show `data-ssr` lingering
+under jsdom, so it's most likely that. Recorded rather than chased: it costs nothing in the
+artefact that ships.
+
 ### The last 39: `{ split }` needs a node WITH content
 **What:** The remaining 3%. A split's lines are editable text, which an atom can't hold.
 **How:** a ProseMirror node containing `splitLine` children, the way a table contains rows —

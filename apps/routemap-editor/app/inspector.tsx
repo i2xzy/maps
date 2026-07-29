@@ -31,6 +31,7 @@ import {
   Trash2,
 } from "lucide-react";
 import {
+  bsiconKnownMissing,
   codeToIcon,
   commonsUrl,
   existingOptions,
@@ -329,6 +330,60 @@ function BoolCard({
 }
 
 // ── one icon's controls (kind → subtype → contextual fields) ─────────────────
+/**
+ * The BSicon code, editable.
+ *
+ * The only way into the ~200,000 real BSicons our encoder can't produce. They render and
+ * round-trip perfectly as a raw `{ code }` cell — there was simply no way to type one, so
+ * "Replace" could take you AWAY from an unmodelled code but nothing could take you to one.
+ * The wikitext pane was the only route in, which isn't the GUI covering everything.
+ *
+ * Typed codes go through `codeToIcon`, so a code the model understands becomes the semantic
+ * object (and the controls below light up) while anything else stays a code. That is the same
+ * rule the paste path already uses, so a typed cell and a pasted one are indistinguishable.
+ *
+ * Existence is a HINT, never a block. The filter has a known false-positive rate, is a
+ * snapshot, and answers `true` for everything until it loads — and a user typing a code we've
+ * never heard of is more likely to be right about Commons than we are.
+ */
+function CodeField({
+  code,
+  onChange,
+}: {
+  code: string | null;
+  onChange: (code: string) => void;
+}): ReactNode {
+  const [text, setText] = useTextBuffer(code ?? "", (v) => {
+    const next = v.trim();
+    if (next && next !== code) onChange(next);
+  });
+  const trimmed = text.trim();
+  // `bsiconKnownMissing`, not `!bsiconExists`. The filter only holds codes our encoder can
+  // emit, so for anything outside that range it has nothing to say — and reading its silence
+  // as "no such file" told users that `WASSERq`, a perfectly real icon, was broken.
+  const unknown = bsiconKnownMissing(trimmed);
+  return (
+    <Stack gap="0.5">
+      <HStack gap="1">
+        <Thumb code={trimmed || null} size={20} />
+        <Input
+          size="xs"
+          fontFamily="mono"
+          value={text}
+          placeholder="BSicon code"
+          aria-label="BSicon code"
+          onChange={(e) => setText(e.target.value)}
+        />
+      </HStack>
+      {unknown ? (
+        <Text fontSize="xs" color="fg.muted">
+          No file on Commons for this code — check the spelling, or carry on if you know better.
+        </Text>
+      ) : null}
+    </Stack>
+  );
+}
+
 function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: IconObject) => void }): ReactNode {
   const set = (patch: Partial<IconObject>) => {
     const next: IconObject = { ...icon, ...patch };
@@ -341,7 +396,6 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
   // `fieldsFor` in the package rather than inline here — and is unit-tested there.
   const pickKind = (k: IconKind) => onChange(retargetKind(icon, k, safeIconCode));
 
-  const code = safeIconCode(icon);
   const subtypes = iconSubtypes(icon.kind);
   // Only the fields that can actually produce a real icon. `fieldsFor` says what the MODEL
   // can represent, which is far more than exists: a plain track has 21 representable fields
@@ -389,12 +443,6 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
 
   return (
     <Stack gap="1.5">
-      <HStack gap="1">
-        <Thumb code={code} size={20} />
-        <Text fontFamily="mono" fontSize="xs" truncate>
-          {code ?? "(No icon)"}
-        </Text>
-      </HStack>
       <EnumSelect
         label="kind"
         value={icon.kind}
@@ -451,53 +499,57 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
  * write back in whatever shape the cell was already using.
  */
 function IconLayerEditor({ icon, onChange }: { icon: CellIcon; onChange: (icon: CellIcon) => void }): ReactNode {
-  if (typeof icon === "object" && "kind" in icon) {
-    return <IconFields icon={icon} onChange={(next) => onChange(next)} />;
-  }
-  // A bare code, written back as a code so a terse row stays terse.
-  if (typeof icon === "string") {
-    const decoded = codeToIcon(icon);
-    if ("kind" in decoded) {
-      return <IconFields icon={decoded} onChange={(next) => onChange(safeIconCode(next) ?? next)} />;
+  const code =
+    (typeof icon === "string" ? icon : "code" in icon ? icon.code : safeIconCode(icon)) ?? null;
+
+  /**
+   * A typed code always writes a BARE code, so a terse row stays terse and typing the same
+   * code twice can't produce two different JSON shapes depending on what was there before.
+   * A `{ code, title, href }` ref keeps its metadata, which the controls know nothing about
+   * — the sample's `hKRZW` cell carries a title and losing it on the first keystroke would
+   * be worse than not editing at all.
+   */
+  const setCode = (next: string) =>
+    onChange(typeof icon === "object" && "code" in icon ? { ...icon, code: next } : next);
+
+  const controls = (): ReactNode => {
+    if (typeof icon === "object" && "kind" in icon) {
+      return <IconFields icon={icon} onChange={(next) => onChange(next)} />;
     }
-  }
-  // An `{ code, title, href }` ref: edit the code semantically but keep the metadata,
-  // which the icon controls know nothing about. The sample's `hKRZW` cell carries a
-  // title, and losing it on the first edit would be worse than not editing at all.
-  if (typeof icon === "object" && "code" in icon) {
-    const decoded = codeToIcon(icon.code);
+    const decoded = codeToIcon(typeof icon === "string" ? icon : icon.code);
     if ("kind" in decoded) {
+      // Write back in whatever shape the cell was already using.
       return (
         <IconFields
           icon={decoded}
           onChange={(next) => {
-            const code = safeIconCode(next);
-            onChange(code == null ? icon : { ...icon, code });
+            const encoded = safeIconCode(next);
+            if (typeof icon === "string") onChange(encoded ?? next);
+            else onChange(encoded == null ? icon : { ...icon, code: encoded });
           }}
         />
       );
     }
-  }
-  // A code we don't model (`WASSERq`, `SKRZ-Bo`, a parenthesised or oddly-suffixed
-  // variant). The thumbnail keeps the layer identifiable, and Replace is the way out:
-  // with no JSON pane in production, a cell offering NO control at all was a dead end —
-  // you could delete it, but not change it.
-  const code = typeof icon === "string" ? icon : "code" in icon ? icon.code : null;
+    // A code we don't model (`WASSERq`, `SKRZ-Bo`, a parenthesised or oddly-suffixed
+    // variant). The code field above is the way in and out; Replace is the shortcut to a
+    // modelled icon.
+    return (
+      <>
+        <Text fontSize="xs" color="fg.muted">
+          This icon isn’t one the controls understand. It renders and exports correctly — edit
+          the code above, or replace it.
+        </Text>
+        <Button size="xs" variant="outline" alignSelf="flex-start" onClick={() => onChange(newLayer())}>
+          Replace
+        </Button>
+      </>
+    );
+  };
+
   return (
     <Stack gap="1.5">
-      <HStack gap="1">
-        <Thumb code={code} size={20} />
-        <Text fontFamily="mono" fontSize="xs" truncate>
-          {code ?? "(No icon)"}
-        </Text>
-      </HStack>
-      <Text fontSize="xs" color="fg.muted">
-        This icon isn’t one the controls understand. It renders and exports correctly — edit
-        it as wikitext, or replace it.
-      </Text>
-      <Button size="xs" variant="outline" alignSelf="flex-start" onClick={() => onChange(newLayer())}>
-        Replace
-      </Button>
+      <CodeField code={code} onChange={setCode} />
+      {controls()}
     </Stack>
   );
 }

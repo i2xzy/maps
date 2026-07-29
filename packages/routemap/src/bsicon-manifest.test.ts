@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   bsiconExists,
+  bsiconKnownMissing,
   existingOptions,
   fieldIsOffered,
   loadBsiconFilter,
@@ -103,5 +104,22 @@ describe("field filtering", () => {
     const track: IconObject = { kind: "track" };
     const before = fieldsFor("track").filter((f) => isFieldVisible(f, track)).length;
     expect(offeredFields(track).length).toBeLessThan(before);
+  });
+});
+
+describe("bsiconKnownMissing", () => {
+  it("says nothing about a real code our encoder can't build", () => {
+    // `WASSERq` is on Commons and is not encoder-reachable, so it was never a key in the
+    // filter. Reading its absence as "no such file" told users their good code was broken.
+    expect(bsiconExists("WASSERq")).toBe(false); // the filter genuinely lacks it
+    expect(bsiconKnownMissing("WASSERq")).toBe(false); // but we must not claim it's missing
+    expect(bsiconKnownMissing("SKRZ-Bo")).toBe(false);
+  });
+
+  it("is confident only inside the encoder's range", () => {
+    expect(bsiconKnownMissing("kSTR")).toBe(true); // reachable and absent: certain
+    expect(bsiconKnownMissing("STR")).toBe(false); // reachable and present
+    expect(bsiconKnownMissing("")).toBe(false);
+    expect(bsiconKnownMissing(null)).toBe(false);
   });
 });

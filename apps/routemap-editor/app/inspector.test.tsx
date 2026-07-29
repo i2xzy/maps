@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
+import { loadBsiconFilter } from "@repo/routemap";
 import type { RouteDiagram, Selection } from "@repo/routemap";
 import { Inspector } from "./inspector";
 import { renderWithChakra } from "./test-utils";
@@ -41,6 +42,9 @@ function Controlled({ initial, select }: { initial: RouteDiagram; select?: Selec
   );
 }
 const model = (): RouteDiagram => JSON.parse(screen.getByTestId("json").textContent!);
+/** The BSicon code is an editable input now, so read its value rather than page text. */
+const codes = (): string[] =>
+  screen.getAllByLabelText("BSicon code").map((el) => (el as HTMLInputElement).value);
 const sel = (): Selection | null => JSON.parse(screen.getByTestId("sel").textContent!);
 
 const CELL = (kind: string): RouteDiagram => ({ rows: [{ cells: [{ kind } as never] }] });
@@ -66,7 +70,7 @@ describe("Inspector: cell selection", () => {
     renderWithChakra(<Controlled initial={CELL("station")} select={{ kind: "cell", row: 0, col: 0 }} />);
     expect(screen.getByText("Cell 1 of 1")).toBeTruthy();
     expect(screen.getByText("Kind")).toBeTruthy(); // captions shown in proper case
-    expect(screen.getByText("BHF")).toBeTruthy();
+    expect(codes()).toEqual(["BHF"]);
   });
 
   it("adds a cell after the selected one and selects it", () => {
@@ -129,7 +133,7 @@ describe("Inspector: cell selection", () => {
     );
     // Decoded into the semantic controls: BHF is a station.
     expect(screen.getByText("Kind")).toBeTruthy();
-    expect(screen.getByText("BHF")).toBeTruthy();
+    expect(codes()).toEqual(["BHF"]);
     fireEvent.click(screen.getByLabelText("Add cell"));
     // Still a terse string, not an object — the row must not blow up into JSON
     // nobody wants to read just because a cell was selected.
@@ -145,11 +149,93 @@ describe("Inspector: cell selection", () => {
       <Controlled initial={{ rows: [{ cells: ["WASSERq"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
     );
     expect(screen.queryByText("Kind")).toBeNull();
-    expect(screen.getByText("WASSERq")).toBeTruthy();
+    expect(codes()).toEqual(["WASSERq"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Replace" }));
     expect((model().rows![0] as { cells: unknown[] }).cells[0]).toEqual({ kind: "track" });
     expect(screen.getByText("Kind")).toBeTruthy(); // now editable
+  });
+
+  it("lets you type any BSicon code, including ones the model can't produce", () => {
+    // The only way into the ~200,000 real BSicons our encoder can't build. "Replace" could
+    // take you AWAY from an unmodelled code; nothing could take you to one, so the wikitext
+    // pane was the sole route in.
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: ["STR"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    const field = screen.getByLabelText("BSicon code");
+    fireEvent.change(field, { target: { value: "WASSERq" } });
+    // Kept as a code, because that's what it is — not coerced into a shape that loses it.
+    expect((model().rows![0] as { cells: unknown[] }).cells[0]).toBe("WASSERq");
+  });
+
+  it("decodes a typed code into the semantic controls, keeping the terse string", () => {
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: ["WASSERq"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    expect(screen.queryByText("Kind")).toBeNull(); // unmodelled: no controls
+    fireEvent.change(screen.getByLabelText("BSicon code"), { target: { value: "BHF" } });
+    // The controls appear, and the cell stays a bare code — a string cell doesn't get
+    // promoted to JSON just because it was retyped.
+    expect(screen.getByText("Kind")).toBeTruthy();
+    expect((model().rows![0] as { cells: unknown[] }).cells[0]).toBe("BHF");
+  });
+
+  it("does not warn about a real icon our encoder simply can't build", async () => {
+    // `WASSERq` is on Commons and is outside the encoder's range, so it was never a key in
+    // the existence filter. Reading that absence as "no such file" told users their good
+    // code was broken — a wrong warning is worse than none.
+    await loadBsiconFilter();
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: ["STR"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    fireEvent.change(screen.getByLabelText("BSicon code"), { target: { value: "WASSERq" } });
+    expect(screen.queryByText(/No file on Commons/)).toBeNull();
+  });
+
+  it("writes the same shape whichever cell you typed into", () => {
+    // The code field used to sit inside IconFields for modelled cells and outside it for
+    // unmodelled ones, so typing `BHF` gave a bare string from one and `{ kind: "station" }`
+    // from the other. One field at the cell level, one rule: a typed code is a code.
+    for (const start of ["STR", "WASSERq"]) {
+      const { unmount } = renderWithChakra(
+        <Controlled initial={{ rows: [{ cells: [start] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+      );
+      fireEvent.change(screen.getByLabelText("BSicon code"), { target: { value: "BHF" } });
+      expect((model().rows![0] as { cells: unknown[] }).cells[0], start).toBe("BHF");
+      unmount();
+    }
+  });
+
+  it("keeps a ref's title when its code is retyped", () => {
+    // `{ code, title }` metadata the controls know nothing about must survive the keystroke.
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ cells: [{ code: "hKRZW", title: "bridge over water" } as never] }] }}
+        select={{ kind: "cell", row: 0, col: 0 }}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("BSicon code"), { target: { value: "WASSERq" } });
+    expect((model().rows![0] as { cells: unknown[] }).cells[0]).toEqual({
+      code: "WASSERq",
+      title: "bridge over water",
+    });
+  });
+
+  it("warns about a code with no file, but still accepts it", async () => {
+    // A hint, never a block: the filter has a known false-positive rate, is a snapshot, and
+    // a user typing an unfamiliar code is likelier to be right about Commons than we are.
+    //
+    // The filter has to be loaded explicitly — it's fetched on demand to stay out of the
+    // first-load chunk, and until it arrives every code reads as existing. So this asserts
+    // the warning, and the test above (which doesn't load it) shows the quiet default.
+    await loadBsiconFilter();
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: ["STR"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    fireEvent.change(screen.getByLabelText("BSicon code"), { target: { value: "kSTR" } });
+    expect(screen.getByText(/No file on Commons/)).toBeTruthy();
+    expect((model().rows![0] as { cells: unknown[] }).cells[0]).toBeTruthy();
   });
 
   it("shows a placeholder, not a broken image, when a preview has no file", () => {
@@ -192,8 +278,7 @@ describe("Inspector: cell selection", () => {
     );
     // One set of controls per layer, each decoded from its code.
     expect(screen.getAllByText("Kind")).toHaveLength(2);
-    expect(screen.getByText("STR")).toBeTruthy();
-    expect(screen.getByText("BHF")).toBeTruthy();
+    expect(codes()).toEqual(["STR", "BHF"]);
   });
 
   it("reorders stack layers, and the arrows match the list", () => {
@@ -222,7 +307,7 @@ describe("Inspector: cell selection", () => {
       />,
     );
     expect(screen.getByText("Kind")).toBeTruthy(); // decoded, not read-only
-    expect(screen.getByText("hKRZW")).toBeTruthy();
+    expect(codes()).toEqual(["hKRZW"]);
     fireEvent.click(screen.getByRole("button", { name: /Overlay/ }));
     const base = (model().rows![0] as { cells: unknown[][] }).cells[0]![0];
     expect(base).toEqual({ code: "hKRZW", title: "bridge over water" });
