@@ -13,6 +13,7 @@ import {
   Input,
   Collapsible,
   Portal,
+  RadioCard,
   Select,
   Stack,
   Text,
@@ -231,6 +232,70 @@ function EnumSelect({
   );
 }
 
+/**
+ * A small enum as radio CARDS rather than a dropdown.
+ *
+ * Seven fields have only 2–3 options (`connect`, `curve`, `direction`, `entry`, `lane`,
+ * `level`, `offset`), and a dropdown makes you click twice to see two choices. Cards, not
+ * plain radios, because each option carries a THUMBNAIL — the option names are `l`, `r`,
+ * `1`–`4`, which mean nothing without the picture. Matches the CheckboxCard used for
+ * booleans, so the two read as one family.
+ */
+function EnumCards({
+  label,
+  value,
+  options,
+  clearedCode,
+  onPick,
+  disabled,
+}: {
+  label: string;
+  value: string | number | undefined;
+  options: EnumOpt[];
+  /** Preview for the "unset" card: the icon this field cleared. */
+  clearedCode: string | null;
+  onPick: (raw: string | number | undefined) => void;
+  disabled?: boolean;
+}): ReactNode {
+  return (
+    <RadioCard.Root
+      size="sm"
+      orientation="horizontal"
+      disabled={disabled}
+      value={value == null ? NONE : String(value)}
+      onValueChange={(e) =>
+        onPick(e.value === NONE ? undefined : options.find((o) => String(o.value) === e.value)?.value)
+      }
+    >
+      {/* `RadioCard.Label`, not a bare caption — Ark wires it to the group, so the field
+          name is announced instead of an anonymous set of radios. */}
+      <RadioCard.Label fontSize="xs" color="fg.muted" fontWeight="normal">
+        {capitalize(label)}
+      </RadioCard.Label>
+      <HStack gap="1" flexWrap="wrap">
+          {/*
+            An explicit "unset" card, because there is otherwise no way back to it: Ark
+            fires no change event when you click the ALREADY-SELECTED item, so
+            re-click-to-clear silently does nothing. It previews the icon with the field
+            cleared, so every card in the row answers the same question — "what do I get
+            if I pick this?"
+          */}
+        {[{ value: NONE, code: clearedCode }, ...options].map((o) => (
+          <RadioCard.Item key={String(o.value)} value={String(o.value)} flex="0 0 auto">
+            <RadioCard.ItemHiddenInput />
+            <RadioCard.ItemControl px="1.5" py="1">
+              <HStack gap="1">
+                <Thumb code={o.code} />
+                <RadioCard.ItemText fontSize="xs">{o.value === NONE ? "—" : String(o.value)}</RadioCard.ItemText>
+              </HStack>
+            </RadioCard.ItemControl>
+          </RadioCard.Item>
+        ))}
+      </HStack>
+    </RadioCard.Root>
+  );
+}
+
 // ── boolean field → CheckboxCard with the on-state preview ───────────────────
 function BoolCard({
   spec,
@@ -284,20 +349,35 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
   // rest goes behind one disclosure, the same move that calmed the row form.
   const inUse = fields.filter((f) => icon[f.field] !== undefined);
   const unset = fields.filter((f) => icon[f.field] === undefined);
-  const control = (f: FieldSpec) =>
-    f.control === "toggle" ? (
-      <BoolCard key={String(f.field)} spec={f} icon={icon} set={set} />
-    ) : (
+  const control = (f: FieldSpec) => {
+    if (f.control === "toggle") return <BoolCard key={String(f.field)} spec={f} icon={icon} set={set} />;
+    const opts = previewOptions(icon, f.field).map((o) => ({ value: o.value, code: o.code }));
+    // Two or three choices don't need a dropdown you have to open to read.
+    if (opts.length <= 3) {
+      return (
+        <EnumCards
+          key={String(f.field)}
+          label={f.label ?? String(f.field)}
+          value={icon[f.field] as string | number | undefined}
+          options={opts}
+          clearedCode={safeIconCode({ ...icon, [f.field]: undefined } as IconObject)}
+          disabled={f.disabledWhen?.(icon)}
+          onPick={(v) => set({ [f.field]: v } as Partial<IconObject>)}
+        />
+      );
+    }
+    return (
       <EnumSelect
         key={String(f.field)}
         label={f.label ?? String(f.field)}
         value={icon[f.field] as string | number | undefined}
         allowNone
         disabled={f.disabledWhen?.(icon)}
-        options={previewOptions(icon, f.field).map((o) => ({ value: o.value, code: o.code }))}
+        options={opts}
         onPick={(v) => set({ [f.field]: v } as Partial<IconObject>)}
       />
     );
+  };
   // Keep the current kind selectable even if it's not in the standard list (e.g.
   // an unmodelled `bridge`/`water` cell from JSON), so switching kinds isn't lossy.
   const kindOptions = KINDS.includes(icon.kind) ? KINDS : [...KINDS, icon.kind];

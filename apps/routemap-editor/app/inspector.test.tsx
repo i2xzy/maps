@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import type { RouteDiagram, Selection } from "@repo/routemap";
 import { Inspector } from "./inspector";
 import { renderWithChakra } from "./test-utils";
@@ -226,6 +226,39 @@ describe("Inspector: cell selection", () => {
     fireEvent.click(screen.getByRole("button", { name: /Overlay/ }));
     const base = (model().rows![0] as { cells: unknown[][] }).cells[0]![0];
     expect(base).toEqual({ code: "hKRZW", title: "bridge over water" });
+  });
+
+  it("offers a 2–3 option enum as radio cards, including a card back to unset", () => {
+    // A dropdown you must open to read two choices is two clicks for no information, so
+    // fields with 2–3 options render as cards. Each card previews the icon you'd get,
+    // because the option names (`l`, `1`, `over`) mean nothing without the picture.
+    //
+    // Structure only. Under jsdom the group still carries Ark's `data-ssr` when the
+    // assertions run and no click — on the input, the label or the control — reaches a
+    // handler, so an interaction assertion here would pass or fail for reasons unrelated
+    // to this code. Picking and clearing ARE verified in a real browser (STR → STRo →
+    // STR → STRu). What's locked in here is the part that regresses silently: that the
+    // control is a labelled radio group carrying the right options and previews.
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ cells: [{ kind: "track", level: "over" }] }] }}
+        select={{ kind: "cell", row: 0, col: 0 }}
+      />,
+    );
+    const level = screen.getByRole("radiogroup", { name: /level/i });
+    const card = (name: RegExp | string) => within(level).getByRole("radio", { name }).closest("label")!;
+    const preview = (name: RegExp | string) => card(name).querySelector("img")!.getAttribute("src");
+
+    // Every option, plus the explicit way back to unset — needed because Ark fires no
+    // change event when you click the already-selected item, so re-click can't clear.
+    expect(within(level).getAllByRole("radio").map((r) => (r as HTMLInputElement).value)).toEqual([
+      "__none__",
+      "over",
+      "under",
+    ]);
+    expect(preview("—")).toContain("BSicon_STR.svg"); // the icon with `level` cleared
+    expect(preview(/over/i)).toContain("BSicon_STRo.svg");
+    expect(preview(/under/i)).toContain("BSicon_STRu.svg");
   });
 
   it("edits an empty column as the spacer it already is", () => {
