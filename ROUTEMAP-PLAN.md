@@ -16,7 +16,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 
 | | |
 |---|---|
-| rows surviving wikitext → model → wikitext unchanged in meaning | **93.7%** |
+| rows surviving wikitext → model → wikitext unchanged in meaning | **94.3%** |
 | …unchanged byte-for-byte | 79.6% |
 | …exported unchanged **in practice**, via per-row provenance | **99.6%** |
 | `{{Routemap}}` wrappers rebuilt byte-for-byte | **100%** (17/17) |
@@ -236,17 +236,35 @@ selection. None of it is testable under jsdom, so it needs browser-driven tests.
 in real diagrams. If it's ~1%, (a) is the right answer forever; if it's 15%, skip (b) and go
 straight to (c).
 
-### Row properties and other unmodelled constructs
-**What:** Not in the model, so a GUI edit to the row would drop them: icon links
-(`!@Superhub`), row properties (`bg=#7af`, row styles), `-colspan-2-style=`,
-`-colspan-end`, collapsible rows, text cells inside icon rows (`*text` with width
-prefixes), and `map2`/`map3` (carried verbatim as a wrapper param, but their rows aren't
-parsed).
-**Why:** Provenance protects rows nobody touched. It does **not** protect a row the user
-edits — and these are all in real diagrams.
-**How:** Work the remaining 58 round-trip differences; each one names a construct. Raise
-the test floor as they close.
+### Text cells in the icon strip — 51 of the 52 remaining round-trip failures
+**What:** A cell in the icon strip can hold TEXT rather than an icon, marked `*`, with a
+width prefix and cell properties around it:
+`w\c\\STRc2 maroon\KINTACC3 maroon\bs*{{rws|Cheshunt}} {{rint|gb|rail}}!_align=bl`
+**Why:** This is now essentially the *whole* remaining gap. 52 of 917 rows fail the
+round-trip and **51 of them are this one feature**; the 52nd is a single `bg=#003399` row
+property. Closing it would take semantic fidelity from 94.3% to ~99.9%.
+
+It also matters more than the ratio suggests: provenance protects rows nobody touches, so
+these survive today — but the moment a user makes one GUI edit to such a row, the text cell
+is dropped. That's the failure mode this whole item exists to prevent.
+**How:** unknown yet — the next step is to diff one and see exactly what's lost, then decide
+between modelling it (`{ text, width, align }`) and carrying the cell verbatim. Verbatim is
+probably enough: the GUI can't edit it either way, and preserving it is the actual
+requirement.
 **Depends on:** Nothing.
+
+### The fidelity measurement was unsound, and is now slot-aware
+**What:** `norm` in `from-wikitext.test.ts` trimmed each field and dropped trailing empties.
+On the LEFT that's wrong — fields read backwards from `! !`, so a trailing field is the low
+slot and dropping an empty one shifts everything: `A~~B! !STR` (dist=B, main=A) and
+`A~~B~~! !STR` (main=B, remark=A) squashed to the same string.
+**Outcome:** replaced with a slot-assignment canonicaliser transcribed from the module's
+rules, independent of our parser. Measured both ways: the string version **overstated
+nothing** — so the floor was never lying in the dangerous direction — and understated 6 rows.
+93.7% -> 94.3%, floor raised 93% -> 94%.
+**Trap worth keeping:** the first version of the new instrument dropped fields past the 4th
+slot and reported a flat **100%**. Anything past slot 4 is a row property and has to be
+carried. A measurement that agrees with itself isn't a measurement.
 
 ### Mobile layout
 **What:** The editor is a three-pane splitter at `100dvh`. Unusable on a phone.

@@ -5,23 +5,54 @@ import { fromRoutemap, fromWikitext, mapParam, parseLabelText, toRoutemap } from
 import { toWikitext } from "./serialize";
 
 /**
- * `Module:Routemap` trims every `~~`/`! !` field, so whitespace padding changes no
- * rendered output. Normalising the same way separates "we lost something" from "we
- * wrote the same row differently" — only the first is a defect.
+ * A row reduced to explicit SLOT ASSIGNMENTS — what the row MEANS, not how it's spelled.
+ *
+ * This replaced a string normaliser that trimmed each field and dropped trailing empties,
+ * which was unsound on the left. Left fields are read BACKWARDS from `! !`, so a trailing
+ * field is the LOW slot (`dist`) and dropping an empty one shifts every slot by one:
+ * `A~~B! !STR` (dist=B, main=A) and `A~~B~~! !STR` (main=B, remark=A) squashed to the same
+ * string while meaning different things. It also called 58 rows failures that differ only in
+ * spelling — `X~~ ~~Label` and `X~~Label` both put Label in `main`, by the lone-field rule.
+ *
+ * Measured both ways over the corpus: the string version overstated nothing (so the floor
+ * was never lying in the dangerous direction) and understated 6 rows.
+ *
+ * Transcribed from `Module:Routemap`'s rules and deliberately NOT built on our own parser —
+ * an instrument that shares the implementation it measures can only agree with it.
+ *
+ *   left:  fields read BACKWARDS from `! !`   -> dist, main, remark, outer
+ *   right: fields read FORWARDS from the icons -> dist, main, remark, outer
+ *   a LONE field on either side is `main`, never `dist`
+ *   anything past the 4th slot is a row property and must be carried, not dropped —
+ *   dropping it made an earlier version of this agree with itself and report a flat 100%
  */
-const norm = (line: string) => {
-  const parts = line.split("! !");
-  // A leading `! !` with nothing before it declares no left fields, same as omitting it.
-  if (parts.length > 1 && parts[0]!.trim() === "") parts.shift();
-  return parts
-    .map((part) => {
-      const f = part.split("~~").map((x) => x.trim());
-      // Trailing empty fields are absent fields.
-      while (f.length > 1 && f[f.length - 1] === "") f.pop();
-      return f.join("~~");
-    })
-    .join("! !")
-    .trim();
+const SLOTS = ["dist", "main", "remark", "outer"] as const;
+
+const assignSlots = (fields: string[], backwards: boolean): Record<string, unknown> => {
+  const f = fields.map((x) => x.trim());
+  while (f.length && f[f.length - 1] === "") f.pop(); // absent trailing fields
+  if (f.length === 0) return {};
+  const ordered = backwards ? [...f].reverse() : f;
+  if (ordered.length === 1) return ordered[0] ? { main: ordered[0]! } : {};
+  const out: Record<string, unknown> = {};
+  const extra = ordered.slice(SLOTS.length).filter(Boolean);
+  if (extra.length) out.extra = extra;
+  ordered.slice(0, SLOTS.length).forEach((v, i) => {
+    if (v) out[SLOTS[i]!] = v;
+  });
+  return out;
+};
+
+const norm = (line: string): string => {
+  const at = line.indexOf("! !");
+  const rhs = at >= 0 ? line.slice(at + 3) : line;
+  const rf = rhs.split("~~");
+  const icons = (rf.shift() ?? "").trim();
+  return JSON.stringify({
+    left: assignSlots((at >= 0 ? line.slice(0, at) : "").split("~~"), true),
+    icons,
+    right: assignSlots(rf, false),
+  });
 };
 
 const rows = Object.entries(corpus as Record<string, string>).flatMap(([title, body]) =>
@@ -48,16 +79,20 @@ describe("fromWikitext round-trip", () => {
    * A ratchet, not a target. 21 real diagrams, 917 rows. Raise the floor as the remaining
    * classes are closed; never lower it to make a change pass.
    *
+   * Now 865/917 = 94.3%, and the 52 that fail are ONE feature plus one straggler: 51 are a
+   * text cell (`*text`) inside the icon strip, 1 is a row property (`bg=#003399`).
+   *
    * Lowered ONCE, from 94%, and only because the CORPUS was wrong: the extractor ran to
    * the end of the page rather than the end of the `{{Routemap}}` call, so 119 lines of
    * `|map2 =`, `}}<noinclude>` and `{{documentation}}` were being counted as diagram rows.
    * They round-tripped trivially, so removing them took 119 off both the numerator and the
-   * denominator — 978/1036 became 859/917. Nothing about the parser changed; the ratio just
-   * stopped being flattered by junk.
+   * denominator. Nothing about the parser changed; the ratio just stopped being flattered
+   * by junk. Raised to 94% when `norm` became slot-aware — see above; that was the
+   * instrument getting more honest, not the parser improving.
    */
-  it("preserves at least 93% of real rows, semantically", () => {
+  it("preserves at least 94% of real rows, semantically", () => {
     const kept = rows.filter(({ line }) => norm(roundTrip(line)) === norm(line));
-    expect(kept.length / rows.length).toBeGreaterThan(0.93);
+    expect(kept.length / rows.length).toBeGreaterThan(0.94);
   });
 
   it("never throws on a real row", () => {
