@@ -115,17 +115,6 @@ templatestyles. It was in the whitelist on the strength of its name until each e
 actually checked. Names are not evidence — hence the guard that rejects any expansion
 containing markup.
 
-### `collectRwsArgs` and `collectRintCodes` miss everything outside the `main` slot
-**What:** Both call `normalizeSide`, which takes a `SideLabel` — so a slots-based side
-(`{ dist, main, remark, outer }`) returns null and only `main` is ever scanned.
-**Why:** A `{{rint}}` logo or `{{rws}}` station link in a `remark` or `dist` slot is never
-fetched, so it renders as nothing at all. Silent.
-**How:** `rawRunsIn` in `rint.ts` already walks sides correctly (all four slots, and into
-`{{BSsplit}}` lines); the two older collectors should share it. Held back from the
-station-link change because it alters what those two fetch and deserves its own fixture
-case proving a remark-slot logo resolves.
-**Depends on:** Nothing.
-
 ### Deploy
 **What:** Vercel, on the free Hobby tier (explicitly non-commercial, which matches).
 **Why:** Item 3 of MVP. The static export already builds.

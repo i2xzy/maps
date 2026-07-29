@@ -11,8 +11,8 @@
  * Note: these are trademarked transit logos (and some are non-free), unlike the
  * PD-shape BSicons — a licensing decision for any non-Wikipedia use.
  */
-import type { LabelIcon, RouteDiagram } from "./types";
-import { labelRuns, normalizeSide, SLOT_NAMES } from "./normalize";
+import type { LabelIcon, RouteDiagram, TextRun } from "./types";
+import { SLOT_NAMES } from "./normalize";
 import { parseRintExpansion, type RintEntry } from "./rint-expansion";
 
 const DEFAULT_API = "https://en.wikipedia.org/w/api.php";
@@ -181,46 +181,75 @@ export function createRwsResolver(
   return (args) => rws[args];
 }
 
+/** A run that carries fields — the walker skips bare strings, so `in` is always valid. */
+type ObjectRun = Exclude<TextRun, string>;
+
+/**
+ * Every run in a side, whatever shape the side takes.
+ *
+ * The three collectors below all need this and all used to get it slightly wrong.
+ * `normalizeSide` accepts a `SideLabel`, so a SLOTS-based side (`{ dist, main, remark,
+ * outer }`) came back null and only `main` was ever scanned — a {{rint}} logo or {{rws}}
+ * station link in a `remark` or `dist` slot was never fetched, so it rendered as nothing
+ * at all. Silently. `labelRuns` additionally drops `{ raw }` runs on purpose, which the
+ * station-link collector needs.
+ *
+ * Descends into `{{BSsplit}}` lines, because a logo or link nested in one still has to
+ * resolve, and keeps `normalizeSide`'s rule that a whole-label `rws` with no text is sugar
+ * for a single station run.
+ */
+function eachRun(side: unknown, visit: (run: ObjectRun) => void): void {
+  if (side == null || typeof side !== "object") return;
+  const walk = (runs: unknown): void => {
+    if (!Array.isArray(runs)) return;
+    for (const run of runs) {
+      if (run == null || typeof run !== "object") continue;
+      visit(run as ObjectRun);
+      if ("split" in run && Array.isArray(run.split)) for (const line of run.split) walk(line);
+    }
+  };
+  if (Array.isArray(side)) return walk(side);
+  const obj = side as Record<string, unknown>;
+  if (SLOT_NAMES.some((name) => name in obj)) {
+    for (const name of SLOT_NAMES) eachRun(obj[name], visit);
+    return;
+  }
+  const text = obj.text;
+  const empty = text == null || text === "" || (Array.isArray(text) && text.length === 0);
+  if (empty && typeof obj.rws === "string") return visit({ rws: obj.rws } as ObjectRun);
+  walk(text);
+}
+
+/** Run `visit` over every run in every label of a diagram. */
+function eachLabelRun(diagram: RouteDiagram, visit: (run: ObjectRun) => void): void {
+  for (const row of diagram.rows) {
+    if ("cells" in row) {
+      eachRun(row.left, visit);
+      eachRun(row.right, visit);
+    } else {
+      eachRun({ text: row.text, rws: row.rws }, visit);
+    }
+  }
+}
+
 /** Every distinct {{rws}} args string used by a diagram's labels (for expandRws). */
 export function collectRwsArgs(diagram: RouteDiagram): string[] {
   const seen = new Set<string>();
-  const scan = (side: unknown) => {
-    const norm = normalizeSide(side as never);
-    for (const run of labelRuns(norm?.text)) if ("rws" in run && run.rws) seen.add(run.rws);
-  };
-  for (const row of diagram.rows) {
-    if ("cells" in row) {
-      scan(row.left);
-      scan(row.right);
-    } else {
-      scan({ text: row.text, rws: row.rws });
-    }
-  }
+  eachLabelRun(diagram, (run) => {
+    if ("rws" in run && run.rws) seen.add(run.rws);
+  });
   return [...seen];
 }
 
 /** Every distinct rint code used by a diagram's labels (for expandRint). */
 export function collectRintCodes(diagram: RouteDiagram): string[] {
   const seen = new Set<string>();
-  const add = (icons: LabelIcon[] | undefined) => {
-    for (const ic of icons ?? []) {
-      const code = rintCode(ic);
+  eachLabelRun(diagram, (run) => {
+    if ("icon" in run) {
+      const code = rintCode(run.icon);
       if (code) seen.add(code);
     }
-  };
-  const scan = (side: unknown) => {
-    const norm = normalizeSide(side as never);
-    // Every `{ icon }` run, splits included — a logo nested in one still has to resolve.
-    for (const run of labelRuns(norm?.text)) if ("icon" in run) add([run.icon]);
-  };
-  for (const row of diagram.rows) {
-    if ("cells" in row) {
-      scan(row.left);
-      scan(row.right);
-    } else {
-      scan({ text: row.text }); // a colspan row's logos are runs in its text
-    }
-  }
+  });
   return [...seen];
 }
 
@@ -340,52 +369,14 @@ export function createTextResolver(
   return (call) => texts[call];
 }
 
-/**
- * Every `{ raw }` run in a label, splits and all four slots included.
- *
- * Can't use `labelRuns`: it drops `raw` runs on purpose, since its callers want content.
- * Can't use `normalizeSide` alone either — it takes a `SideLabel`, so a slots-based side
- * (`{ dist, main, remark, outer }`) comes back null and everything but `main` is missed.
- * That gap is why `collectRwsArgs` and `collectRintCodes` don't see a logo in a remark
- * slot; recorded in ROUTEMAP-PLAN.md rather than changed here, because fixing them alters
- * what those two fetch and deserves its own fixture case.
- */
-function rawRunsIn(side: unknown, out: string[]): void {
-  if (side == null || typeof side !== "object") return;
-  const walk = (runs: unknown): void => {
-    if (!Array.isArray(runs)) return;
-    for (const run of runs) {
-      if (run == null || typeof run !== "object") continue;
-      if ("raw" in run && typeof run.raw === "string") out.push(run.raw);
-      // A station link can sit inside a {{BSsplit}} line.
-      else if ("split" in run && Array.isArray(run.split)) for (const line of run.split) walk(line);
-    }
-  };
-  const asRuns = (text: unknown) => (typeof text === "string" ? [] : text);
-  if (Array.isArray(side)) return walk(side);
-  const obj = side as Record<string, unknown>;
-  if (SLOT_NAMES.some((name) => name in obj)) {
-    for (const name of SLOT_NAMES) rawRunsIn(obj[name], out);
-    return;
-  }
-  walk(asRuns(obj.text));
-}
-
 /** Every distinct expandable template call in a diagram's labels. */
 export function collectTextTemplates(diagram: RouteDiagram): string[] {
-  const raws: string[] = [];
-  for (const row of diagram.rows) {
-    if ("cells" in row) {
-      rawRunsIn(row.left, raws);
-      rawRunsIn(row.right, raws);
-    } else {
-      rawRunsIn({ text: row.text }, raws);
-    }
-  }
   const seen = new Set<string>();
-  for (const raw of raws) {
-    const call = textTemplateCall(raw);
-    if (call) seen.add(call);
-  }
+  eachLabelRun(diagram, (run) => {
+    if ("raw" in run && run.raw) {
+      const call = textTemplateCall(run.raw);
+      if (call) seen.add(call);
+    }
+  });
   return [...seen];
 }

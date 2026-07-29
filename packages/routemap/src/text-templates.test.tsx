@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { RouteMap } from "./render";
-import { collectTextTemplates, createTextResolver, TEXT_TEMPLATES, textTemplateCall } from "./rint";
+import {
+  collectRintCodes,
+  collectRwsArgs,
+  collectTextTemplates,
+  createTextResolver,
+  TEXT_TEMPLATES,
+  textTemplateCall,
+} from "./rint";
 import { fromWikitext } from "./from-wikitext";
 import diagrams from "./__fixtures__/real-diagrams.json";
 
@@ -103,5 +110,44 @@ describe("guarding against a misclassified template", () => {
       TEXT_TEMPLATES.delete("madeup");
       globalThis.fetch = original;
     }
+  });
+});
+
+describe("collectors see every slot, not just main", () => {
+  // All three collectors used `normalizeSide`, which only understands a plain SideLabel —
+  // so a slots-based side returned null and a logo or station link in `remark`/`dist`/
+  // `outer` was never fetched, and rendered as nothing at all.
+  const slotted = {
+    rows: [
+      {
+        left: {
+          outer: [{ icon: "london|underground" }],
+          remark: [{ rws: "Liverpool|Lime Street" }],
+          dist: [{ raw: "{{stnlnk|Shepley}}" }],
+          main: ["plain"],
+        },
+        cells: ["STR"],
+      },
+    ],
+  } as unknown as Parameters<typeof collectRwsArgs>[0];
+
+  it("finds a {{rws}} link in a remark slot", () => {
+    expect(collectRwsArgs(slotted)).toEqual(["Liverpool|Lime Street"]);
+  });
+
+  it("finds a {{rint}} logo in an outer slot", () => {
+    expect(collectRintCodes(slotted)).toEqual(["london|underground"]);
+  });
+
+  it("finds a station-link template in a dist slot", () => {
+    expect(collectTextTemplates(slotted)).toEqual(["stnlnk|Shepley"]);
+  });
+
+  it("still honours whole-label rws sugar on a colspan row", () => {
+    // `{ rws }` with no text is a single station run; the walker must not lose that.
+    const colspan = { rows: [{ type: "colspan", rws: "Edinburgh|Waverley" }] } as unknown as Parameters<
+      typeof collectRwsArgs
+    >[0];
+    expect(collectRwsArgs(colspan)).toEqual(["Edinburgh|Waverley"]);
   });
 });
