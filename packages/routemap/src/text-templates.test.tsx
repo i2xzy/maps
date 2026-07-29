@@ -210,3 +210,22 @@ describe("file-producing templates render as logos", () => {
     expect(collectTextTemplates(diagram).sort()).toEqual(["rmri|u", "tram|Derker"]);
   });
 });
+
+describe("{{enlarge}} is a file, not a text wrapper", () => {
+  it("renders the magnifier glyph its argument names", () => {
+    // Reads like `{{small|x}}` and behaves like `{{rint}}`: the argument is a LINK TARGET
+    // and the expansion is a File. Grouped by what it expands to, not what it looks like.
+    expect(iconTemplateCall("{{enlarge|Manchester Metrolink}}")).toBe("enlarge|Manchester Metrolink");
+    const diagram = fromWikitext("A! !STR~~{{enlarge|Foo}}");
+    const html = renderToStaticMarkup(
+      <RouteMap
+        diagram={diagram}
+        resolveText={createTextResolver({
+          "enlarge|Foo": "[[File:Gnome-searchtool.svg|10px|link=Template:Foo|enlarge…]]",
+        })}
+      />,
+    );
+    expect(html).toContain("Gnome-searchtool.svg");
+    expect(html).not.toContain("{{enlarge|Foo}}");
+  });
+});

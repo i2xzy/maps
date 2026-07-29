@@ -289,11 +289,15 @@ export const TEXT_TEMPLATES = new Set(["tram", "stl", "stnlnk", "stn"]);
  * the same shape `{{rint}}` produces, so `parseRintExpansion` already reads them and they
  * render through the existing logo path. 26 of the fixture's placeholders, 10%.
  *
+ * `{{enlarge}}` (12) is here for the opposite reason to {{BSsrws}}: it reads like a text
+ * wrapper — `{{enlarge|Foo}}` — and is actually the magnifier glyph,
+ * `[[File:Gnome-searchtool.svg|10px|link=…]]`, with its argument as the link target.
+ *
  * `{{rcb}}` (13) belongs to neither family despite sitting alongside these in real
  * diagrams: it expands to a `<span>` carrying inline styles, not a file. Checked by
  * expanding it, which is the only way to know — see the {{BSsrws}} note above.
  */
-export const ICON_TEMPLATES = new Set(["rmri", "ric"]);
+export const ICON_TEMPLATES = new Set(["rmri", "ric", "enlarge"]);
 
 /**
  * The expandable call inside a `{ raw }` run, or null if it isn't one.
