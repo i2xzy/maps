@@ -10,7 +10,10 @@ and the command that produces each is given so they can be re-checked rather tha
 
 ## Where it stands
 
-Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)** and
+Measured against TWO committed fixtures: **21 diagrams (917 rows)** from one region, and
+**68 diagrams (1,725 rows)** sampled evenly across all 28,012 pages that transclude
+`{{Routemap}}`. The narrow one is the regression guard; the wide one exists to disagree with it.
+Also
 **17 whole `{{Routemap}}` calls**, not hand-written examples
 (`packages/routemap/src/__fixtures__/`).
 
@@ -23,7 +26,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 761 package + 121 editor |
+| tests | 764 package + 121 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -613,6 +616,36 @@ failures** — a vanishing row leaves `""` on both sides, so text comparison can
 also asserts the row survives, and with that, the same mutation produces 48 failures. A sweep
 reporting 0 is exactly the result to distrust; this one was verified by breaking the code on
 purpose.
+
+### ~~Widen the corpus~~ — done, and it disagreed
+**What:** every number this package reports was measured against 21 diagrams. **28,012 pages
+transclude `{{Routemap}}`**, so that was 0.075% of it, and heavily one region's conventions —
+"100% round-trip, zero placeholders" was true of those diagrams and said nothing about Wikipedia.
+`scripts/build-diagram-corpus.mjs` samples EVENLY across the transclusion list (the first N
+alphabetically are one network sharing one set of habits) with brace-matched extraction, because
+the original extractor ran to end-of-page and counted 119 lines of `|map2 =` and
+`{{documentation}}` as rows.
+
+**What it said**, on 68 diagrams / 1,725 rows:
+
+| | narrow (21) | wide (68) |
+|---|---|---|
+| rows round-tripping | 100% | **99.6%** |
+| templates resolved | 100% | 59% -> **79%** |
+| rows showing a placeholder | 0% | 10.4% -> **5.3%** |
+| cell codes modellable | 71% | 72% |
+
+The parser generalised far better than expected — 7 genuine failures in 1,725 rows. **Template
+coverage did not**, and that's the real finding: the narrow corpus simply didn't contain five
+station-link families (`njts`, `lrts`, `bmts`, `mrts`, `sta`) or `{{BSflag}}`. Each verified by
+expanding it, then added: 59% -> 79%.
+
+**Still unresolved, 100 across 20 constructs:** `{{uk road}}` 35 (a styled road shield, badge
+family), `{{jctrdt}}` 12, `{{routebox}}` 9, then a tail of four-or-fewer.
+
+**A measurement artefact worth knowing:** 17 of the 20 apparent round-trip failures were
+`{{Rint}}` -> `{{rint}}`. A template name's first letter is case-insensitive to MediaWiki, so
+that's a normalisation and not a loss — comparing verbatim understated fidelity by 1%.
 
 ## Traps worth not rediscovering
 

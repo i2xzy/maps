@@ -301,7 +301,20 @@ export function collectRintCodes(diagram: RouteDiagram): string[] {
  *
  * Adding a name is a one-line change, but check which family it's in first.
  */
-export const TEXT_TEMPLATES = new Set(["tram", "stl", "stnlnk", "stn"]);
+export const TEXT_TEMPLATES = new Set([
+  "tram",
+  "stl",
+  "stnlnk",
+  "stn",
+  // Found by widening the corpus from 21 diagrams to 68 sampled across all 28,012 pages that
+  // transclude {{Routemap}}. Each verified by expanding it: they all produce a bare wikilink,
+  // the same shape as `stnlnk`. Together they were 75 of the 195 unresolved placeholders.
+  "njts", // [[Newark station|Newark]]
+  "lrts", // [[Ampang LRT station|Ampang]]
+  "bmts", // [[Sirsi Circle BTS station|Sirsi Circle]]
+  "mrts", // [[Woodlands MRT station|Woodlands]]
+  "sta", // [[Shinjuku railway station|Shinjuku]]
+]);
 
 /**
  * Templates that expand to a FILE link rather than label text.
@@ -319,7 +332,14 @@ export const TEXT_TEMPLATES = new Set(["tram", "stl", "stnlnk", "stn"]);
  * diagrams: it expands to a `<span>` carrying inline styles, not a file. Checked by
  * expanding it, which is the only way to know — see the {{BSsrws}} note above.
  */
-export const ICON_TEMPLATES = new Set(["rmri", "ric", "enlarge"]);
+export const ICON_TEMPLATES = new Set([
+  "rmri",
+  "ric",
+  "enlarge",
+  // `{{BSflag|GBR}}` -> `[[File:GBR flag waving.svg|10px|link=request stop]]`. Verified, like the
+  // rest: a flag is a file, whatever its name suggests.
+  "bsflag",
+]);
 
 /**
  * Templates that expand to a coloured route BADGE — a pill wrapping a link.
