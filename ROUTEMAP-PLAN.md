@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 760 package + 118 editor |
+| tests | 760 package + 121 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -603,6 +603,11 @@ Recorded so they aren't relitigated. Each has a reason, and several were mistake
   last cell — serialized to an empty LINE, and the module ignores those, so the row disappeared
   the moment the wikitext was re-read. It now writes `\`. A row with labels but no cells was
   already fine (`Depot! !` isn't blank) and must not gain a stray backslash.
+- **A row of blanks can't shrink to ONE blank.** Cell count is the number of `\` plus one, so a
+  single blank cell has no spelling at all — the line would be empty. Two blanks are `\`, the
+  minimum. Deleting past that looked like it worked and then came back on the next read, because
+  the serializer has to write something. The form refuses it up front with the reason in the
+  tooltip. Zero cells is allowed: that writes `\` and survives.
 
 - **A spacer as an overlay's base layer is load-bearing, not noise.** 106 of the 555 overlay
   stacks in the fixture (19%) start with one — `["c", "exSTR3+l"]`, `["c", "dSTRl+4h"]`. The

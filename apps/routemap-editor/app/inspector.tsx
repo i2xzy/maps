@@ -1387,6 +1387,21 @@ export function Inspector({
       setRows(next);
       onSelect({ kind: "cell", row: t, col: at });
     };
+    /*
+     * Whether this cell can go.
+     *
+     * A row's cell count is the number of `\\` plus one, so a row of nothing but ONE blank cell
+     * has no spelling: the line would be empty, and `Module:Routemap` ignores empty lines. Two
+     * blanks are `\\`, which is the minimum. Deleting past that used to look like it worked and
+     * then silently come back as `\\` on the next read, because the serializer has to write
+     * something. Refused up front instead, with the reason in the tooltip.
+     */
+    const remaining = removeAt(cells, j);
+    const blank = (c: Cell) => c == null || c === "" || safeIconCode(c as never) === "";
+    // Exactly ONE blank cell is the unrepresentable case. Zero cells is fine — the row writes
+    // `\\`, two blanks, and survives; two blanks is what `\\` already means.
+    const canDeleteCell = !(remaining.length === 1 && remaining.every(blank));
+
     body = (
       <Section
         title={`Cell ${j + 1} of ${cells.length}`}
@@ -1398,7 +1413,15 @@ export function Inspector({
             <MiniBtn title="Move to row below" disabled={!canMoveTo(1)} onClick={() => moveToRow(1)}><ArrowDownToLine size={ICON} /></MiniBtn>
             <MiniBtn title="Duplicate cell" onClick={() => { setCells(insertAt(cells, j + 1, structuredClone(cell ?? null))); onSelect({ ...selection, col: j + 1 }); }}><Copy size={ICON} /></MiniBtn>
             <MiniBtn title="Add cell" onClick={() => { setCells(insertAt(cells, j + 1, newCell())); onSelect({ ...selection, col: j + 1 }); }}><Plus size={ICON} /></MiniBtn>
-            <MiniBtn title="Delete cell" onClick={() => { const next = removeAt(cells, j); setCells(next); onSelect(next.length ? { ...selection, col: Math.min(j, next.length - 1) } : { kind: "row", row: i }); }}><Trash2 size={ICON} /></MiniBtn>
+            <MiniBtn
+              title={
+                canDeleteCell
+                  ? "Delete cell"
+                  : "A row of blanks needs two cells — one has no wikitext of its own"
+              }
+              disabled={!canDeleteCell}
+              onClick={() => { const next = removeAt(cells, j); setCells(next); onSelect(next.length ? { ...selection, col: Math.min(j, next.length - 1) } : { kind: "row", row: i }); }}
+            ><Trash2 size={ICON} /></MiniBtn>
           </HStack>
         }
       >

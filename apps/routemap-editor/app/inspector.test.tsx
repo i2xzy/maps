@@ -745,3 +745,34 @@ describe("Inspector: a spacer's blank icon", () => {
     expect(row.innerHTML).not.toContain("red");
   });
 });
+
+describe("Inspector: a row of blanks can't shrink to one", () => {
+  it("refuses the delete that the wikitext would undo", () => {
+    // Typing `\` gives two blank cells. Deleting one leaves a single blank, which has no
+    // spelling — the line would be empty and Module:Routemap ignores empty lines — so the
+    // serializer had to write `\` again and the delete silently came back.
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: [null, null] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    const del = screen.getByLabelText(/A row of blanks needs two cells/);
+    expect(del).toHaveProperty("disabled", true);
+  });
+
+  it("still allows deleting a blank next to a real icon", () => {
+    // One blank plus an icon is `\STR`, which is perfectly representable.
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: [null, "STR"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    fireEvent.click(screen.getByLabelText("Delete cell"));
+    expect((model().rows![0] as { cells: unknown[] }).cells).toEqual(["STR"]);
+  });
+
+  it("still allows emptying a row completely", () => {
+    // Zero cells is fine: the row writes `\` and survives as two blanks.
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: ["STR"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    fireEvent.click(screen.getByLabelText("Delete cell"));
+    expect((model().rows![0] as { cells: unknown[] }).cells).toEqual([]);
+  });
+});
