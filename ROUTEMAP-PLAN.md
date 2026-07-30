@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 756 package + 118 editor |
+| tests | 756 package + 123 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -503,6 +503,20 @@ rule that a value in use is always offered:
   and double. `defaultAfter` on the field spec names the value it follows rather than an index,
   so it stays right if the scale gains a step, and it's set only where the values form a scale —
   `state` and `formation` are unordered sets where an insertion point would be arbitrary.
+
+### Option lists: label column first, preview at true size
+**What:** The Width dropdown read as a staircase — previews led each row at their true width, so
+an eighth-width icon and an octuple one started their labels 126px apart.
+**First attempt was wrong:** fitting every preview into a fixed slot aligned the labels and
+destroyed the only thing the preview says. For Width the picture IS the information, and a
+spacer's fractions are otherwise indistinguishable.
+**Done:** the label goes in a fixed-width leading column and the preview follows at its true
+size. Labels line up, and every preview starts at the same x and extends right by its real width,
+so they're directly comparable — right-aligning them instead meant judging width by where each
+one began, which is the same puzzle as the staircase.
+**Honest limitation:** for a track the ink is a thin line centred in the canvas, so a wider icon
+shows as the line sitting further right rather than as a wider mark. That's what the files
+actually are; the label carries the rest.
 
 ### Mobile layout — deferred to the front-end rework
 **What:** The editor is a three-pane splitter at `100dvh`. Unusable on a phone, and Wikipedia

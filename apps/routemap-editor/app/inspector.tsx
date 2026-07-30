@@ -155,6 +155,9 @@ function Thumb({ code, size = 16 }: { code: string | null; size?: number }): Rea
   // boolean, so the state clears itself the moment the code changes.
   const [failed, setFailed] = useState<string | null>(null);
 
+  // A square for the states with no image of their own; there's no width to convey.
+  const slot = { boxSize: `${size}px`, flexShrink: "0" } as const;
+
   /*
    * Two different nothings, which used to look identical.
    *
@@ -164,25 +167,26 @@ function Thumb({ code, size = 16 }: { code: string | null; size?: number }): Rea
    * every fraction has a file and only "Full" cannot.
    */
   const missing = (
-    <Box
-      boxSize={`${size}px`}
-      borderWidth="1px"
-      borderStyle="dashed"
-      borderColor="border"
-      borderRadius="xs"
-      flexShrink="0"
-    />
+    <Box {...slot} borderWidth="1px" borderStyle="dashed" borderColor="border" borderRadius="xs" />
   );
   // Nothing drawn, because a full-width spacer draws nothing. It still occupies the thumbnail's
   // size so the labels beside it stay aligned with every other option's.
-  const empty = <Box boxSize={`${size}px`} flexShrink="0" />;
+  const empty = <Box {...slot} />;
   // null → no valid icon (red). "" → a valid full-width blank spacer (neutral,
   // dashed — there's no BSicon file for it). Otherwise the Commons thumbnail.
-  if (code == null) return <Box boxSize={`${size}px`} bg="red.subtle" borderRadius="xs" flexShrink="0" />;
+  if (code == null) return <Box {...slot} bg="red.subtle" borderRadius="xs" />;
   if (code === "") return empty;
   // A broken-image glyph in a form reads as "this control is broken"; the dashed
   // placeholder reads as "no picture for this one", which is what it means.
   if (failed === code) return missing;
+  /*
+   * At its TRUE width, not fitted into a slot.
+   *
+   * Fitting these into a fixed box aligned the labels and destroyed the only thing the preview
+   * says: an eighth-width spacer against an octuple one IS the width. Alignment is solved where
+   * it belongs — the option lists put the label in the leading column and the preview after it,
+   * so labels line up while the pictures stay comparable.
+   */
   return (
     <Image
       src={commonsUrl(code)}
@@ -222,16 +226,28 @@ function MiniBtn({
  *
  * Not always first: for an ordered scale its position is part of the meaning — "Full" sits
  * between three-quarter and double, and at the head of the list it read as another extreme.
- * `after` naming a value rather than an index keeps it right if the scale gains a step.
+ *
+ * Positioned against the FULL scale (`order`), not against the options actually shown. The
+ * existence filter removes values that have no icon: a track offers quarter, half, double, quad
+ * with `three-quarter` gone, so matching the anchor among the visible options found nothing and
+ * fell back to the head — which is exactly the bug this was meant to fix.
  */
-function withNoneOption<T extends { value: string | number }>(
+export function withNoneOption<T extends { value: string | number }>(
   options: T[],
   none: T | null,
   after?: string,
+  order: readonly (string | number)[] = [],
 ): T[] {
   if (!none) return options;
-  const at = after ? options.findIndex((o) => String(o.value) === after) : -1;
-  return at < 0 ? [none, ...options] : [...options.slice(0, at + 1), none, ...options.slice(at + 1)];
+  const rank = (v: string | number) => order.findIndex((o) => String(o) === String(v));
+  const anchor = after ? rank(after) : -1;
+  if (anchor < 0) return [none, ...options];
+  // After the last shown option that precedes the unset state on the scale.
+  const at = options.reduce((last, o, i) => {
+    const r = rank(o.value);
+    return r >= 0 && r <= anchor ? i : last;
+  }, -1);
+  return [...options.slice(0, at + 1), none, ...options.slice(at + 1)];
 }
 
 // ── enum field → Select with a preview per option ───────────────────────────
@@ -246,6 +262,7 @@ function EnumSelect({
   noneLabel,
   noneCode,
   noneAfter,
+  noneOrder,
   disabled,
 }: {
   label: string;
@@ -259,6 +276,8 @@ function EnumSelect({
   noneCode?: string | null;
   /** The value the unset option sits after, for an ordered scale. */
   noneAfter?: string;
+  /** The full scale, so the position survives options being filtered out. */
+  noneOrder?: readonly (string | number)[];
   disabled?: boolean;
 }): ReactNode {
   const items = useMemo(
@@ -274,8 +293,9 @@ function EnumSelect({
             }
           : null,
         noneAfter,
+        noneOrder,
       ),
-    [options, allowNone, noneLabel, noneCode, noneAfter],
+    [options, allowNone, noneLabel, noneCode, noneAfter, noneOrder],
   );
   const collection = useMemo(() => createListCollection({ items }), [items]);
   const cur = value == null ? NONE : String(value);
@@ -304,9 +324,20 @@ function EnumSelect({
           <Select.Content>
             {collection.items.map((item) => (
               <Select.Item item={item} key={item.value}>
-                <HStack gap="1">
+                {/* Label FIRST, preview after. The previews are true-width — that's the whole
+                    point of them for a field like Width — so leading with them started every
+                    label at a different x and the list read as a staircase. This way the labels
+                    line up in a column and the pictures stay side by side and comparable. */}
+                <HStack gap="2" flex="1" minW="0">
+                  {/* A label column wide enough for the common case, so every preview STARTS at
+                      the same x and extends right by its true width. Right-aligning them instead
+                      meant comparing widths by where each one began, which is the same puzzle
+                      the staircase was. A long label pushes its own preview over; that's rarer
+                      than wanting to compare sizes. */}
+                  <Box minW="7rem" flexShrink="0">
+                    <Select.ItemText>{item.label}</Select.ItemText>
+                  </Box>
                   <Thumb code={item.code} />
-                  <Select.ItemText>{item.label}</Select.ItemText>
                 </HStack>
                 <Select.ItemIndicator />
               </Select.Item>
@@ -334,6 +365,7 @@ function EnumCards({
   clearedCode,
   noneLabel,
   noneAfter,
+  noneOrder,
   onPick,
   disabled,
 }: {
@@ -346,6 +378,8 @@ function EnumCards({
   noneLabel?: string;
   /** The value the unset card sits after, for an ordered scale. */
   noneAfter?: string;
+  /** The full scale, so the position survives options being filtered out. */
+  noneOrder?: readonly (string | number)[];
   onPick: (raw: string | number | undefined) => void;
   disabled?: boolean;
 }): ReactNode {
@@ -372,7 +406,12 @@ function EnumCards({
           way back and a second entry for it would be a lie. It previews the icon with the
           field cleared, so every card answers the same question: what do I get if I pick this?
         */}
-        {withNoneOption(options, noneLabel ? { value: NONE, code: clearedCode } : null, noneAfter).map((o) => (
+        {withNoneOption(
+          options,
+          noneLabel ? { value: NONE, code: clearedCode } : null,
+          noneAfter,
+          noneOrder,
+        ).map((o) => (
           <RadioCard.Item key={String(o.value)} value={String(o.value)} flex="0 0 auto">
             <RadioCard.ItemHiddenInput />
             <RadioCard.ItemControl px="1.5" py="1">
@@ -558,6 +597,7 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
           clearedCode={safeIconCode({ ...icon, [f.field]: undefined } as IconObject)}
           noneLabel={noneLabel}
           noneAfter={f.defaultAfter}
+          noneOrder={f.values}
           disabled={f.disabledWhen?.(icon)}
           onPick={pick}
         />
@@ -571,6 +611,7 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
         allowNone={noneLabel != null}
         noneLabel={noneLabel}
         noneAfter={f.defaultAfter}
+        noneOrder={f.values}
         noneCode={safeIconCode({ ...icon, [f.field]: undefined } as IconObject)}
         disabled={f.disabledWhen?.(icon)}
         options={opts}
