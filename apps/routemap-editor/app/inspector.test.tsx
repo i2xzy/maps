@@ -697,3 +697,31 @@ describe("Inspector: field values read as words, not wire format", () => {
     expect(choices.filter((el) => (el.textContent ?? "").trim() === "—")).toEqual([]);
   });
 });
+
+describe("Inspector: sections only when they help", () => {
+  const sections = (): string[] =>
+    Array.from(document.querySelectorAll('[data-scope="accordion"][data-part="item-trigger"]')).map(
+      (el) => (el.textContent ?? "").trim(),
+    );
+
+  it("lists a spacer's single field flat, with no section to open", () => {
+    // A spacer offers exactly `width`. A header there is a click you must make to reveal one
+    // control — grouping charging for navigation it isn't providing.
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ cells: [{ kind: "spacer" }] }] }}
+        select={{ kind: "cell", row: 0, col: 0 }}
+      />,
+    );
+    expect(sections()).toEqual([]);
+    expect(screen.getByText("Width")).toBeTruthy(); // still there, just not behind a header
+  });
+
+  it("groups a track, which has enough fields for sections to be a map", () => {
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: ["STR"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    expect(sections().length).toBeGreaterThan(1);
+    expect(sections().join(" ")).toContain("Appearance");
+  });
+});

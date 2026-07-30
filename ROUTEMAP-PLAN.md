@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 754 package + 115 editor |
+| tests | 754 package + 117 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -455,6 +455,12 @@ I argued against grouping when the form had 23 fields, on the grounds that a men
 is no better than a flat list. Existence filtering took it to 14, which is few enough for
 sections to be a map rather than another maze — the earlier objection expired rather than
 being wrong.
+
+**Sections only when they help.** Below six controls the form lists them flat. A `spacer`
+offers exactly one field (`width`), so a header there is a click you must make to reveal a
+single control. Measured over the corpus's distinct icons: 53 offer five or fewer — including
+cases with THREE sections holding three fields — while the bulk sit at 10–11, where the headers
+are the point.
 
 **Design choices worth keeping:**
 - A field keeps its section whether or not it's set, so a control never moves under you. The

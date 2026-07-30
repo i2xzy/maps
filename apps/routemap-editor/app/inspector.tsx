@@ -82,6 +82,15 @@ const KINDS: IconKind[] = [
 ];
 const NONE = "__none__";
 
+/**
+ * Below this many controls, the form skips sections and lists the fields.
+ *
+ * Five, from the corpus: 53 of its distinct icons offer five or fewer fields — a `spacer` offers
+ * one — and grouping those costs a click per section without giving anything to navigate. Above
+ * it, the common case is 10–11 fields across three sections, where the headers are the point.
+ */
+const FLAT_FIELD_LIMIT = 5;
+
 /** Sentence-case a field caption for display (e.g. "kind" → "Kind"). */
 const capitalize = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
@@ -570,6 +579,19 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
         />
       )}
       {/*
+        Too few fields to bother grouping: show them flat.
+
+        A `spacer` offers exactly one control (`width`), so a section header there is a click you
+        have to make to reveal a single field. Measured over the corpus's distinct icons, 53 of
+        them offer five or fewer — including cases with THREE sections holding three fields — and
+        for those the headers cost navigation instead of providing it. The bulk sit at 10–11,
+        where sections earn their place.
+      */}
+      {fields.length <= FLAT_FIELD_LIMIT ? (
+        fields.map(control)
+      ) : (
+        <>
+      {/*
         Named sections, not one "n more fields" disclosure.
 
         The disclosure was honest but opaque: you couldn't tell whether the eleven things behind
@@ -610,7 +632,9 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
             </Accordion.Item>
           );
         })}
-      </Accordion.Root>
+          </Accordion.Root>
+        </>
+      )}
     </Stack>
   );
 }
