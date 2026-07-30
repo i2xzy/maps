@@ -495,8 +495,9 @@ rule that a value in use is always offered:
 - **"Blank" and "no image" looked identical.** Both rendered as a dashed box, so the one option
   that legitimately has no file read as an error. Visible in the Width dropdown for a spacer:
   every fraction has a file on Commons (`BSicon_c.svg`, `BSicon_d.svg`, … all checked) and only
-  "Full" cannot, because a full-width spacer IS the absence of an icon. A plain tint now means
-  "intentionally blank" and dashed means "we asked for a file and didn't get one".
+  "Full" cannot, because a full-width spacer IS the absence of an icon. So it now draws NOTHING —
+  blank space that still holds the thumbnail's size so the labels stay aligned — while dashed
+  keeps its old meaning: we asked for a file and didn't get one.
 - **"Full" sat at the head of the width list.** For an ordered scale the unset state has a
   position: the widths run eighth -> octuple and full is 1, so it belongs between three-quarter
   and double. `defaultAfter` on the field spec names the value it follows rather than an index,

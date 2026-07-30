@@ -158,10 +158,10 @@ function Thumb({ code, size = 16 }: { code: string | null; size?: number }): Rea
   /*
    * Two different nothings, which used to look identical.
    *
-   * `missing` is dashed: we asked for a file and didn't get one. `empty` is a plain tint: there
-   * is no file to ask for, because a full-width spacer IS the absence of an icon. Sharing the
-   * dashed style made the legitimate case read as an error — visible in the Width dropdown for a
-   * spacer, where every fraction has a file and only "Full" cannot.
+   * `missing` is dashed: we asked for a file and didn't get one. `empty` is blank space, because
+   * a full-width spacer draws nothing — there is no file to ask for. Sharing the dashed style
+   * made the legitimate case read as an error, visible in the Width dropdown for a spacer where
+   * every fraction has a file and only "Full" cannot.
    */
   const missing = (
     <Box
@@ -173,7 +173,9 @@ function Thumb({ code, size = 16 }: { code: string | null; size?: number }): Rea
       flexShrink="0"
     />
   );
-  const empty = <Box boxSize={`${size}px`} bg="bg.muted" borderRadius="xs" flexShrink="0" />;
+  // Nothing drawn, because a full-width spacer draws nothing. It still occupies the thumbnail's
+  // size so the labels beside it stay aligned with every other option's.
+  const empty = <Box boxSize={`${size}px`} flexShrink="0" />;
   // null → no valid icon (red). "" → a valid full-width blank spacer (neutral,
   // dashed — there's no BSicon file for it). Otherwise the Commons thumbnail.
   if (code == null) return <Box boxSize={`${size}px`} bg="red.subtle" borderRadius="xs" flexShrink="0" />;
