@@ -804,17 +804,88 @@ function asLine(value: SideLabel | undefined): TextRun[] {
   });
 }
 
-function ColspanBody({ row, onChange }: { row: ColspanRow; onChange: (r: DiagramRow) => void }): ReactNode {
-  const isRich = row.text != null && typeof row.text !== "string";
-  const [text, setText] = useTextBuffer(typeof row.text === "string" ? row.text : "", (v) => onChange({ ...row, text: v }));
-  if (isRich) {
+/**
+ * A colspan row's text.
+ *
+ * Rich text here IS a label — `string | TextRun[]`, the same shape a side label carries — so
+ * it goes through the same editor. It used to say "(Rich colspan — edit in JSON)", which was
+ * the other half of the dead end the side labels had: with no JSON pane in production it named
+ * a place the user can't go. Only 1 of the 2 colspan rows in the fixture is rich, but a dead
+ * end is a dead end.
+ */
+function ColspanBody({
+  row,
+  onChange,
+  resolveRws,
+  resolveLogo,
+}: {
+  row: ColspanRow;
+  onChange: (r: DiagramRow) => void;
+  resolveRws?: RwsResolver;
+  resolveLogo?: LogoResolver;
+}): ReactNode {
+  const text = row.text;
+  const [plain, setPlain] = useTextBuffer(typeof text === "string" ? text : "", (v) =>
+    onChange({ ...row, text: v }),
+  );
+  const splitLines = splitLinesOf(text as SideLabel | undefined);
+  const setText = (next: SideLabel | undefined) => onChange({ ...row, text: next as ColspanRow["text"] });
+
+  // Same branch order as a side label: a whole-label split first, or making splits
+  // RTE-editable would leave the per-line editor unreachable.
+  if (splitLines) {
     return (
-      <Text fontSize="xs" color="fg.muted">
-        (Rich colspan — edit in JSON)
-      </Text>
+      <SplitLines
+        lines={splitLines}
+        label="Colspan text"
+        onChange={(next) =>
+          setText(next == null ? undefined : next.length > 1 ? [{ split: next }] : next[0])
+        }
+        resolveRws={resolveRws}
+        resolveLogo={resolveLogo}
+      />
     );
   }
-  return <Input size="xs" value={text} placeholder="Colspan text" onChange={(e) => setText(e.target.value)} autoFocus />;
+  if (text != null && typeof text !== "string") {
+    if (!labelIsRteEditable(text as SideLabel)) {
+      return (
+        <Text fontSize="xs" color="fg.muted">
+          Contains wikitext this form can’t model — edit it in the wikitext panel.
+        </Text>
+      );
+    }
+    return (
+      <Stack gap="1">
+        <LabelRichEditor
+          value={text as SideLabel}
+          onChange={setText}
+          ariaLabel="Colspan text"
+          resolveRws={resolveRws}
+          resolveLogo={resolveLogo}
+        />
+        {splitsIn(text as SideLabel).map((sp, n) => (
+          <SplitLines
+            key={n}
+            lines={sp.lines}
+            label={`Colspan text${n > 0 ? ` split ${n + 1}` : ""}`}
+            onChange={(next) => setText(sp.replace(next))}
+            resolveRws={resolveRws}
+            resolveLogo={resolveLogo}
+          />
+        ))}
+      </Stack>
+    );
+  }
+  return (
+    <Input
+      size="xs"
+      value={plain}
+      placeholder="Colspan text"
+      aria-label="Colspan text"
+      onChange={(e) => setPlain(e.target.value)}
+      autoFocus
+    />
+  );
 }
 
 // ── panel section header ─────────────────────────────────────────────────────
@@ -1027,7 +1098,7 @@ export function Inspector({
   if (selection.kind === "row" && isColspanRow(row)) {
     body = (
       <Section title="Text">
-        <ColspanBody row={row} onChange={setRow} />
+        <ColspanBody row={row} onChange={setRow} resolveRws={resolveRws} resolveLogo={resolveLogo} />
       </Section>
     );
   } else if (selection.kind === "row") {
@@ -1061,7 +1132,7 @@ export function Inspector({
     // JSON edit) — there are no cells to edit; fall back to the text.
     body = (
       <Section title="Text">
-        <ColspanBody row={row} onChange={setRow} />
+        <ColspanBody row={row} onChange={setRow} resolveRws={resolveRws} resolveLogo={resolveLogo} />
       </Section>
     );
   } else {

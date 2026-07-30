@@ -600,3 +600,41 @@ describe("Inspector: row actions", () => {
     expect(screen.queryByRole("button", { name: "Row below" })).toBeNull();
   });
 });
+
+describe("Inspector: colspan rows", () => {
+  it("edits rich colspan text in the RTE, not a dead end", () => {
+    // The other half of the dead end the side labels had: "(Rich colspan — edit in JSON)"
+    // named a pane that isn't in the production build.
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ type: "colspan", text: ["a ", { text: "b", italic: true }] } as never] }}
+        select={{ kind: "row", row: 0 }}
+      />,
+    );
+    expect(screen.queryByText(/edit in JSON/)).toBeNull();
+    fireEvent.change(screen.getByLabelText("Colspan text"), { target: { value: "changed" } });
+    expect((model().rows![0] as { text: unknown }).text).toBe("changed");
+  });
+
+  it("edits a whole-label split in a colspan row line by line", () => {
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ type: "colspan", text: [{ split: [["a"], ["b"]] }] } as never] }}
+        select={{ kind: "row", row: 0 }}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Colspan text line 2"), { target: { value: "B" } });
+    expect((model().rows![0] as { text: unknown }).text).toEqual([{ split: [["a"], ["B"]] }]);
+  });
+
+  it("still edits plain colspan text as a plain field", () => {
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ type: "colspan", text: "all stations" } as never] }}
+        select={{ kind: "row", row: 0 }}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Colspan text"), { target: { value: "some stations" } });
+    expect((model().rows![0] as { text: unknown }).text).toBe("some stations");
+  });
+});

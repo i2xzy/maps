@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 747 package + 108 editor |
+| tests | 747 package + 111 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -414,9 +414,16 @@ against the previous rules.
 splits the whole label, which would move the words either side of it onto separate lines — the
 one distinction the document genuinely can't hold.
 
-### Mobile layout
-**What:** The editor is a three-pane splitter at `100dvh`. Unusable on a phone.
-**Why:** Wikipedia editing happens on phones. Not MVP, but it caps the audience.
+### Mobile layout — deferred to the front-end rework
+**What:** The editor is a three-pane splitter at `100dvh`. Unusable on a phone, and Wikipedia
+editing happens on phones.
+**Decision (2026-07-30):** not worth doing against the current layout. The JSON pane is being
+removed, which changes the pane structure this problem is a property of — so the layout gets
+solved as part of that rework rather than twice.
+**Implication already acted on:** anything that told the user to "edit in JSON" was naming a
+place that won't exist. Both instances are gone — the side-label fallback and the colspan one —
+and a colspan row's rich text now goes through the same editor a side label does, since it's
+the same `string | TextRun[]` shape.
 
 ---
 
