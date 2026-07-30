@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 722 package + 88 editor |
+| tests | 733 package + 98 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -91,8 +91,8 @@ text should be.
 
 | | before | after |
 |---|---|---|
-| placeholders in the fixture | 260 | **67** (74% resolved) |
-| rows showing one | 205/915 (22%) | **58/915 (6%)** |
+| placeholders in the fixture | 260 | **32** (88% resolved) |
+| rows showing one | 205/915 (22%) | **30/915 (3%)** |
 | API requests for a whole diagram | would be 129 | **3** |
 
 **How:** two families expand to something we can already render, and they share one batched
@@ -125,21 +125,30 @@ positional arg is a link target applied to both lines**, not a third line, and *
 `it=none` expand identically** — so `it=` is ignored rather than guessed at. Line 1's 105% is
 not modelled; the 90% split styling is.
 
-**What remains, 67 placeholders across 58 rows (6%):**
+**Layout wrappers are done too,** and they split into two groups that had to be told apart:
 
-| count | template | expands to | verdict |
-|---|---|---|---|
-| 14 + 4 | `{{left}}`, `{{right}}` | `<div style="float:…">X</div>` | wrapper; content is the label |
-| 13 | `{{rcb}}` | `<span>` with inline colours | needs a styled-badge component |
-| 9 | `{{BSsrws}}` | `<table>` + templatestyles | layout, keep the placeholder |
-| 8 | bare wikitext | mixed | inspect individually |
-| 6 | `{{float}}` | float span | wrapper |
-| 6 | `{{0}}` | hidden-zero digit-width spacer | render a space |
-| 6 | '''stl-call''' | a station link inside bold marks | the call isn't bare, so it stays raw |
+- **Content wrappers** — `{{left}}` 14, `{{right}}` 4, `{{float}}` 6, `{{small}}` 2. Their
+  content IS the label, taken from the LAST positional arg (right for both shapes seen:
+  `{{left|X}}` has one, and `{{float}}`'s named args come first). The positioning is dropped,
+  as `{{small}}`'s 85% and `{{BSto}}`'s 105% are.
+- **Spacers** — `{{0}}` 6, `{{pad}}` 3. Their argument is a MEASUREMENT, not content;
+  treating `{{pad|1em}}` as a wrapper printed "1em" into the label. `{{0}}` hides a zero to
+  reserve a digit's width, so U+2007 FIGURE SPACE is literally what it means.
 
-The cheapest next one is a marked call like '''`{{stl|…}}`''' (6): the template is already
-expandable, it just isn't a BARE call, so `textTemplateCall` rejects it. Unwrapping the marks
-and re-applying them to the expansion would do it.
+**And the escaped pipe.** `{{float{{!}}15'}}` is `{{float|15'}}` — authors must escape the
+separator because a real pipe would end the enclosing `{{Routemap|map=…}}` parameter, and the
+call was unparseable as a result. Unescaped only when the parsed NAME still contains `{{!}}`,
+because the other use of `{{!}}` is a VISIBLE pipe between two station links, and unescaping
+`{{left|A {{!}} B}}` unconditionally would split it and silently drop "A".
+
+**What remains, 32 placeholders across 30 rows (3%):**
+
+| count | template | verdict |
+|---|---|---|
+| 13 | `{{rcb}}` | a `<span>` with inline colours — needs a styled-badge component |
+| 9 | `{{BSsrws}}` | a `<table>` + templatestyles — genuine layout, keep the placeholder |
+| 8 | bare wikitext | mixed; inspect individually |
+| 2 | `{{center}}`, `{{BS1/2}}` | one each |
 
 **Trap, twice over:** `{{BSsrws}}` reads exactly like a station link and expands to a `<table>` with
 templatestyles. It was in the whitelist on the strength of its name until each expansion was

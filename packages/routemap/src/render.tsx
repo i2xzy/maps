@@ -483,6 +483,18 @@ function renderFragment(
  * Unresolved (not fetched yet, or the request failed) leaves the run exactly as it was, so
  * this can only ever improve on the placeholder.
  */
+/**
+ * Layout wrappers: the label is their content, and the layout is what we drop.
+ *
+ * Grouped by what each one EXPANDS to, checked one at a time — the same discipline that
+ * caught `{{BSsrws}}` (looks like a station link, is a table), `{{rcb}}` (looks like a route
+ * icon, is a styled span) and `{{enlarge}}` (looks like a text wrapper, is a file).
+ */
+const WRAPPER_TEMPLATES = new Set(["left", "right", "small", "float"]);
+
+/** Templates that render as whitespace. Their argument is a length, never content. */
+const SPACER_TEMPLATES = new Set(["0", "pad"]);
+
 function expandRawRuns(
   text: string | TextRun[],
   resolveText?: TextResolver,
@@ -520,9 +532,47 @@ function expandRawRuns(
     // THIRD positional arg is a link target applied to BOTH lines, not a third line, and
     // `it=all` and `it=none` produce identical output — so `it=` is ignored here rather than
     // guessed at. Line 2 is italic; line 1's 105% is not modelled.
-    const bsto = /^\{\{\s*bsto\s*\|/i.test(run.raw.trim()) ? template(run.raw.trim()) : null;
-    if (bsto) {
-      const positional = bsto.args.filter((a) => !/^\s*[a-z][\w-]*\s*=/i.test(a));
+    /*
+     * `{{!}}` is the escaped pipe authors MUST use for a template's argument separator
+     * inside a diagram, because a real pipe would end the enclosing `{{Routemap|map=…}}`
+     * parameter. So `{{float{{!}}15'}}` is `{{float|15'}}`.
+     *
+     * Unescaped only when the NAME came back containing it — which means the call couldn't be
+     * parsed at all. Doing it unconditionally would break the other use of `{{!}}`, as a
+     * VISIBLE pipe between two station links: `{{left|A {{!}} B}}` would split into two args
+     * and quietly lose "A".
+     */
+    const rawText = run.raw.trim();
+    const firstTry = template(rawText);
+    const tpl = firstTry?.name.includes("{{!}}")
+      ? template(rawText.replace(/\{\{!\}\}/g, "|"))
+      : firstTry;
+    const name = tpl?.name.trim().toLowerCase();
+    // Positional args only. Several of these take named ones (`it=all`, `top=-8px`) that
+    // must not be mistaken for content.
+    const positional = (tpl?.args ?? []).filter((a) => !/^\s*[a-z][\w-]*\s*=/i.test(a));
+
+    /*
+     * Templates whose whole job is layout and whose CONTENT is the label. `{{left|X}}` is
+     * `<div style="float:left">X</div>`; `{{float|top=-8px|X}}` positions X absolutely. We
+     * can't reproduce the positioning, but showing the words beats showing the source —
+     * `{{small}}`'s 85% is lost the same way `{{BSto}}`'s 105% is.
+     *
+     * Content is the LAST positional arg, correct for both shapes seen: `{{left|X}}` has
+     * exactly one, and `{{float}}`'s named args come before it.
+     */
+    if (name && WRAPPER_TEMPLATES.has(name) && positional.length) {
+      return parseLabelText((positional[positional.length - 1] ?? "").trim());
+    }
+
+    /*
+     * Templates that ARE a space. Their argument is a measurement, not content — rendering
+     * `{{pad|1em}}` as a wrapper would print "1em" into the label. `{{0}}` hides a zero to
+     * reserve a digit's width, so U+2007 FIGURE SPACE is what it actually means.
+     */
+    if (name && SPACER_TEMPLATES.has(name)) return [name === "0" ? " " : " "];
+
+    if (name === "bsto") {
       const [first = "", second = "", link] = positional;
       const line = (body: string, italic: boolean): TextRun[] => {
         const runs = parseLabelText(body.trim());

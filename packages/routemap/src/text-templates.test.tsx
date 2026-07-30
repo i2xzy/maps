@@ -294,3 +294,76 @@ describe("{{BSto}} becomes the split it expands to", () => {
     expect(toWikitext({ ...d, rows: d.rows.map((r) => ({ ...r, src: undefined })) })).toBe(line);
   });
 });
+
+describe("layout wrappers render their content", () => {
+  const html = (line: string) =>
+    renderToStaticMarkup(<RouteMap diagram={fromWikitext(line)} resolveHref={(r) => `/${r}`} />);
+
+  it("unwraps {{left}} and {{right}} to the label inside", () => {
+    expect(html("A! !STR~~{{left|Longsight}}")).toContain("Longsight");
+    expect(html("A! !STR~~{{left|Longsight}}")).not.toContain("{{left");
+    expect(html("A! !STR~~{{right|Withington}}")).toContain("Withington");
+  });
+
+  it("takes {{float}}'s content from after its named args", () => {
+    // `{{float|left=0|top=-8px|X}}` — reading the FIRST positional arg would be fine here,
+    // but reading arg 1 blindly would print "left=0".
+    const out = html("A! !STR~~{{float|left=0|top=-8px|Sofia University}}");
+    expect(out).toContain("Sofia University");
+    expect(out).not.toContain("top=-8px");
+    expect(out).not.toContain("left=0");
+  });
+
+  it("parses the content, so a wikilink inside still links", () => {
+    const out = html("A! !STR~~{{left|[[Longsight railway station|Longsight]]}}");
+    expect(out).toContain('href="/Longsight railway station"');
+    expect(out).toContain(">Longsight<");
+  });
+
+  it("renders {{pad}} as space, never as its measurement", () => {
+    // Its argument is a length. Treating it as a content wrapper printed "1em" in the label.
+    const out = html("A! !STR~~{{pad|1em}}");
+    expect(out).not.toContain("1em");
+    expect(out).not.toContain("{{pad");
+  });
+
+  it("renders {{0}} as a digit-width space", () => {
+    // It hides a zero purely to reserve a digit's width, which is what U+2007 means.
+    const out = html("A! !STR~~{{0}}");
+    expect(out).toContain(" ");
+    expect(out).not.toContain("{{0}}");
+  });
+
+  it("leaves a wrapper with no content alone", () => {
+    // `{{left}}` with nothing in it has nothing to unwrap to; dropping it would silently
+    // delete the run rather than show it.
+    expect(html("A! !STR~~{{left}}")).toContain("{{left}}");
+  });
+});
+
+describe("the escaped pipe inside a template call", () => {
+  const html = (line: string) =>
+    renderToStaticMarkup(<RouteMap diagram={fromWikitext(line)} resolveHref={(r) => `/${r}`} />);
+
+  it("reads {{float{{!}}X}} as {{float|X}}", () => {
+    // Authors must escape the pipe here: a real one would end the enclosing
+    // {{Routemap|map=…}} parameter. Unparsed, the name came back as `float{{!}}15'`.
+    const out = html("A! !STR~~{{float{{!}}15'}}");
+    expect(out).toContain("15");
+    expect(out).not.toContain("{{float");
+  });
+
+  it("handles named args written the same way", () => {
+    const out = html("A! !STR~~{{float{{!}}left=0{{!}}top=-8px{{!}}Sofia}}");
+    expect(out).toContain("Sofia");
+    expect(out).not.toContain("top=-8px");
+  });
+
+  it("leaves a VISIBLE {{!}} separator alone", () => {
+    // The other use of {{!}}: a literal pipe between two station links. Unescaping here would
+    // split the wrapper's content in two and silently drop the first half.
+    const out = html("A! !STR~~{{left|Alpha {{!}} Beta}}");
+    expect(out).toContain("Alpha");
+    expect(out).toContain("Beta");
+  });
+});
