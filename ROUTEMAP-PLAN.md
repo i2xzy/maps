@@ -595,6 +595,15 @@ Recorded so they aren't relitigated. Each has a reason, and several were mistake
 
 ## Traps worth not rediscovering
 
+- **A spacer as an overlay's base layer is load-bearing, not noise.** 106 of the 555 overlay
+  stacks in the fixture (19%) start with one — `["c", "exSTR3+l"]`, `["c", "dSTRl+4h"]`. The
+  renderer's rule is that the FIRST icon sits in flow and sets the cell width while the rest are
+  absolutely positioned over it, so a spacer base is how an author controls cell width
+  independently of the icons being drawn. It looks like overlaying onto nothing, which invites
+  removing the affordance from the form for spacers; that would make a fifth of all real overlays
+  unauthorable while they kept arriving from pasted wikitext.
+
+
 Each of these cost real time.
 
 - **`~~~~` is a MediaWiki signature.** An empty label slot must be a space, never nothing.
