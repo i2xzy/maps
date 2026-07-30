@@ -433,8 +433,9 @@ the same `string | TextRun[]` shape.
   diagrams written against the pre-`{ icon }` label shape. Nothing was ever released with
   that shape, so its only remaining job is old files and clipboards — and carrying it
   indefinitely reads as though the format is still in flux.
-- **Publish `@repo/routemap` to npm.** Only worth it if the HS2 site or a third party wants
-  it. Currently `private: true` with no `main`/`types`/`files`, so it needs a build first.
+- **Publish `@repo/routemap` to npm.** NOT needed for the HS2 app, which is in this monorepo
+  and can consume the source export directly. Only worth it for a third party outside the repo,
+  and then it needs `main`/`types`/`files` and a build.
 - **Attribution beyond a link.** `logoCredits()` returns author, licence and a link to each
   Commons file page. CC 4.0 accepts a link to a resource carrying the required information,
   so this is sufficient; a fuller inline credit line would be belt-and-braces.
@@ -445,6 +446,24 @@ the same `string | TextRun[]` shape.
 
 Recorded so they aren't relitigated. Each has a reason, and several were mistakes first.
 
+- **JSON is the programmatic input, not an editing surface** (decided 2026-07-30). Two
+  audiences, two formats. A Wikipedia editor works in the GUI and falls back to the **wikitext
+  panel**; nothing user-facing mentions JSON any more. JSON is how another app — the HS2 app
+  first — hands the package a diagram built from its own data.
+
+  What follows from it: the model is a **public API**, so its shape and stability matter more
+  than how pleasant it is to hand-edit, and `migrate.ts` becomes more load-bearing rather than
+  less. `canonicalizeDiagram` ("Format") is a canonical form for that API, not a readability
+  aid. And the wikitext panel has to stay: it's the fallback for anything the form can't model,
+  and while nothing in the 21-diagram corpus still needs it, that is a statement about the
+  corpus and not about Wikipedia.
+
+  **Already consumable in-repo, verified:** `apps/hs2` needs only a `workspace:*` dep — the
+  package exports `./src/index.ts` directly and the consuming app compiles it, so no build step.
+  Nothing heavy is statically reachable from the barrel (16 modules, no data file): the 363 KB
+  rint catalog is opt-in via the `./rint-catalog` entry, and the 268 KB BSicon filter is
+  dynamically imported. A data-driven consumer pays for neither. `private: true` blocks npm
+  publishing only, which nothing needs yet.
 - **The catalog is trusted over the live wiki.** Logos resolve from the generated snapshot;
   only `{{rws}}` station lookups hit the API, because station names can't be pre-baked.
   Asking the wiki as well meant an API call per logo per visitor against servers that
