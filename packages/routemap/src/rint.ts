@@ -151,27 +151,49 @@ export interface RwsEntry {
   display: string;
 }
 
-const rwsCache = new Map<string, Promise<RwsEntry | null>>();
+/**
+ * args -> entry, kept so a repeat lookup hands back the SAME object.
+ *
+ * Referential stability is load-bearing: the editor's `useExpanded` diffs the resolved map by
+ * identity to decide whether to re-render, so minting a fresh entry each call would report a
+ * change on every pass. The promise cache this replaced gave that for free.
+ */
+const rwsEntries = new Map<string, RwsEntry>();
 
 /**
- * Resolve {{rws|args}} station links via the API. rws builds both the article
- * name (parentheses, disambiguators) and the display text non-trivially, so we
- * expand it and parse the resulting `[[target|display]]`. Returns args -> entry.
+ * Resolve {{rws|args}} station links. rws builds both the article name (parentheses,
+ * disambiguators) and the display text non-trivially, so we expand it and parse the resulting
+ * `[[target|display]]`. Returns args -> entry.
  *
- * Unlike rint logos these can't be pre-baked: the args name any station on any
- * network, so there is no finite set to generate a catalog from.
+ * Unlike rint logos these can't be pre-baked: the args name any station on any network, so
+ * there is no finite set to generate a catalog from.
+ *
+ * BATCHED, sharing the request the station-link templates already use. It was one request per
+ * station: 309 across the 21-diagram corpus and **66 for a single diagram**, which is worse
+ * than the 10-to-2 saving the {{rint}} catalog exists to provide. That diagram now costs 2.
  */
 export async function expandRws(
   argsList: string[],
   opts: { apiBase?: string } = {},
 ): Promise<Record<string, RwsEntry>> {
-  const api = opts.apiBase ?? DEFAULT_API;
-  return expandCached(argsList, rwsCache, async (args) => {
-    const text = await expandTemplate(api, `{{rws|${args}}}`);
-    const m = text.match(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/); // [[target|display]]
-    const target = m?.[1]?.trim();
-    return target ? { target, display: (m?.[2] ?? target).trim() } : null;
-  });
+  const wanted = [...new Set(argsList)];
+  const texts = await expandTextTemplates(
+    wanted.filter((a) => !rwsEntries.has(a)).map((a) => `rws|${a}`),
+    opts,
+  );
+  const out: Record<string, RwsEntry> = {};
+  for (const args of wanted) {
+    let entry = rwsEntries.get(args);
+    if (!entry) {
+      const m = texts[`rws|${args}`]?.match(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/); // [[target|display]]
+      const target = m?.[1]?.trim();
+      if (!target) continue; // unresolved is simply absent, and stays retryable
+      entry = { target, display: (m?.[2] ?? target).trim() };
+      rwsEntries.set(args, entry);
+    }
+    out[args] = entry;
+  }
+  return out;
 }
 
 /** Build a `resolveRws(args)` for RouteMap from an expandRws result map. */

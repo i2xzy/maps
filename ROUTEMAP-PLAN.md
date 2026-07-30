@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 733 package + 98 editor |
+| tests | 734 package + 98 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -105,9 +105,15 @@ and splits then work through the existing path with no second rendering branch. 
 (not fetched, or the request failed) leaves the placeholder, so it can only improve on it.
 
 Batched: many calls share ONE `expandtemplates` request, joined by a separator that passes
-through untouched, and the split is only trusted when the arity matches. That's the
-difference between 113 requests and 3 — `{{rws}}` still does one per instance and could
-adopt the same trick.
+through untouched, and the split is only trusted when the arity matches. That's the difference
+between 113 requests and 3.
+
+`{{rws}}` now shares that request too. It was one per station — **309 across the corpus and 66
+for a single diagram**, worse than the 10-to-2 saving the `{{rint}}` catalog exists to provide.
+That diagram costs 2. Verified against the live API: 8 stations, 1 request, correct article
+targets. Entries are memoised by args so a repeat hands back the SAME object — the editor
+diffs the resolved map by identity to decide whether to re-render, which the promise cache
+this replaced gave for free.
 
 *File links* (`{{rmri}}`, `{{ric}}`, 26) expand to the same `[[File:…|Npx]]` shape as
 `{{rint}}`, so `parseRintExpansion` reads them and they render through the existing logo

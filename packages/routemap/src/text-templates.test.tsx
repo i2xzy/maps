@@ -367,3 +367,41 @@ describe("the escaped pipe inside a template call", () => {
     expect(out).toContain("Beta");
   });
 });
+
+describe("{{rws}} shares the batch", () => {
+  it("resolves many stations in ONE request", async () => {
+    // It was one request per station: 309 across the corpus and 66 for a single diagram —
+    // worse than the 10-to-2 saving the {{rint}} catalog exists to provide.
+    const { expandRws } = await import("./rint");
+    const urls: string[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (url: string) => {
+      urls.push(String(url));
+      const text = decodeURIComponent(new URL(String(url)).searchParams.get("text") ?? "");
+      // Echo one wikilink per call, in order, joined by the separator the batcher uses.
+      const wikitext = text
+        .split("@ROUTEMAP-SPLIT@")
+        .map((call) => {
+          const station = call.replace(/^\{\{rws\|/, "").replace(/\}\}$/, "");
+          return `[[${station} station|${station}]]`;
+        })
+        .join("@ROUTEMAP-SPLIT@");
+      return new Response(JSON.stringify({ expandtemplates: { wikitext } }));
+    }) as typeof fetch;
+    try {
+      const stations = Array.from({ length: 12 }, (_, i) => `Batched${i}`);
+      const out = await expandRws(stations);
+      expect(urls).toHaveLength(1);
+      expect(Object.keys(out)).toHaveLength(12);
+      expect(out.Batched0).toEqual({ target: "Batched0 station", display: "Batched0" });
+
+      // A repeat asks for nothing and hands back the SAME object — the editor diffs the
+      // resolved map by identity to decide whether to re-render.
+      const again = await expandRws(stations);
+      expect(urls).toHaveLength(1);
+      expect(again.Batched0).toBe(out.Batched0);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+});
