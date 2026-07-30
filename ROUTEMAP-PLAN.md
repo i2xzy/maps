@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 737 package + 98 editor |
+| tests | 739 package + 98 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -147,13 +147,23 @@ call was unparseable as a result. Unescaped only when the parsed NAME still cont
 because the other use of `{{!}}` is a VISIBLE pipe between two station links, and unescaping
 `{{left|A {{!}} B}}` unconditionally would split it and silently drop "A".
 
-**Route badges too.** `{{rcb|Sofia Metro|M2|croute}}` expands to a coloured pill wrapping a
-link. Two named fields are extracted from a shape checked against the live template — the link
-target and the label — and rendered bold-and-linked. **The pill colour is dropped**: a run has
-no background colour to carry, and adding one for 13 placeholders isn't worth a new run type
-plus a serializer guard. For a route badge the colour carries real information, so this is an
-acknowledged loss rather than a complete job. Nothing is substituted unless BOTH fields parse,
-so an unexpected shape keeps the placeholder rather than emitting half a badge.
+**Route badges, in colour.** `{{rcb|Sofia Metro|M2|croute}}` expands to a coloured pill
+wrapping a link, and four fields are extracted from a shape checked against the live template:
+link target, label, fill colour and text colour. Rendered as the pill itself.
+
+The colour lives on a **render-local** run type (`BadgeRun`), not in the model. The model keeps
+`{ raw }` and the wikitext is what round-trips, so a badge run cannot be spelled in a document
+and cannot reach the serializer. Nothing is substituted unless the target, label AND fill all
+parse — an unexpected shape falls back to a bold link, and failing that to the placeholder.
+
+Two colour bugs, both found by looking at rendered output rather than at tests:
+- **`\bcolor:` also matches inside `background-color:`** — the `-` is a word boundary — so the
+  text colour came out equal to the fill and the label was invisible. The pattern now requires
+  a `;` or `"` immediately before `color:`.
+- **`.rm-link` sets `color: revert`** to restore the user agent's link blue, which beat the
+  colour inherited from the pill: a blue route badge rendered blue-on-blue. The badge's text
+  colour has to sit INLINE on the anchor. Both are asserted as properties now (fill ≠ text),
+  not as fixed values.
 
 This is also the ONE family allowed to return markup. The guard that rejects `<`/`>` is what
 makes a misfiled name fail closed — it's what keeps `{{BSsrws}}` out — so the exception is by

@@ -259,7 +259,26 @@ interface Fragment {
   title?: string;
   bold?: boolean;
   italic?: boolean;
+  /** A `{{rcb}}` route badge's colours. Render-only — see `BadgeRun`. */
+  badge?: Badge;
 }
+
+/** The two colours a `{{rcb}}` pill needs: its fill, and the text on top of it. */
+interface Badge {
+  bg: string;
+  fg?: string;
+}
+
+/**
+ * A run that exists only between `expandRawRuns` and `buildLines`.
+ *
+ * `{{rcb}}` renders as a coloured pill, and no run in the MODEL carries a background colour —
+ * nor should one, since the model keeps `{ raw }` for these and the wikitext is what round
+ * trips. So the badge is a render-local run type rather than a new public field: it cannot
+ * reach the serializer because it cannot be spelled in a document.
+ */
+type BadgeRun = { text: string; link?: string; badge: Badge };
+type RenderRun = TextRun | BadgeRun;
 
 /** Wikitext we can't render, shown compactly rather than dumped in full. */
 interface RawPiece {
@@ -301,11 +320,11 @@ const splitLines = (s: string): string[] =>
  * point: whatever sits beside it stays beside it instead of being pushed onto line one.
  */
 function buildLines(
-  text: string | TextRun[],
+  text: string | RenderRun[],
   labelLink?: string | true,
   labelTitle?: string,
 ): Piece[][] {
-  const runs: TextRun[] = typeof text === "string" ? [text] : text;
+  const runs: RenderRun[] = typeof text === "string" ? [text] : text;
   const lines: Piece[][] = [[]];
   for (const run of runs) {
     if (typeof run === "object" && "raw" in run) {
@@ -327,16 +346,18 @@ function buildLines(
       continue;
     }
     const r = typeof run === "string" ? { text: run } : run;
+    const badge = "badge" in r ? r.badge : undefined;
     const pieces = splitLines(r.text ?? "");
     pieces.forEach((piece, i) => {
       if (i > 0) lines.push([]);
       (lines[lines.length - 1] as Piece[]).push({
         text: piece,
         link: r.link ?? labelLink,
-        rws: r.rws,
-        title: r.title ?? labelTitle,
-        bold: r.bold,
-        italic: r.italic,
+        rws: "rws" in r ? r.rws : undefined,
+        title: ("title" in r ? r.title : undefined) ?? labelTitle,
+        bold: "bold" in r ? r.bold : undefined,
+        italic: "italic" in r ? r.italic : undefined,
+        badge,
       });
     });
   }
@@ -447,12 +468,18 @@ function renderFragment(
     const href = resolveHref(ref);
     // Hover shows the link target (the article name), like a wiki [[link]].
     const title = f.title ?? ref;
+    // A badge's text colour has to sit INLINE on the anchor. `.rm-link` sets `color: revert`
+    // to restore the user agent's link blue, which beat the colour inherited from the pill —
+    // so a blue route badge rendered blue-on-blue and its label was unreadable.
+    const style = f.badge?.fg ? { color: f.badge.fg } : undefined;
     node = href ? (
-      <a href={href} title={title} className={LINK_CLASS}>
+      <a href={href} title={title} className={LINK_CLASS} style={style}>
         {f.text}
       </a>
     ) : (
-      <span title={title}>{f.text}</span>
+      <span title={title} style={style}>
+        {f.text}
+      </span>
     );
   } else if (f.text && f.title) {
     node = <span title={f.title}>{f.text}</span>;
@@ -460,6 +487,26 @@ function renderFragment(
   if (f.bold || f.italic) {
     node = (
       <span style={{ fontWeight: f.bold ? "bold" : undefined, fontStyle: f.italic ? "italic" : undefined }}>
+        {node}
+      </span>
+    );
+  }
+  if (f.badge) {
+    // A `{{rcb}}` route pill, matching what the template emits: a rounded box filled with
+    // the route's colour, its text in the contrasting colour rcb chose. Wraps the link rather
+    // than sitting inside it, which is the nesting the template uses.
+    node = (
+      <span
+        style={{
+          backgroundColor: f.badge.bg,
+          border: `.075em solid ${f.badge.bg}`,
+          borderRadius: ".5em",
+          padding: "0 .3em",
+          color: f.badge.fg,
+          fontWeight: "bold",
+          whiteSpace: "nowrap",
+        }}
+      >
         {node}
       </span>
     );
@@ -499,11 +546,11 @@ const SPACER_TEMPLATES = new Set(["0", "pad"]);
 function expandRawRuns(
   text: string | TextRun[],
   resolveText?: TextResolver,
-): string | TextRun[] {
+): string | RenderRun[] {
   // No early return on a missing resolver: a File link written directly in the label needs
   // no resolution at all, and skipping the whole pass would keep showing its source.
   if (typeof text === "string") return text;
-  return text.flatMap((run): TextRun[] => {
+  return text.flatMap((run): RenderRun[] => {
     if (run == null || typeof run !== "object") return [run];
     if ("split" in run) {
       return [
@@ -592,6 +639,18 @@ function expandRawRuns(
       const expanded = resolveText!(badgeCall);
       const m = expanded?.match(/\[\[([^\]|]+)\|.*?>([^<]+)</);
       const [, target, label] = m ?? [];
+      // The pill's own colours, read from the expansion. `background-color` is the route
+      // colour; the INNER span's `color` is the text on top of it — matching the first
+      // `color:` would pick up rcb's `color:inherit` on the outer span instead.
+      const bg = expanded?.match(/background-color:\s*([^;"]+)/)?.[1]?.trim();
+      // `[;"]` before `color:` is load-bearing: `\bcolor:` also matches inside
+      // `background-color:` (the `-` is a word boundary), so the text colour came out equal
+      // to the fill and the label rendered invisible.
+      const fg = expanded?.match(/[;"]color:\s*(?!inherit)([^;"]+)/)?.[1]?.trim();
+      if (target && label && bg) {
+        return [{ text: label.trim(), link: target.trim(), badge: { bg, fg } }];
+      }
+      // No colour means the shape wasn't the one we checked. A bold link still beats source.
       if (target && label) return [{ text: label.trim(), link: target.trim(), bold: true }];
       return [run];
     }

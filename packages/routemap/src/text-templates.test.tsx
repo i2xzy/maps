@@ -427,9 +427,34 @@ describe("{{rcb}} route badges", () => {
     expect(out).toContain('href="/Sofia Metro#M2 line"');
     expect(out).toContain(">2<");
     expect(out).not.toContain("{{rcb");
-    // The markup itself is never emitted — only two extracted fields.
-    expect(out).not.toContain("background-color");
-    expect(out).not.toContain("border-radius");
+    // The pill is drawn with the route's own colour, read from the expansion. `#1C75BB` is
+    // the fill and `white` the text on top — NOT the outer span's `color:inherit`, which a
+    // first-match regex would have picked up.
+    expect(out).toContain("#1C75BB");
+    expect(out).toContain("color:white");
+    expect(out).not.toContain("inherit");
+    // rcb's own markup is never emitted, only fields extracted from it.
+    expect(out).not.toContain("<span style=\"color:inherit");
+  });
+
+  it("puts the badge's text colour INLINE on the link", () => {
+    // `.rm-link` sets `color: revert` to restore the user agent's link blue, which beat the
+    // colour inherited from the pill — so a blue route badge rendered blue-on-blue and its
+    // label was unreadable. Only an inline style on the anchor wins.
+    const out = html({ "rcb|Sofia Metro|M2|croute": EXPANSION });
+    expect(out).toMatch(/<a[^>]*class="rm-link"[^>]*style="color:white"/);
+  });
+
+  it("never paints the label in the fill colour", () => {
+    // The first bug here: `\bcolor:` also matches inside `background-color:` (the `-` is a
+    // word boundary), so the text colour came out equal to the fill and the label was
+    // invisible. Asserted as a property rather than a fixed value.
+    const out = html({ "rcb|Sofia Metro|M2|croute": EXPANSION });
+    const bg = /background-color:([^;"]+)/.exec(out)?.[1];
+    const fg = /<a[^>]*style="color:([^;"]+)"/.exec(out)?.[1];
+    expect(bg).toBeTruthy();
+    expect(fg).toBeTruthy();
+    expect(fg).not.toBe(bg);
   });
 
   it("keeps the placeholder when the shape isn't the one we checked", () => {
