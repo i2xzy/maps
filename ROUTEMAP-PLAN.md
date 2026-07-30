@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 756 package + 123 editor |
+| tests | 760 package + 118 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -594,6 +594,15 @@ Recorded so they aren't relitigated. Each has a reason, and several were mistake
 ---
 
 ## Traps worth not rediscovering
+
+- **A blank line adds no row, and that's correct.** Verified against the live template: a blank
+  line and a space-only line each add nothing, while `\` adds a row and so does a width prefix
+  like `d`. Our parser matches on all four. So the way to author an empty row is `\` — two empty
+  cells, the least Routemap can express, since a one-cell empty row has no spelling at all.
+- **An empty row used to vanish.** `cells: []` — which the form makes when you delete a row's
+  last cell — serialized to an empty LINE, and the module ignores those, so the row disappeared
+  the moment the wikitext was re-read. It now writes `\`. A row with labels but no cells was
+  already fine (`Depot! !` isn't blank) and must not gain a stray backslash.
 
 - **A spacer as an overlay's base layer is load-bearing, not noise.** 106 of the 555 overlay
   stacks in the fixture (19%) start with one — `["c", "exSTR3+l"]`, `["c", "dSTRl+4h"]`. The

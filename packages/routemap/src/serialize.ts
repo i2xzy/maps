@@ -198,11 +198,24 @@ function rowToWiki(row: RouteDiagram["rows"][number], ctx?: IconContext): string
   const left = slotFields(normalizeSlots(row.left), "left");
   const right = slotFields(normalizeSlots(row.right), "right", row.props);
   const cells = (row.cells ?? []).map((c) => cellToWiki(c, ctx)).join("\\");
-  return (
+  const line =
     (left.length ? `${left.join("~~")}! !` : "") +
     cells +
-    (right.length ? `~~${right.join("~~")}` : "")
-  );
+    (right.length ? `~~${right.join("~~")}` : "");
+  /*
+   * A row with nothing in it still has to occupy a line.
+   *
+   * An empty row serialized to an EMPTY LINE, and `Module:Routemap` ignores those — verified
+   * against the live template, where a blank line and a space-only line both add no row while
+   * `\` adds one. So the row vanished on the next parse: delete a row's last cell in the form and
+   * the row itself silently disappeared the moment the wikitext was re-read.
+   *
+   * `\` is the shortest thing that makes a row, and it means two empty cells — the minimum
+   * Routemap can express, since a one-cell empty row has no spelling at all. Round-tripping
+   * therefore turns `cells: []` into two empty cells, which renders identically and, unlike the
+   * blank line, still exists.
+   */
+  return line.trim() === "" ? "\\" : line;
 }
 
 /** Structural equality, ignoring key order and `undefined` fields. */

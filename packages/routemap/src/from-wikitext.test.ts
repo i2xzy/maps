@@ -346,3 +346,37 @@ describe("a mark around the whole field", () => {
     });
   });
 });
+
+describe("an empty row still occupies a line", () => {
+  it("survives the round trip instead of vanishing", () => {
+    // The form can make one: delete a row's last cell and you get `cells: []`. That serialized
+    // to an empty LINE, and Module:Routemap ignores empty lines — verified against the live
+    // template, where a blank line adds no row while `\` adds one. So the row silently
+    // disappeared the moment the wikitext was re-read.
+    const diagram = { rows: [{ cells: ["STR"] }, { cells: [] }, { cells: ["STR"] }] };
+    const wikitext = toWikitext(diagram as never);
+    expect(wikitext).toBe("STR\n\\\nSTR");
+    expect(fromWikitext(wikitext).rows).toHaveLength(3);
+  });
+
+  it("writes two empty cells, the least Routemap can express", () => {
+    // A one-cell empty row has no spelling: a line with nothing on it is ignored. `\` is the
+    // minimum, and it means two empty cells — which renders the same and, unlike the blank
+    // line, exists.
+    const back = fromWikitext(toWikitext({ rows: [{ cells: [] }] } as never));
+    expect(back.rows[0]).toMatchObject({ cells: [null, null] });
+  });
+
+  it("leaves a row with labels but no cells alone", () => {
+    // That line isn't blank, so it already survived; it must not gain a stray backslash.
+    const wikitext = toWikitext({ rows: [{ left: "Depot", cells: [] }] } as never);
+    expect(wikitext).toBe("Depot! !");
+    expect(fromWikitext(wikitext).rows[0]).toMatchObject({ left: "Depot" });
+  });
+
+  it("still drops a blank line on the way in, as the module does", () => {
+    // Verified against the live template: a blank line and a space-only line both add no row.
+    expect(fromWikitext("STR\n\nSTR").rows).toHaveLength(2);
+    expect(fromWikitext("STR\n \nSTR").rows).toHaveLength(2);
+  });
+});
