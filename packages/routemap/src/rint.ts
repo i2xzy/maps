@@ -322,6 +322,20 @@ export const TEXT_TEMPLATES = new Set(["tram", "stl", "stnlnk", "stn"]);
 export const ICON_TEMPLATES = new Set(["rmri", "ric", "enlarge"]);
 
 /**
+ * Templates that expand to a coloured route BADGE — a pill wrapping a link.
+ *
+ * `{{rcb|Sofia Metro|M2|croute}}` becomes
+ * `<span style="…background-color:#1C75BB;border-radius:.5em…">[[Sofia Metro#M2 line|<span
+ * style="color:white;font-weight:bold">2</span>]]</span>`.
+ *
+ * The only family whose expansion is markup we deliberately accept, and only because we don't
+ * render that markup — two named fields are extracted from a shape that was checked against
+ * the live template. Everything else still fails the markup guard, which is what makes a
+ * misfiled name safe.
+ */
+export const BADGE_TEMPLATES = new Set(["rcb"]);
+
+/**
  * The expandable call inside a `{ raw }` run, or null if it isn't one.
  *
  * `{{tram|Derker}}` -> `tram|Derker`, ready to be re-wrapped for the API.
@@ -339,9 +353,12 @@ export const textTemplateCall = (raw: string): string | null => templateCall(raw
 /** The call inside a `{ raw }` run if it's a file-producing template, else null. */
 export const iconTemplateCall = (raw: string): string | null => templateCall(raw, ICON_TEMPLATES);
 
-/** Either family — what the collector fetches and the renderer substitutes. */
+/** The call inside a `{ raw }` run if it's a route-badge template, else null. */
+export const badgeTemplateCall = (raw: string): string | null => templateCall(raw, BADGE_TEMPLATES);
+
+/** Any family — what the collector fetches and the renderer substitutes. */
 export const expandableCall = (raw: string): string | null =>
-  textTemplateCall(raw) ?? iconTemplateCall(raw);
+  textTemplateCall(raw) ?? iconTemplateCall(raw) ?? badgeTemplateCall(raw);
 
 /**
  * A separator that survives `expandtemplates` untouched.
@@ -371,10 +388,16 @@ async function fetchBatch(api: string, calls: string[]): Promise<void> {
   if (parts.length !== calls.length) return;
   calls.forEach((call, i) => {
     const value = parts[i]?.trim();
+    if (!value) return;
     // Only keep expansions that are label TEXT. `{{BSsrws}}` was misfiled here on the
     // strength of its name and expands to a `<table>` — rendering that into a label is
     // worse than the placeholder it replaced, so markup is rejected rather than trusted.
-    if (value && !/[<>]/.test(value)) textCache.set(call, value);
+    //
+    // A badge template is the exception, and only because we don't render its markup: we
+    // extract two named fields from a shape we've checked. The guard stays for everything
+    // else precisely so the next misfiled name fails closed.
+    const expectsMarkup = BADGE_TEMPLATES.has(call.split("|")[0]!.trim().toLowerCase());
+    if (expectsMarkup || !/[<>]/.test(value)) textCache.set(call, value);
   });
 }
 

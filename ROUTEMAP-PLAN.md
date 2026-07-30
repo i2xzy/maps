@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 734 package + 98 editor |
+| tests | 737 package + 98 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -91,8 +91,8 @@ text should be.
 
 | | before | after |
 |---|---|---|
-| placeholders in the fixture | 260 | **32** (88% resolved) |
-| rows showing one | 205/915 (22%) | **30/915 (3%)** |
+| placeholders in the fixture | 260 | **19** (93% resolved) |
+| rows showing one | 205/915 (22%) | **18/915 (2%)** |
 | API requests for a whole diagram | would be 129 | **3** |
 
 **How:** two families expand to something we can already render, and they share one batched
@@ -147,14 +147,27 @@ call was unparseable as a result. Unescaped only when the parsed NAME still cont
 because the other use of `{{!}}` is a VISIBLE pipe between two station links, and unescaping
 `{{left|A {{!}} B}}` unconditionally would split it and silently drop "A".
 
-**What remains, 32 placeholders across 30 rows (3%):**
+**Route badges too.** `{{rcb|Sofia Metro|M2|croute}}` expands to a coloured pill wrapping a
+link. Two named fields are extracted from a shape checked against the live template — the link
+target and the label — and rendered bold-and-linked. **The pill colour is dropped**: a run has
+no background colour to carry, and adding one for 13 placeholders isn't worth a new run type
+plus a serializer guard. For a route badge the colour carries real information, so this is an
+acknowledged loss rather than a complete job. Nothing is substituted unless BOTH fields parse,
+so an unexpected shape keeps the placeholder rather than emitting half a badge.
+
+This is also the ONE family allowed to return markup. The guard that rejects `<`/`>` is what
+makes a misfiled name fail closed — it's what keeps `{{BSsrws}}` out — so the exception is by
+name, and only because we parse `{{rcb}}`'s shape rather than render it.
+
+**What remains, 19 placeholders across 18 rows (2%):**
 
 | count | template | verdict |
 |---|---|---|
-| 13 | `{{rcb}}` | a `<span>` with inline colours — needs a styled-badge component |
-| 9 | `{{BSsrws}}` | a `<table>` + templatestyles — genuine layout, keep the placeholder |
-| 8 | bare wikitext | mixed; inspect individually |
+| 9 | `{{BSsrws}}` | a `<table>` + templatestyles — genuine layout; the placeholder is the right answer |
+| 8 | bare wikitext | one-offs; worth reading individually rather than pattern-matching |
 | 2 | `{{center}}`, `{{BS1/2}}` | one each |
+
+At 2% this is done for MVP. What's left needs case-by-case judgement, not another family.
 
 **Trap, twice over:** `{{BSsrws}}` reads exactly like a station link and expands to a `<table>` with
 templatestyles. It was in the whitelist on the strength of its name until each expansion was

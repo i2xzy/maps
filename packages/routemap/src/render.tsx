@@ -28,6 +28,7 @@ import type { LabelIcon, RouteDiagram, TextRun } from "./types";
 import { computeLayout, type PlacedCell } from "./layout";
 import { isWidthPrefix, prefixWidthFraction, type NormalizedSide } from "./normalize";
 import {
+  badgeTemplateCall,
   createLogoResolver,
   iconTemplateCall,
   textTemplateCall,
@@ -571,6 +572,29 @@ function expandRawRuns(
      * reserve a digit's width, so U+2007 FIGURE SPACE is what it actually means.
      */
     if (name && SPACER_TEMPLATES.has(name)) return [name === "0" ? " " : " "];
+
+    /*
+     * A coloured route badge: `{{rcb|Sofia Metro|M2|croute}}` expands to a pill wrapping a
+     * link — `<span style="…background-color:#1C75BB…">[[Sofia Metro#M2 line|<span
+     * style="color:white;font-weight:bold">2</span>]]</span>`.
+     *
+     * Two named fields are pulled out of a shape checked against the live template: the link
+     * target and the label. The PILL ITSELF IS DROPPED — a run has no background colour to
+     * carry, and adding one for 13 placeholders isn't worth a new run type plus a serializer
+     * guard. Bold-and-linked is legible and correct as far as it goes; the colour, which for a
+     * route badge carries real information, is the acknowledged loss.
+     *
+     * Nothing is rendered unless BOTH fields parse, so an unexpected shape keeps the
+     * placeholder rather than emitting half a badge.
+     */
+    const badgeCall = resolveText ? badgeTemplateCall(run.raw) : null;
+    if (badgeCall) {
+      const expanded = resolveText!(badgeCall);
+      const m = expanded?.match(/\[\[([^\]|]+)\|.*?>([^<]+)</);
+      const [, target, label] = m ?? [];
+      if (target && label) return [{ text: label.trim(), link: target.trim(), bold: true }];
+      return [run];
+    }
 
     if (name === "bsto") {
       const [first = "", second = "", link] = positional;

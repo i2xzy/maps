@@ -5,6 +5,7 @@ import {
   collectRintCodes,
   collectRwsArgs,
   collectTextTemplates,
+  badgeTemplateCall,
   createTextResolver,
   expandableCall,
   iconTemplateCall,
@@ -403,5 +404,46 @@ describe("{{rws}} shares the batch", () => {
     } finally {
       globalThis.fetch = original;
     }
+  });
+});
+
+describe("{{rcb}} route badges", () => {
+  const EXPANSION =
+    '<span style="color:inherit;background-color:#1C75BB;border:.075em solid #1C75BB;' +
+    'border-radius:.5em;padding:0 .3em">[[Sofia Metro#M2 line|' +
+    '<span style="color:white;font-weight:bold;font-size:inherit;white-space:nowrap">2</span>]]</span>';
+
+  const html = (resolve?: Record<string, string>) =>
+    renderToStaticMarkup(
+      <RouteMap
+        diagram={fromWikitext("A! !STR~~{{rcb|Sofia Metro|M2|croute}}")}
+        resolveText={resolve ? createTextResolver(resolve) : undefined}
+        resolveHref={(r) => `/${r}`}
+      />,
+    );
+
+  it("pulls the link and label out of the pill markup", () => {
+    const out = html({ "rcb|Sofia Metro|M2|croute": EXPANSION });
+    expect(out).toContain('href="/Sofia Metro#M2 line"');
+    expect(out).toContain(">2<");
+    expect(out).not.toContain("{{rcb");
+    // The markup itself is never emitted — only two extracted fields.
+    expect(out).not.toContain("background-color");
+    expect(out).not.toContain("border-radius");
+  });
+
+  it("keeps the placeholder when the shape isn't the one we checked", () => {
+    // Half a badge is worse than none. Both fields must parse or nothing is substituted.
+    const out = html({ "rcb|Sofia Metro|M2|croute": "<span>no link here</span>" });
+    expect(out).toContain("{{rcb");
+  });
+
+  it("is the only family allowed to return markup", () => {
+    // The guard that rejects markup is what makes a misfiled name fail closed — {{BSsrws}}
+    // looked like a station link and expands to a table. rcb is an explicit exception
+    // because we parse its shape rather than render it.
+    expect(badgeTemplateCall("{{rcb|Sofia Metro|M2|croute}}")).toBe("rcb|Sofia Metro|M2|croute");
+    expect(badgeTemplateCall("{{BSsrws|Manchester|Piccadilly}}")).toBe(null);
+    expect(expandableCall("{{rcb|a|b}}")).toBe("rcb|a|b");
   });
 });
