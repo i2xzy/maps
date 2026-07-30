@@ -79,14 +79,27 @@ export function normalizeCell(cell: Cell): CellObject | null {
 }
 
 /** Coerce a `SideLabel` into a `NormalizedSide`, or `null` when empty. */
+/**
+ * Whether a run list has anything to render.
+ *
+ * `[""]` doesn't: it's an empty label written the long way, and the form produces one whenever a
+ * label is cleared to nothing. Counting it as content made the serializer emit a placeholder
+ * field — `" ! !STR"` instead of `"STR"` — which then parsed back to no label at all, so the
+ * wikitext gained noise on every pass and wasn't a fixed point. An `{ icon }` or `{ rws }` run
+ * has no text and IS content, so this asks about emptiness rather than about text.
+ */
+const hasContent = (runs: readonly TextRun[]): boolean =>
+  runs.some((run) => (typeof run === "string" ? run !== "" : true));
+
 export function normalizeSide(side: SideLabel | null | undefined): NormalizedSide | null {
   if (side == null) return null;
   if (typeof side === "string") return side ? { text: side } : null;
-  if (Array.isArray(side)) return side.length ? { text: side } : null;
+  if (Array.isArray(side)) return hasContent(side) ? { text: side } : null;
   // Whole-label `rws` is sugar for a single station run (when there's no text).
-  const empty = side.text == null || side.text === "" || (Array.isArray(side.text) && !side.text.length);
+  const empty =
+    side.text == null || side.text === "" || (Array.isArray(side.text) && !hasContent(side.text));
   const text = empty && side.rws ? [{ rws: side.rws }] : side.text;
-  const hasText = Array.isArray(text) ? text.length > 0 : !!text && text.length > 0;
+  const hasText = Array.isArray(text) ? hasContent(text) : !!text && text.length > 0;
   if (!hasText) return null;
   return {
     text,

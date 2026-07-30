@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 760 package + 121 editor |
+| tests | 761 package + 121 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -592,6 +592,27 @@ Recorded so they aren't relitigated. Each has a reason, and several were mistake
   from the icons, and a lone field is always `main`, never `dist`.
 
 ---
+
+### ~~Sweep for model states the wikitext can't spell~~ — done
+**What:** The model is deliberately more permissive than the format, and each state it can hold
+needs either a valid spelling or to be unreachable. Two real bugs came from that gap in one
+afternoon (an empty row vanishing, a row of blanks that couldn't shrink), found one report at a
+time. `round-trip-shapes.test.ts` is the systematic version: **1,120 shapes** — every cell shape
+against every label shape, on each side, with and without a row property, plus each run kind in
+each of the four slots, and colspan rows.
+
+**Found and fixed:** a label of `[""]` — which the form produces whenever a label is cleared —
+counted as content, so the serializer emitted a placeholder field (`" ! !STR"` instead of
+`"STR"`) that then parsed back to no label. Noise added on every pass, and not a fixed point.
+`normalizeSide` now asks whether a run list has CONTENT rather than whether it has entries, so an
+`{ icon }` run still counts and `[""]` doesn't.
+
+**The harness needed fixing before it was worth anything.** Its first property was "the wikitext
+is a fixed point", and against a deliberately reverted empty-row fix it reported **zero
+failures** — a vanishing row leaves `""` on both sides, so text comparison can't see it. It now
+also asserts the row survives, and with that, the same mutation produces 48 failures. A sweep
+reporting 0 is exactly the result to distrust; this one was verified by breaking the code on
+purpose.
 
 ## Traps worth not rediscovering
 
