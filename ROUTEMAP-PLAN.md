@@ -504,19 +504,22 @@ rule that a value in use is always offered:
   so it stays right if the scale gains a step, and it's set only where the values form a scale —
   `state` and `formation` are unordered sets where an insertion point would be arbitrary.
 
-### Option lists: label column first, preview at true size
-**What:** The Width dropdown read as a staircase — previews led each row at their true width, so
-an eighth-width icon and an octuple one started their labels 126px apart.
-**First attempt was wrong:** fitting every preview into a fixed slot aligned the labels and
-destroyed the only thing the preview says. For Width the picture IS the information, and a
-spacer's fractions are otherwise indistinguishable.
-**Done:** the label goes in a fixed-width leading column and the preview follows at its true
-size. Labels line up, and every preview starts at the same x and extends right by its real width,
-so they're directly comparable — right-aligning them instead meant judging width by where each
-one began, which is the same puzzle as the staircase.
-**Honest limitation:** for a track the ink is a thin line centred in the canvas, so a wider icon
-shows as the line sitting further right rather than as a wider mark. That's what the files
-actually are; the label carries the rest.
+### Option lists: the icon first, at true width — and the stagger is the point
+**What I got wrong, twice.** The Width dropdown's labels don't line up: each row leads with the
+icon at its true width, so an eighth-width option and an octuple one start their labels 126px
+apart. I read that as a defect and "fixed" it — first by fitting every icon into a slot of one
+size, then by leading with the label instead.
+
+Both removed the only cue there was. **These canvases are transparent**, so nothing about an
+eighth-width icon looks different from an octuple one except how far it pushes what follows. The
+stagger IS the width. Nobody asked for it to be changed; I invented the problem.
+
+Now: icon first at true width, label after. A full-width blank draws nothing but still occupies
+its 16px, so it keeps its place in the progression — measured, the label offsets run 2, 4, 6, 8,
+12, 16, 32, 64, 96, 128px, which reads as a ruler.
+
+**The lesson, which cost two commits:** an apparent visual defect can be the display doing its
+job. Ask what information the layout is carrying before straightening it.
 
 ### Mobile layout — deferred to the front-end rework
 **What:** The editor is a three-pane splitter at `100dvh`. Unusable on a phone, and Wikipedia

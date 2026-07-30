@@ -328,16 +328,19 @@ function EnumSelect({
                     point of them for a field like Width — so leading with them started every
                     label at a different x and the list read as a staircase. This way the labels
                     line up in a column and the pictures stay side by side and comparable. */}
+                {/*
+                  Icon FIRST, at its true width, with the label after it.
+
+                  The labels then don't line up — and that stagger IS the information. These
+                  canvases are transparent, so nothing about an eighth-width icon looks different
+                  from an octuple one except how far it pushes what follows. I "fixed" that
+                  stagger twice (fitting the icons into a slot, then leading with the label) and
+                  both times removed the only cue there was. A full-width blank draws nothing but
+                  still occupies its width, so it keeps its place in the progression.
+                */}
                 <HStack gap="2" flex="1" minW="0">
-                  {/* A label column wide enough for the common case, so every preview STARTS at
-                      the same x and extends right by its true width. Right-aligning them instead
-                      meant comparing widths by where each one began, which is the same puzzle
-                      the staircase was. A long label pushes its own preview over; that's rarer
-                      than wanting to compare sizes. */}
-                  <Box minW="7rem" flexShrink="0">
-                    <Select.ItemText>{item.label}</Select.ItemText>
-                  </Box>
                   <Thumb code={item.code} />
+                  <Select.ItemText>{item.label}</Select.ItemText>
                 </HStack>
                 <Select.ItemIndicator />
               </Select.Item>
