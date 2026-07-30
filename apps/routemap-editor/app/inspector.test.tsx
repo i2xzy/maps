@@ -341,7 +341,11 @@ describe("Inspector: cell selection", () => {
       "over",
       "under",
     ]);
-    expect(preview("—")).toContain("BSicon_STR.svg"); // the icon with `level` cleared
+    expect(within(level).queryByRole("radio", { name: "—" })).toBeNull();
+    // Named, not a dash: `level` has no option meaning "unset" (over/under only), so its unset
+    // state gets a word. Fields where an option IS the default (`state` -> in-use) show no
+    // unset entry at all — see the tests below.
+    expect(preview("None")).toContain("BSicon_STR.svg"); // the icon with `level` cleared
     expect(preview(/over/i)).toContain("BSicon_STRo.svg");
     expect(preview(/under/i)).toContain("BSicon_STRu.svg");
   });
@@ -636,5 +640,60 @@ describe("Inspector: colspan rows", () => {
     );
     fireEvent.change(screen.getByLabelText("Colspan text"), { target: { value: "some stations" } });
     expect((model().rows![0] as { text: unknown }).text).toBe("some stations");
+  });
+});
+
+describe("Inspector: field values read as words, not wire format", () => {
+  // `state` has four options so it renders as a dropdown, and Ark dropdowns are inert under
+  // jsdom (see the radio-card note above). These assert what is RENDERED — which is exactly
+  // where the reported bug was visible — and the click-through is verified in a browser.
+  const stateText = (): string => {
+    const caption = screen.getByText("State");
+    return caption.closest("div")?.parentElement?.textContent ?? "";
+  };
+
+  it("shows the default by name instead of a dash", () => {
+    // The reported bug: `state` showed `—` as selected on a plain BHF, when `in-use` is exactly
+    // what a plain BHF is.
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: ["BHF"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    expect(stateText()).toContain("In use");
+    expect(stateText()).not.toContain("—");
+  });
+
+  it("titles hyphenated values as words wherever they appear", () => {
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ cells: [{ kind: "station", state: "disused-primary" }] }] }}
+        select={{ kind: "cell", row: 0, col: 0 }}
+      />,
+    );
+    expect(stateText()).toContain("Disused primary");
+    expect(stateText()).not.toContain("disused-primary");
+  });
+
+  it("names the unset state where no option means it", () => {
+    // `width` is a set of fractions with no "full" among them, so its unset state gets a word
+    // of its own rather than a dash.
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: ["BHF"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    const width = screen.getByText("Width").closest("div")?.parentElement?.textContent ?? "";
+    expect(width).toContain("Full");
+    expect(width).not.toContain("—");
+  });
+
+  it("offers no dash as a VALUE anywhere in the form", () => {
+    // The blanket version of the request, scoped to what it's about: an em-dash is fine as
+    // punctuation (the wikitext-fallback message uses one), but never as the name of a choice.
+    renderWithChakra(
+      <Controlled initial={{ rows: [{ cells: ["BHF"] }] }} select={{ kind: "cell", row: 0, col: 0 }} />,
+    );
+    const choices = [
+      ...screen.queryAllByRole("radio"),
+      ...Array.from(document.querySelectorAll('[data-part="item-text"], [data-part="trigger"]')),
+    ];
+    expect(choices.filter((el) => (el.textContent ?? "").trim() === "—")).toEqual([]);
   });
 });

@@ -7,7 +7,7 @@ import {
   loadBsiconFilter,
   offeredFields,
 } from "./bsicon-manifest";
-import { fieldSpec, fieldsFor, isFieldVisible } from "./descriptor";
+import { defaultOptionOf, fieldSpec, fieldsFor, isFieldVisible, safeIconCode } from "./descriptor";
 import type { IconObject } from "./icon";
 
 const spec = (field: string) => fieldSpec(field as keyof IconObject)!;
@@ -121,5 +121,36 @@ describe("bsiconKnownMissing", () => {
     expect(bsiconKnownMissing("STR")).toBe(false); // reachable and present
     expect(bsiconKnownMissing("")).toBe(false);
     expect(bsiconKnownMissing(null)).toBe(false);
+  });
+});
+
+describe("defaultOptionOf", () => {
+  it("finds the option that means the same as unset", () => {
+    // `in-use` emits no affix, so plain `BHF` already IS in-use. Showing `—` for it claimed
+    // nothing was chosen when something plainly was.
+    expect(defaultOptionOf({ kind: "station" }, "state")?.value).toBe("in-use");
+    expect(defaultOptionOf({ kind: "track" }, "system")?.value).toBe("rail");
+  });
+
+  it("returns nothing when the unset state has no option of its own", () => {
+    // `width` is a set of fractions with no "full"; `formation` has no "at grade". Those need a
+    // name for the unset state instead — `defaultLabel`.
+    expect(defaultOptionOf({ kind: "track" }, "width")).toBeUndefined();
+    expect(defaultOptionOf({ kind: "track" }, "formation")).toBeUndefined();
+    expect(defaultOptionOf({ kind: "track" }, "level")).toBeUndefined();
+    expect(fieldSpec("width")?.defaultLabel).toBe("Full");
+    expect(fieldSpec("formation")?.defaultLabel).toBe("At grade");
+  });
+
+  it("asks whether CLEARING the field changes the icon, not what's selected", () => {
+    // A junction's `to` has no default even though it always has one set: clearing it gives
+    // `ABZg`, which isn't an icon — a junction must have a direction. Comparing each option to
+    // the icon's CURRENT code instead would have called `left` the default here, which is a
+    // different question and the wrong one.
+    expect(safeIconCode({ kind: "junction", to: "left" })).toBe("ABZgl");
+    expect(defaultOptionOf({ kind: "junction", to: "left" }, "to")).toBeUndefined();
+    expect(defaultOptionOf({ kind: "track" }, "to")).toBeUndefined();
+    // Whereas clearing `state` genuinely changes nothing, on either kind.
+    expect(defaultOptionOf({ kind: "junction", to: "left" }, "state")?.value).toBe("in-use");
   });
 });

@@ -57,6 +57,15 @@ export interface FieldSpec {
   /** Contextual visibility: only offer the field when this returns true. Defaults
    *  to "`requires` are satisfied" (or always, if no `requires`). */
   showWhen?: (icon: IconObject) => boolean;
+  /**
+   * What to call the UNSET state, when no option means the same thing.
+   *
+   * `width` has no "full" among its fractions and `formation` no "at grade", so leaving those
+   * unset is a real choice with no name in the value list. Only set where the domain gives a
+   * clear word; anything else falls back to "None", which is accurate — the affix is absent —
+   * without inventing a claim about what the icon then is.
+   */
+  defaultLabel?: string;
 }
 
 /** Whether the GUI should offer a field given the icon's current other values. */
@@ -101,6 +110,8 @@ export const FIELDS: readonly FieldSpec[] = [
   {
     field: "formation",
     control: "enum",
+    // A line with no formation affix runs on the surface.
+    defaultLabel: "At grade",
     values: ICON_FORMATIONS,
     kinds: LINE_KINDS,
     sample: { formation: "tunnel" },
@@ -115,6 +126,8 @@ export const FIELDS: readonly FieldSpec[] = [
     field: "width",
     control: "enum",
     values: ICON_WIDTHS,
+    // The widths are fractions OF full, and there is no "full" among them.
+    defaultLabel: "Full",
     kinds: [...LINE_KINDS, "shift", "symbol", "spacer"],
     sample: { width: "half" },
   },
@@ -382,6 +395,24 @@ export function safeIconCode(icon: IconObject): string | null {
 export interface FieldOption {
   value: string | number;
   code: string | null;
+}
+
+/**
+ * The option that means the same as leaving the field unset, if there is one.
+ *
+ * Several fields have a value that emits NO affix, so choosing it and clearing the field
+ * produce the same icon: a `state` of `in-use` is plain `BHF`, exactly as an unset `state` is.
+ * The form showed those as `—`, which is wrong twice over — it implies nothing is chosen when
+ * `in-use` plainly is, and it puts a punctuation mark where a name belongs.
+ *
+ * DERIVED by comparing codes rather than declared per field, so it can't drift from what the
+ * encoder does. A field with no such value (`width` has no "full", `formation` no "at grade")
+ * returns undefined, and its unset state needs a name of its own — see `defaultLabel`.
+ */
+export function defaultOptionOf(icon: IconObject, field: keyof IconObject): FieldOption | undefined {
+  const cleared = safeIconCode({ ...icon, [field]: undefined } as IconObject);
+  if (cleared == null) return undefined;
+  return previewOptions(icon, field).find((o) => o.code === cleared);
 }
 
 /** The options for a field on the given icon, each with the code it would yield

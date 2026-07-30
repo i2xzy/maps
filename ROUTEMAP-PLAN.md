@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 747 package + 111 editor |
+| tests | 750 package + 115 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -413,6 +413,35 @@ against the previous rules.
 **Kept:** a split stays an ATOM rather than becoming the `|` paragraph-break sugar. Sugar
 splits the whole label, which would move the words either side of it onto separate lines — the
 one distinction the document genuinely can't hold.
+
+### ~~Form values read as wire format, and defaults showed as `—`~~ — **done**
+**What:** Two bugs in one place. Enum values were shown raw (`in-use`, `disused-primary`,
+`three-quarter`), so the form read like a config file. And a field whose default is a real
+option showed `—` as selected: a plain `BHF` displayed `—` for State when `in-use` is exactly
+what a plain `BHF` is.
+**Done:**
+- **Proper case everywhere.** Hyphens become spaces and the first letter is capitalised, with
+  four explicit exceptions the rule would get wrong — `sbahn` is "S-Bahn", `sBend` is "S-bend",
+  and `gb`/`uk` are country codes, not words. Numbers stay numbers.
+- **The default is DERIVED, not declared.** `defaultOptionOf` asks whether *clearing* the field
+  changes the code; if an option produces the same code as no option, that option IS the
+  default. It shows as selected and there's no separate unset entry, because a `—` beside
+  `in-use` claimed nothing was chosen when something plainly was. Picking it still CLEARS the
+  field, so choosing what was already true leaves the wikitext untouched.
+- **Where no option means "unset", the unset state is named** — `defaultLabel`, set only where
+  the domain gives a clear word (`width` → "Full", `formation` → "At grade") and otherwise
+  "None", which is accurate without inventing a claim about what the icon then is.
+- **Subtype gets the same rule**, which removed the last `—` in the form: it was the select's
+  *placeholder*, showing whenever an icon had no subtype.
+
+Verified in a browser, every field on a plain `STR`: Kind "Track", Subtype "None", System
+"Rail", State "In use", Formation "At grade", Width "Full", and "None" for the rest. Zero values
+showing a bare dash.
+
+**Subtlety worth keeping:** the derivation asks about CLEARING, not about what's selected. A
+junction's `to` has no default even though one is always set — clearing it gives `ABZg`, which
+isn't an icon. An earlier probe compared each option to the icon's *current* code instead and
+called `left` the default, which is a different question and the wrong one.
 
 ### Mobile layout — deferred to the front-end rework
 **What:** The editor is a three-pane splitter at `100dvh`. Unusable on a phone, and Wikipedia

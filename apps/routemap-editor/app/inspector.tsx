@@ -33,6 +33,7 @@ import {
 import {
   bsiconKnownMissing,
   codeToIcon,
+  defaultOptionOf,
   commonsUrl,
   existingOptions,
   iconSubtypes,
@@ -80,6 +81,32 @@ const NONE = "__none__";
 
 /** Sentence-case a field caption for display (e.g. "kind" → "Kind"). */
 const capitalize = (s: string): string => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+/**
+ * Proper nouns and acronyms the rule below would get wrong.
+ *
+ * Everything else derives: hyphens become spaces and the first letter is capitalised, so
+ * `in-use` reads "In use" and `disused-primary` "Disused primary". These four don't follow
+ * that — an S-Bahn is a proper noun, and `gb`/`uk` are country codes, not words.
+ */
+const VALUE_NAMES: Record<string, string> = {
+  sbahn: "S-Bahn",
+  sBend: "S-bend",
+  gb: "GB",
+  uk: "UK",
+};
+
+/**
+ * An enum value as the form should show it.
+ *
+ * Raw values are wire format — `in-use`, `disused-primary`, `three-quarter` — and showing them
+ * as-is made the form read like a config file. Numbers stay numbers: `corner` is 1–4 and
+ * "1" is already how you'd say it.
+ */
+const valueName = (value: string | number): string => {
+  if (typeof value === "number") return String(value);
+  return VALUE_NAMES[value] ?? capitalize(value.replace(/-/g, " "));
+};
 
 
 
@@ -176,6 +203,8 @@ function EnumSelect({
   options,
   onPick,
   allowNone,
+  noneLabel,
+  noneCode,
   disabled,
 }: {
   label: string;
@@ -183,14 +212,27 @@ function EnumSelect({
   options: EnumOpt[];
   onPick: (raw: string | number | undefined) => void;
   allowNone: boolean;
+  /** What to call the unset option. Never a dash — see `valueName`. */
+  noneLabel?: string;
+  /** Preview for the unset option: the icon with this field cleared. */
+  noneCode?: string | null;
   disabled?: boolean;
 }): ReactNode {
   const items = useMemo(
     () => [
-      ...(allowNone ? [{ label: "—", value: NONE, code: null as string | null, raw: undefined as string | number | undefined }] : []),
-      ...options.map((o) => ({ label: String(o.value), value: String(o.value), code: o.code, raw: o.value })),
+      ...(allowNone
+        ? [
+            {
+              label: noneLabel ?? "None",
+              value: NONE,
+              code: noneCode ?? null,
+              raw: undefined as string | number | undefined,
+            },
+          ]
+        : []),
+      ...options.map((o) => ({ label: valueName(o.value), value: String(o.value), code: o.code, raw: o.value })),
     ],
-    [options, allowNone],
+    [options, allowNone, noneLabel, noneCode],
   );
   const collection = useMemo(() => createListCollection({ items }), [items]);
   const cur = value == null ? NONE : String(value);
@@ -247,6 +289,7 @@ function EnumCards({
   value,
   options,
   clearedCode,
+  noneLabel,
   onPick,
   disabled,
 }: {
@@ -255,6 +298,8 @@ function EnumCards({
   options: EnumOpt[];
   /** Preview for the "unset" card: the icon this field cleared. */
   clearedCode: string | null;
+  /** What to call the unset card, and whether to show one at all. */
+  noneLabel?: string;
   onPick: (raw: string | number | undefined) => void;
   disabled?: boolean;
 }): ReactNode {
@@ -274,20 +319,22 @@ function EnumCards({
         {capitalize(label)}
       </RadioCard.Label>
       <HStack gap="1" flexWrap="wrap">
-          {/*
-            An explicit "unset" card, because there is otherwise no way back to it: Ark
-            fires no change event when you click the ALREADY-SELECTED item, so
-            re-click-to-clear silently does nothing. It previews the icon with the field
-            cleared, so every card in the row answers the same question — "what do I get
-            if I pick this?"
-          */}
-        {[{ value: NONE, code: clearedCode }, ...options].map((o) => (
+        {/*
+          The unset card, shown only when no option already means "unset". Ark fires no change
+          event when you click the ALREADY-SELECTED item, so without it there'd be no way back
+          — but where a real option IS the default (a `state` of `in-use`), that option is the
+          way back and a second entry for it would be a lie. It previews the icon with the
+          field cleared, so every card answers the same question: what do I get if I pick this?
+        */}
+        {[...(noneLabel ? [{ value: NONE, code: clearedCode }] : []), ...options].map((o) => (
           <RadioCard.Item key={String(o.value)} value={String(o.value)} flex="0 0 auto">
             <RadioCard.ItemHiddenInput />
             <RadioCard.ItemControl px="1.5" py="1">
               <HStack gap="1">
                 <Thumb code={o.code} />
-                <RadioCard.ItemText fontSize="xs">{o.value === NONE ? "—" : String(o.value)}</RadioCard.ItemText>
+                <RadioCard.ItemText fontSize="xs">
+                  {o.value === NONE ? noneLabel : valueName(o.value)}
+                </RadioCard.ItemText>
               </HStack>
             </RadioCard.ItemControl>
           </RadioCard.Item>
@@ -398,6 +445,12 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
   const pickKind = (k: IconKind) => onChange(retargetKind(icon, k, safeIconCode));
 
   const subtypes = iconSubtypes(icon.kind);
+  // The subtype that means the same as having none, derived the way `defaultOptionOf` derives
+  // an enum's default: by asking whether clearing it changes the code.
+  const bareCode = safeIconCode({ ...icon, subtype: undefined } as IconObject);
+  const defaultSubtype = subtypes.find(
+    (sub) => bareCode != null && safeIconCode({ ...icon, subtype: sub } as IconObject) === bareCode,
+  );
   // Only the fields that can actually produce a real icon. `fieldsFor` says what the MODEL
   // can represent, which is far more than exists: a plain track has 21 representable fields
   // and 6 of them have no option that resolves to a file on Commons. Measured over the
@@ -412,17 +465,37 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
     // `existingOptions`, not `previewOptions` — the dead half of the choices is dropped,
     // except any value the icon currently holds, which stays so it can be seen and changed.
     const opts = existingOptions(icon, f.field).map((o) => ({ value: o.value, code: o.code }));
+
+    /*
+     * The default, and how it is shown.
+     *
+     * When one option means the same as leaving the field unset — `state` of `in-use` is plain
+     * `BHF`, exactly as an unset state is — that option IS the default. So it is shown as
+     * selected and there is no separate unset entry: a `—` there claimed nothing was chosen
+     * when `in-use` plainly was.
+     *
+     * Picking it still CLEARS the field rather than writing it, which keeps the model terse and
+     * means the wikitext is unchanged by selecting what was already true.
+     */
+    const dflt = defaultOptionOf(icon, f.field);
+    const current = icon[f.field] as string | number | undefined;
+    const shown = current ?? dflt?.value;
+    const pick = (v: string | number | undefined) =>
+      set({ [f.field]: v === dflt?.value ? undefined : v } as Partial<IconObject>);
+    // No unset entry when the default has a name of its own among the options.
+    const noneLabel = dflt ? undefined : (f.defaultLabel ?? "None");
     // Two or three choices don't need a dropdown you have to open to read.
     if (opts.length <= 3) {
       return (
         <EnumCards
           key={String(f.field)}
           label={f.label ?? String(f.field)}
-          value={icon[f.field] as string | number | undefined}
+          value={shown}
           options={opts}
           clearedCode={safeIconCode({ ...icon, [f.field]: undefined } as IconObject)}
+          noneLabel={noneLabel}
           disabled={f.disabledWhen?.(icon)}
-          onPick={(v) => set({ [f.field]: v } as Partial<IconObject>)}
+          onPick={pick}
         />
       );
     }
@@ -430,11 +503,13 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
       <EnumSelect
         key={String(f.field)}
         label={f.label ?? String(f.field)}
-        value={icon[f.field] as string | number | undefined}
-        allowNone
+        value={shown}
+        allowNone={noneLabel != null}
+        noneLabel={noneLabel}
+        noneCode={safeIconCode({ ...icon, [f.field]: undefined } as IconObject)}
         disabled={f.disabledWhen?.(icon)}
         options={opts}
-        onPick={(v) => set({ [f.field]: v } as Partial<IconObject>)}
+        onPick={pick}
       />
     );
   };
@@ -460,12 +535,20 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
         onPick={(v) => v != null && pickKind(v as IconKind)}
       />
       {subtypes.length > 0 && (
+        /*
+         * Subtype gets the same default rule as the other enums: if one subtype produces the
+         * same code as no subtype at all, it IS what the icon currently is, so it shows as
+         * selected. Otherwise the unset state is named rather than left as the trigger's
+         * placeholder — which was the last `—` shown as a value anywhere in the form.
+         */
         <EnumSelect
           label="subtype"
-          value={icon.subtype}
-          allowNone={false}
+          value={icon.subtype ?? defaultSubtype}
+          allowNone={defaultSubtype == null}
+          noneLabel="None"
+          noneCode={safeIconCode({ ...icon, subtype: undefined })}
           options={subtypes.map((s) => ({ value: s, code: safeIconCode({ ...icon, subtype: s }) }))}
-          onPick={(v) => v != null && set({ subtype: String(v) })}
+          onPick={(v) => set({ subtype: v == null || v === defaultSubtype ? undefined : String(v) })}
         />
       )}
       {inUse.map(control)}
