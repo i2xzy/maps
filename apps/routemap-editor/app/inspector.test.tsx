@@ -725,3 +725,23 @@ describe("Inspector: sections only when they help", () => {
     expect(sections().join(" ")).toContain("Appearance");
   });
 });
+
+describe("Inspector: a spacer's blank icon", () => {
+  it("shows an empty box, not the invalid-icon marker", () => {
+    // A spacer's code is `""` — a valid full-width blank. The code field passed `trimmed || null`
+    // and `"" || null` is `null`, which Thumb draws as the red "no valid icon" square, so every
+    // spacer looked broken.
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ cells: [{ kind: "spacer" }] }] }}
+        select={{ kind: "cell", row: 0, col: 0 }}
+      />,
+    );
+    const field = screen.getByLabelText("BSicon code");
+    expect((field as HTMLInputElement).value).toBe("");
+    // No image (there's no file for a blank) and no red box either.
+    const row = field.closest("div")!;
+    expect(row.querySelector("img")).toBeNull();
+    expect(row.innerHTML).not.toContain("red");
+  });
+});

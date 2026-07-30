@@ -155,7 +155,15 @@ function Thumb({ code, size = 16 }: { code: string | null; size?: number }): Rea
   // boolean, so the state clears itself the moment the code changes.
   const [failed, setFailed] = useState<string | null>(null);
 
-  const blank = (
+  /*
+   * Two different nothings, which used to look identical.
+   *
+   * `missing` is dashed: we asked for a file and didn't get one. `empty` is a plain tint: there
+   * is no file to ask for, because a full-width spacer IS the absence of an icon. Sharing the
+   * dashed style made the legitimate case read as an error — visible in the Width dropdown for a
+   * spacer, where every fraction has a file and only "Full" cannot.
+   */
+  const missing = (
     <Box
       boxSize={`${size}px`}
       borderWidth="1px"
@@ -165,13 +173,14 @@ function Thumb({ code, size = 16 }: { code: string | null; size?: number }): Rea
       flexShrink="0"
     />
   );
+  const empty = <Box boxSize={`${size}px`} bg="bg.muted" borderRadius="xs" flexShrink="0" />;
   // null → no valid icon (red). "" → a valid full-width blank spacer (neutral,
   // dashed — there's no BSicon file for it). Otherwise the Commons thumbnail.
   if (code == null) return <Box boxSize={`${size}px`} bg="red.subtle" borderRadius="xs" flexShrink="0" />;
-  if (code === "") return blank;
+  if (code === "") return empty;
   // A broken-image glyph in a form reads as "this control is broken"; the dashed
   // placeholder reads as "no picture for this one", which is what it means.
-  if (failed === code) return blank;
+  if (failed === code) return missing;
   return (
     <Image
       src={commonsUrl(code)}
@@ -206,6 +215,23 @@ function MiniBtn({
   );
 }
 
+/**
+ * The options with the unset entry inserted where it belongs.
+ *
+ * Not always first: for an ordered scale its position is part of the meaning — "Full" sits
+ * between three-quarter and double, and at the head of the list it read as another extreme.
+ * `after` naming a value rather than an index keeps it right if the scale gains a step.
+ */
+function withNoneOption<T extends { value: string | number }>(
+  options: T[],
+  none: T | null,
+  after?: string,
+): T[] {
+  if (!none) return options;
+  const at = after ? options.findIndex((o) => String(o.value) === after) : -1;
+  return at < 0 ? [none, ...options] : [...options.slice(0, at + 1), none, ...options.slice(at + 1)];
+}
+
 // ── enum field → Select with a preview per option ───────────────────────────
 type EnumOpt = { value: string | number; code: string | null };
 
@@ -217,6 +243,7 @@ function EnumSelect({
   allowNone,
   noneLabel,
   noneCode,
+  noneAfter,
   disabled,
 }: {
   label: string;
@@ -228,23 +255,25 @@ function EnumSelect({
   noneLabel?: string;
   /** Preview for the unset option: the icon with this field cleared. */
   noneCode?: string | null;
+  /** The value the unset option sits after, for an ordered scale. */
+  noneAfter?: string;
   disabled?: boolean;
 }): ReactNode {
   const items = useMemo(
-    () => [
-      ...(allowNone
-        ? [
-            {
+    () =>
+      withNoneOption(
+        options.map((o) => ({ label: valueName(o.value), value: String(o.value), code: o.code, raw: o.value })),
+        allowNone
+          ? {
               label: noneLabel ?? "None",
               value: NONE,
               code: noneCode ?? null,
               raw: undefined as string | number | undefined,
-            },
-          ]
-        : []),
-      ...options.map((o) => ({ label: valueName(o.value), value: String(o.value), code: o.code, raw: o.value })),
-    ],
-    [options, allowNone, noneLabel, noneCode],
+            }
+          : null,
+        noneAfter,
+      ),
+    [options, allowNone, noneLabel, noneCode, noneAfter],
   );
   const collection = useMemo(() => createListCollection({ items }), [items]);
   const cur = value == null ? NONE : String(value);
@@ -302,6 +331,7 @@ function EnumCards({
   options,
   clearedCode,
   noneLabel,
+  noneAfter,
   onPick,
   disabled,
 }: {
@@ -312,6 +342,8 @@ function EnumCards({
   clearedCode: string | null;
   /** What to call the unset card, and whether to show one at all. */
   noneLabel?: string;
+  /** The value the unset card sits after, for an ordered scale. */
+  noneAfter?: string;
   onPick: (raw: string | number | undefined) => void;
   disabled?: boolean;
 }): ReactNode {
@@ -338,7 +370,7 @@ function EnumCards({
           way back and a second entry for it would be a lie. It previews the icon with the
           field cleared, so every card answers the same question: what do I get if I pick this?
         */}
-        {[...(noneLabel ? [{ value: NONE, code: clearedCode }] : []), ...options].map((o) => (
+        {withNoneOption(options, noneLabel ? { value: NONE, code: clearedCode } : null, noneAfter).map((o) => (
           <RadioCard.Item key={String(o.value)} value={String(o.value)} flex="0 0 auto">
             <RadioCard.ItemHiddenInput />
             <RadioCard.ItemControl px="1.5" py="1">
@@ -425,7 +457,9 @@ function CodeField({
   return (
     <Stack gap="0.5">
       <HStack gap="1">
-        <Thumb code={trimmed || null} size={20} />
+        {/* `|| code`, not `|| null`: an EMPTY code is a valid full-width blank (a spacer), and
+            `null` is Thumb's "no valid icon" red. `"" || null` made every spacer look broken. */}
+        <Thumb code={trimmed || code} size={20} />
         <Input
           size="xs"
           fontFamily="mono"
@@ -521,6 +555,7 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
           options={opts}
           clearedCode={safeIconCode({ ...icon, [f.field]: undefined } as IconObject)}
           noneLabel={noneLabel}
+          noneAfter={f.defaultAfter}
           disabled={f.disabledWhen?.(icon)}
           onPick={pick}
         />
@@ -533,6 +568,7 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
         value={shown}
         allowNone={noneLabel != null}
         noneLabel={noneLabel}
+        noneAfter={f.defaultAfter}
         noneCode={safeIconCode({ ...icon, [f.field]: undefined } as IconObject)}
         disabled={f.disabledWhen?.(icon)}
         options={opts}

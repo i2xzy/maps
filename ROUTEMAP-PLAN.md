@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 754 package + 117 editor |
+| tests | 756 package + 118 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -486,6 +486,22 @@ rule that a value in use is always offered:
 1. `fieldIsOffered` checked the contextual visibility gate BEFORE the in-use test.
 2. `offeredFields` only ever considered `fieldsFor(kind)`. It now unions in every field the icon
    actually holds.
+
+### Three icon-preview bugs a spacer exposed
+- **Every spacer looked broken.** Its code is `""` — a valid full-width blank — and the code
+  field passed `trimmed || null` to the thumbnail. `"" || null` is `null`, which the thumbnail
+  draws as the red "no valid icon" square. Now `trimmed || code`, so an empty code stays empty
+  and only a genuinely unencodable icon is red.
+- **"Blank" and "no image" looked identical.** Both rendered as a dashed box, so the one option
+  that legitimately has no file read as an error. Visible in the Width dropdown for a spacer:
+  every fraction has a file on Commons (`BSicon_c.svg`, `BSicon_d.svg`, … all checked) and only
+  "Full" cannot, because a full-width spacer IS the absence of an icon. A plain tint now means
+  "intentionally blank" and dashed means "we asked for a file and didn't get one".
+- **"Full" sat at the head of the width list.** For an ordered scale the unset state has a
+  position: the widths run eighth -> octuple and full is 1, so it belongs between three-quarter
+  and double. `defaultAfter` on the field spec names the value it follows rather than an index,
+  so it stays right if the scale gains a step, and it's set only where the values form a scale —
+  `state` and `formation` are unordered sets where an insertion point would be arbitrary.
 
 ### Mobile layout — deferred to the front-end rework
 **What:** The editor is a three-pane splitter at `100dvh`. Unusable on a phone, and Wikipedia

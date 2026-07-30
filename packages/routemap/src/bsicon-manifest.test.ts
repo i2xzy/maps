@@ -208,3 +208,19 @@ describe("in use beats the visibility gate", () => {
     expect(offeredFields(bare).map((f) => String(f.field))).not.toContain("direction");
   });
 });
+
+describe("defaultAfter", () => {
+  it("places Full inside the width scale, not at its head", () => {
+    // The widths run eighth -> octuple and full is 1, so "Full" belongs between three-quarter
+    // and double. At the head of the list it read as another extreme rather than the middle.
+    expect(fieldSpec("width")?.defaultAfter).toBe("three-quarter");
+    const values = (fieldSpec("width")?.values ?? []).map(String);
+    expect(values.indexOf("three-quarter")).toBeLessThan(values.indexOf("double"));
+  });
+
+  it("is only set where the values form a scale", () => {
+    // `state` and `formation` are unordered sets; an insertion point would be arbitrary.
+    expect(fieldSpec("state")?.defaultAfter).toBeUndefined();
+    expect(fieldSpec("formation")?.defaultAfter).toBeUndefined();
+  });
+});

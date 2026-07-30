@@ -58,6 +58,14 @@ export interface FieldSpec {
    *  to "`requires` are satisfied" (or always, if no `requires`). */
   showWhen?: (icon: IconObject) => boolean;
   /**
+   * The value the unset option should sit AFTER in the list.
+   *
+   * For an ordered scale, the unset state has a position rather than being "first". The widths
+   * run eighth -> octuple and full is 1, so "Full" belongs between three-quarter and double;
+   * at the head of the list it reads as another extreme instead of the middle of the scale.
+   */
+  defaultAfter?: string;
+  /**
    * What to call the UNSET state, when no option means the same thing.
    *
    * `width` has no "full" among its fractions and `formation` no "at grade", so leaving those
@@ -128,6 +136,7 @@ export const FIELDS: readonly FieldSpec[] = [
     values: ICON_WIDTHS,
     // The widths are fractions OF full, and there is no "full" among them.
     defaultLabel: "Full",
+    defaultAfter: "three-quarter", // full is 1: after 3/4, before double
     kinds: [...LINE_KINDS, "shift", "symbol", "spacer"],
     sample: { width: "half" },
   },
