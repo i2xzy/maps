@@ -11,7 +11,7 @@ import {
   Image,
   Menu,
   Input,
-  Collapsible,
+  Accordion,
   Portal,
   RadioCard,
   Select,
@@ -34,6 +34,8 @@ import {
   bsiconKnownMissing,
   codeToIcon,
   defaultOptionOf,
+  FIELD_GROUPS,
+  fieldGroup,
   commonsUrl,
   existingOptions,
   iconSubtypes,
@@ -48,6 +50,7 @@ import {
   type CellIcon,
   type ColspanRow,
   type DiagramRow,
+  type FieldGroup,
   type FieldSpec,
   type GridRow,
   type IconKind,
@@ -456,10 +459,25 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
   // and 6 of them have no option that resolves to a file on Commons. Measured over the
   // fixture, this drops 45% of the controls and half the options inside the survivors.
   const fields = offeredFields(icon);
-  // Split by whether the field is actually SET. Everything in use stays on screen; the
-  // rest goes behind one disclosure, the same move that calmed the row form.
-  const inUse = fields.filter((f) => icon[f.field] !== undefined);
-  const unset = fields.filter((f) => icon[f.field] === undefined);
+  // Grouped into named sections, in descriptor order within each. A field keeps its section
+  // whether or not it's set, so a control never moves under you — the in-use/unset split this
+  // replaced made `state` jump out of its group the moment you touched it.
+  const grouped = new Map<FieldGroup, FieldSpec[]>();
+  for (const f of fields) {
+    const g = fieldGroup(f.field);
+    grouped.set(g, [...(grouped.get(g) ?? []), f]);
+  }
+  // Sections the icon actually uses start open. Derived from the icon rather than held in
+  // state, so selecting a different cell opens the sections for THAT icon instead of keeping
+  // the last one's.
+  const usedGroups = FIELD_GROUPS.filter((g) =>
+    (grouped.get(g.id) ?? []).some((f) => icon[f.field] !== undefined),
+  ).map((g) => g.id);
+  // A freshly placed icon has nothing set, so no section would open and the panel would be
+  // four headers and nothing else — worse than the disclosure it replaced. Appearance is the
+  // fallback because it holds the fields that apply to nearly every kind (system, state,
+  // formation, width, colour), so it's the one most likely to be wanted.
+  const openGroups = usedGroups.length ? usedGroups : ["appearance"];
   const control = (f: FieldSpec) => {
     if (f.control === "toggle") return <BoolCard key={String(f.field)} spec={f} icon={icon} set={set} />;
     // `existingOptions`, not `previewOptions` — the dead half of the choices is dropped,
@@ -551,25 +569,48 @@ function IconFields({ icon, onChange }: { icon: IconObject; onChange: (icon: Ico
           onPick={(v) => set({ subtype: v == null || v === defaultSubtype ? undefined : String(v) })}
         />
       )}
-      {inUse.map(control)}
-      {unset.length > 0 ? (
-        <Collapsible.Root>
-          <Collapsible.Trigger asChild>
-            {/* One disclosure, not a grouped taxonomy. A plain track has 23 applicable
-                fields and almost none of them set, so the flat list buried the two that
-                mattered. Discovery is still one click, which a menu of 20 names wouldn't
-                be. */}
-            <Button size="xs" variant="outline" alignSelf="flex-start">
-              <Plus size={ICON} /> {unset.length} more {unset.length === 1 ? "field" : "fields"}
-            </Button>
-          </Collapsible.Trigger>
-          <Collapsible.Content>
-            <Stack gap="1.5" pt="1.5">
-              {unset.map(control)}
-            </Stack>
-          </Collapsible.Content>
-        </Collapsible.Root>
-      ) : null}
+      {/*
+        Named sections, not one "n more fields" disclosure.
+
+        The disclosure was honest but opaque: you couldn't tell whether the eleven things behind
+        it were worth opening, so the answer was always "click and scan". Named sections say
+        what's inside, and a plain track's 14 controls read as 5 + 6 + 3.
+
+        I argued against grouping when the form had 23 fields and a menu of 20 names would have
+        been no better than a flat list. Existence filtering took it to 14, which is few enough
+        for four sections to be a map rather than another maze.
+      */}
+      {/* Keyed by kind so `defaultValue` is re-applied when the sections themselves change.
+          `defaultValue` is only read on mount, so without this, selecting a junction after a
+          track kept the track's open sections — the comment above claimed otherwise and the
+          browser said no. Keying on the KIND rather than the whole code means the user's own
+          open/close choices survive while they edit one icon. */}
+      <Accordion.Root key={icon.kind} multiple defaultValue={openGroups} size="sm" variant="plain">
+        {FIELD_GROUPS.filter((g) => grouped.get(g.id)?.length).map((g) => {
+          const inGroup = grouped.get(g.id) ?? [];
+          const setCount = inGroup.filter((f) => icon[f.field] !== undefined).length;
+          return (
+            <Accordion.Item key={g.id} value={g.id}>
+              <Accordion.ItemTrigger py="1" cursor="pointer">
+                <Text fontSize="xs" fontWeight="medium" flex="1" textAlign="left">
+                  {g.label}
+                </Text>
+                {/* How many of the section's controls the icon uses — the one thing the old
+                    counter got right, kept per section. */}
+                <Text fontSize="xs" color="fg.muted">
+                  {setCount > 0 ? `${setCount} of ${inGroup.length}` : inGroup.length}
+                </Text>
+                <Accordion.ItemIndicator />
+              </Accordion.ItemTrigger>
+              <Accordion.ItemContent>
+                <Accordion.ItemBody pb="2">
+                  <Stack gap="1.5">{inGroup.map(control)}</Stack>
+                </Accordion.ItemBody>
+              </Accordion.ItemContent>
+            </Accordion.Item>
+          );
+        })}
+      </Accordion.Root>
     </Stack>
   );
 }

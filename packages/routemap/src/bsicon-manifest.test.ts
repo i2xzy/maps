@@ -7,7 +7,17 @@ import {
   loadBsiconFilter,
   offeredFields,
 } from "./bsicon-manifest";
-import { defaultOptionOf, fieldSpec, fieldsFor, isFieldVisible, safeIconCode } from "./descriptor";
+import {
+  defaultOptionOf,
+  FIELDS,
+  fieldGroup,
+  fieldHasGroup,
+  fieldSpec,
+  fieldsFor,
+  isFieldVisible,
+  safeIconCode,
+} from "./descriptor";
+
 import type { IconObject } from "./icon";
 
 const spec = (field: string) => fieldSpec(field as keyof IconObject)!;
@@ -152,5 +162,49 @@ describe("defaultOptionOf", () => {
     expect(defaultOptionOf({ kind: "track" }, "to")).toBeUndefined();
     // Whereas clearing `state` genuinely changes nothing, on either kind.
     expect(defaultOptionOf({ kind: "junction", to: "left" }, "state")?.value).toBe("in-use");
+  });
+});
+
+describe("field groups", () => {
+  it("gives every field a home", () => {
+    // A field with no group would still render (the fallback is "appearance") but would be
+    // silently misfiled. This is what makes adding a field to the descriptor fail loudly here
+    // rather than quietly put it in the wrong section.
+    // `fieldHasGroup`, not `fieldGroup` — the latter falls back to "appearance", so a test
+    // built on it would call every field grouped and pass whatever happened.
+    expect(FIELDS.filter((f) => !fieldHasGroup(f.field)).map((f) => String(f.field))).toEqual([]);
+  });
+
+  it("splits a track's controls into sections small enough to read", () => {
+    const track: IconObject = { kind: "track" };
+    const counts = new Map<string, number>();
+    for (const f of offeredFields(track)) {
+      const g = fieldGroup(f.field);
+      counts.set(g, (counts.get(g) ?? 0) + 1);
+    }
+    // 14 fields as 5 + 6 + 3, rather than "2 shown and 11 more fields".
+    expect(counts.get("appearance")).toBe(5);
+    expect(counts.get("direction")).toBe(6);
+    expect(counts.get("shape")).toBe(3);
+    expect([...counts.values()].every((n) => n <= 8)).toBe(true);
+  });
+});
+
+describe("in use beats the visibility gate", () => {
+  it("offers a field the icon has set, even when it wouldn't otherwise apply", () => {
+    // `ABZrg` decodes to `{ kind: junction, to: right, direction: back, through: false }`, and
+    // `direction` is contextually gated for a junction — so the form offered no control for a
+    // value the icon plainly holds. The visibility gate used to be checked first, which
+    // defeated the whole point of the in-use rule.
+    const abzrg: IconObject = { kind: "junction", through: false, to: "right", direction: "back" };
+    expect(abzrg.direction).toBeDefined(); // the premise
+    expect(offeredFields(abzrg).map((f) => String(f.field))).toContain("direction");
+  });
+
+  it("still hides a gated field that is NOT set", () => {
+    // The gate is only overridden by a value actually being there.
+    const bare: IconObject = { kind: "junction", to: "right" };
+    expect(bare.direction).toBeUndefined();
+    expect(offeredFields(bare).map((f) => String(f.field))).not.toContain("direction");
   });
 });

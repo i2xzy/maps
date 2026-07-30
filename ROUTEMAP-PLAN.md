@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 750 package + 115 editor |
+| tests | 754 package + 115 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -442,6 +442,44 @@ showing a bare dash.
 junction's `to` has no default even though one is always set — clearing it gives `ABZg`, which
 isn't an icon. An earlier probe compared each option to the icon's *current* code instead and
 called `left` the default, which is a different question and the wrong one.
+
+### ~~The `n more fields` disclosure~~ — named sections instead
+**What:** One opaque disclosure. You couldn't tell whether the eleven things behind it were
+worth opening, so the answer was always "click and scan".
+**Done:** four named sections in a Chakra `Accordion` — **Appearance** (system, state,
+formation, width, colour), **Direction** (to, from, corner, entry, level, lane, crosses…),
+**Shape** (curve, parallel, transverse, interrupted…) and **Features** (legend, accessible,
+doubleRow). A plain track's 14 controls read as 5 + 6 + 3 instead of "3 shown, 11 more".
+
+I argued against grouping when the form had 23 fields, on the grounds that a menu of 20 names
+is no better than a flat list. Existence filtering took it to 14, which is few enough for
+sections to be a map rather than another maze — the earlier objection expired rather than
+being wrong.
+
+**Design choices worth keeping:**
+- A field keeps its section whether or not it's set, so a control never moves under you. The
+  in-use/unset split this replaced made `state` jump out of its group the moment you touched it.
+- Sections holding a set field start open; if nothing is set, Appearance opens, or a fresh icon
+  would show four headers and nothing else — worse than the disclosure.
+- The grouping lives in `descriptor.ts` with an exhaustiveness test, because a field with no
+  group would still render (the fallback is Appearance) but would be silently misfiled. The test
+  asks `fieldHasGroup`, not `fieldGroup` — the latter falls back, so a test built on it would
+  call every field grouped and pass whatever happened. Verified by removing an entry.
+
+### Trap: `defaultValue` on an Accordion is read once
+Switching from a track to a junction kept the TRACK's open sections, because `defaultValue` only
+applies on mount. Keyed by `icon.kind` so it re-applies when the sections themselves change,
+while the user's own open/close choices survive editing one icon. My comment claimed it already
+worked per-icon; the browser said otherwise.
+
+### A real bug this uncovered: a set field could be unreachable
+`ABZrg` decodes to `{ kind: junction, to: right, direction: back }` — and `direction` is not a
+junction field, so `fieldsFor` never made it a candidate and the form offered no way to see or
+clear a value the icon plainly held. Two ordering errors, both against the documented safety
+rule that a value in use is always offered:
+1. `fieldIsOffered` checked the contextual visibility gate BEFORE the in-use test.
+2. `offeredFields` only ever considered `fieldsFor(kind)`. It now unions in every field the icon
+   actually holds.
 
 ### Mobile layout — deferred to the front-end rework
 **What:** The editor is a three-pane splitter at `100dvh`. Unusable on a phone, and Wikipedia

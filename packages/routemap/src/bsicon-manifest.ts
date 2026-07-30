@@ -21,7 +21,7 @@
  */
 import { bloomFromBase64, bloomHas } from "./bloom";
 import type { Bloom } from "./bloom";
-import { fieldsFor, isFieldVisible, previewOptions, safeIconCode } from "./descriptor";
+import { FIELDS, fieldsFor, isFieldVisible, previewOptions, safeIconCode } from "./descriptor";
 import type { FieldOption, FieldSpec } from "./descriptor";
 import { iconToCode } from "./icon";
 import type { IconObject } from "./icon";
@@ -113,8 +113,13 @@ export function existingOptions(icon: IconObject, field: keyof IconObject): Fiel
  * testing the sample alone would call a live field dead.
  */
 export function fieldIsOffered(spec: FieldSpec, icon: IconObject): boolean {
+  // IN USE beats every other rule, including the visibility gate — which is why this is first.
+  // It used to come second, so a field that was set but contextually gated vanished from the
+  // form: `ABZrg` decodes to `{ to: "right", direction: "back" }` and offered no `direction`
+  // control at all, making a value the icon plainly holds impossible to see or clear. Showing a
+  // set-but-inapplicable field is the lesser evil by far.
+  if (icon[spec.field] !== undefined) return true;
   if (!isFieldVisible(spec, icon)) return false;
-  if (icon[spec.field] !== undefined) return true; // in use: always editable
   if (spec.control === "toggle") {
     const on = spec.sample?.[spec.field] ?? true;
     return bsiconExists(safeIconCode({ ...icon, ...spec.requires, [spec.field]: on } as IconObject));
@@ -122,7 +127,17 @@ export function fieldIsOffered(spec: FieldSpec, icon: IconObject): boolean {
   return existingOptions(icon, spec.field).some((o) => bsiconExists(o.code));
 }
 
-/** The fields the form should show for an icon, in descriptor order. */
+/**
+ * The fields the form should show for an icon, in descriptor order.
+ *
+ * Candidates are the fields for this KIND plus any field the icon actually holds. The second
+ * half matters: `fieldsFor` is gated by kind, so a value that doesn't belong to the current kind
+ * was never even considered. `ABZrg` decodes to `{ kind: junction, to: right, direction: back }`
+ * and `direction` isn't a junction field — so the form offered no way to see or clear a value
+ * the icon plainly has. Whatever the model holds must be reachable.
+ */
 export function offeredFields(icon: IconObject): FieldSpec[] {
-  return fieldsFor(icon.kind).filter((spec) => fieldIsOffered(spec, icon));
+  const forKind = new Set(fieldsFor(icon.kind));
+  const candidates = FIELDS.filter((spec) => forKind.has(spec) || icon[spec.field] !== undefined);
+  return candidates.filter((spec) => fieldIsOffered(spec, icon));
 }

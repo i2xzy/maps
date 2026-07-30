@@ -398,6 +398,90 @@ export interface FieldOption {
 }
 
 /**
+ * How the form groups fields, so ~14 controls read as a few named sections.
+ *
+ * The single "n more fields" disclosure it replaces was honest but opaque: you couldn't tell
+ * whether the 11 hidden things were worth opening. These names come from what the fields
+ * DESCRIBE, not from their control type — `interrupted` is a toggle and `curve` a dropdown, and
+ * both are about the shape of the line.
+ *
+ * Grouped here rather than in the editor because it's a statement about the icon model, and
+ * because a test can then assert every field has a home — a field with no group would silently
+ * vanish from the form.
+ */
+export type FieldGroup = "appearance" | "direction" | "shape" | "features";
+
+/** Display names for the groups, in the order the form shows them. */
+export const FIELD_GROUPS: readonly { id: FieldGroup; label: string }[] = [
+  // What the line or station IS — the five that apply to nearly every kind.
+  { id: "appearance", label: "Appearance" },
+  // Where it points and what it meets.
+  { id: "direction", label: "Direction" },
+  // How the line itself is drawn.
+  { id: "shape", label: "Shape" },
+  // Extras that don't fit the geometry: legend-only icons, accessibility, double rows.
+  { id: "features", label: "Features" },
+];
+
+const GROUP_OF: Record<string, FieldGroup> = {
+  system: "appearance",
+  state: "appearance",
+  formation: "appearance",
+  width: "appearance",
+  colour: "appearance",
+  variant: "appearance",
+  category: "appearance",
+
+  to: "direction",
+  from: "direction",
+  direction: "direction",
+  corner: "direction",
+  cornerAdd: "direction",
+  entry: "direction",
+  connect: "direction",
+  level: "direction",
+  lane: "direction",
+  by: "direction",
+  offset: "direction",
+  offsetTarget: "direction",
+  crosses: "direction",
+  region: "direction",
+  roadClass: "direction",
+  roadLanes: "direction",
+
+  curve: "shape",
+  length: "shape",
+  parallel: "shape",
+  transverse: "shape",
+  interrupted: "shape",
+  interruptedCorners: "shape",
+  stub: "shape",
+  continuation: "shape",
+  through: "shape",
+
+  legend: "features",
+  accessible: "features",
+  doubleRow: "features",
+};
+
+/**
+ * Whether a field has an EXPLICIT group, as opposed to falling back.
+ *
+ * Exported so the exhaustiveness test can ask a question `fieldGroup` can't answer: it returns
+ * "appearance" for anything unlisted, so a test built on it would report every field as grouped
+ * and pass vacuously.
+ */
+export const fieldHasGroup = (field: keyof IconObject): boolean =>
+  Object.hasOwn(GROUP_OF, String(field));
+
+/** Which section of the form a field belongs in. */
+export function fieldGroup(field: keyof IconObject): FieldGroup {
+  // "appearance" rather than a throw: a field with no entry should be visible and slightly
+  // misfiled, never missing. The exhaustiveness test is what keeps that from happening.
+  return GROUP_OF[String(field)] ?? "appearance";
+}
+
+/**
  * The option that means the same as leaving the field unset, if there is one.
  *
  * Several fields have a value that emits NO affix, so choosing it and clearing the field
