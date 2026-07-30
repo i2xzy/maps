@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 739 package + 101 editor |
+| tests | 747 package + 101 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -91,8 +91,8 @@ text should be.
 
 | | before | after |
 |---|---|---|
-| placeholders in the fixture | 260 | **19** (93% resolved) |
-| rows showing one | 205/915 (22%) | **18/915 (2%)** |
+| placeholders in the fixture | 260 | **0** (100% resolved) |
+| rows showing one | 205/915 (22%) | **0/915** |
 | API requests for a whole diagram | would be 129 | **3** |
 
 **How:** two families expand to something we can already render, and they share one batched
@@ -169,15 +169,31 @@ This is also the ONE family allowed to return markup. The guard that rejects `<`
 makes a misfiled name fail closed — it's what keeps `{{BSsrws}}` out — so the exception is by
 name, and only because we parse `{{rcb}}`'s shape rather than render it.
 
-**What remains, 19 placeholders across 18 rows (2%):**
+**Nothing remains: 0 of 915 rows show a placeholder.** The last 19 were three patterns:
 
-| count | template | verdict |
-|---|---|---|
-| 9 | `{{BSsrws}}` | a `<table>` + templatestyles — genuine layout; the placeholder is the right answer |
-| 8 | bare wikitext | one-offs; worth reading individually rather than pattern-matching |
-| 2 | `{{center}}`, `{{BS1/2}}` | one each |
+- **`{{BSsrws}}` (9)** — an `.RMsplit` table, so a split. Its lines can't be built from the args
+  the way `{{BSto}}`'s can, because the article each line links to is derived the way `{{rws}}`
+  derives one; only the expansion knows it. The `<td>`s are read out and each becomes a line.
+  This had been filed as "genuine layout, keep the placeholder" purely because it expands to a
+  `<table>` — it expands to a table because a split IS a table.
+- **Marks wrapped round a whole template (8)** — `'''{{stl|…}}'''`, `''{{small|…}}''`,
+  `''{{BSsplit|…}}''`. Handled by unwrapping, re-parsing the inside as a label, expanding THAT,
+  and pushing the marks down onto the text runs it produced. Recursion rather than special
+  cases, so a bolded station link, a bolded wrapper and a bolded split all take one route.
+  A split run can't carry a mark itself, so its lines get them.
+- **`{{center}}` and `{{BS1/2}}` (2)** — two more content wrappers, both verified.
 
-At 2% this is done for MVP. What's left needs case-by-case judgement, not another family.
+**Caught in a browser, not by a test:** the render path handled marks correctly while the
+COLLECTOR still asked `expandableCall` on the raw run — which isn't a bare call — so the inner
+call was never fetched and the label stayed a placeholder regardless. `expandableCall` unwraps
+marks; the per-family helpers deliberately do NOT, because the renderer routes a marked run
+through its own branch to re-apply them, and matching through marks there would silently lose
+the bold.
+
+**Note on the mark handling:** a mark spanning the WHOLE field is lifted to a label-level
+`italic`/`bold` by the parser and already worked. Only a field with other content keeps the
+marks on the run — which is every real instance. Two tests were initially written against the
+already-working shape and passed without touching the new code.
 
 **Trap, twice over:** `{{BSsrws}}` reads exactly like a station link and expands to a `<table>` with
 templatestyles. It was in the whitelist on the strength of its name until each expansion was

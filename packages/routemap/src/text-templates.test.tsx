@@ -472,3 +472,106 @@ describe("{{rcb}} route badges", () => {
     expect(expandableCall("{{rcb|a|b}}")).toBe("rcb|a|b");
   });
 });
+
+describe("marks wrapped round a whole template", () => {
+  const html = (line: string, resolve?: Record<string, string>) =>
+    renderToStaticMarkup(
+      <RouteMap
+        diagram={fromWikitext(line)}
+        resolveText={resolve ? createTextResolver(resolve) : undefined}
+        resolveHref={(r) => `/${r}`}
+      />,
+    );
+
+  // The marks stay ON the run only when the field has other content: a mark spanning the WHOLE
+  // field is lifted to a label-level italic/bold by the parser, and that case already worked.
+  // Every real instance in the fixture is this shape, so these lines carry a leading word —
+  // without it the tests would pass without touching the new code at all.
+  it("bolds a station link wrapped in bold marks", () => {
+    const out = html("A! !STR~~to '''{{stl|Sofia Metro|Serdika}}'''", {
+      "stl|Sofia Metro|Serdika": "[[Serdika Metro Station|Serdika]]",
+    });
+    expect(out).toContain('href="/Serdika Metro Station"');
+    expect(out).toContain("font-weight:bold");
+    expect(out).not.toContain("'''");
+  });
+
+  it("italicises a wrapper's content", () => {
+    const out = html("A! !STR~~to ''{{small|(planned)}}''");
+    expect(out).toContain("(planned)");
+    expect(out).toContain("font-style:italic");
+    expect(out).not.toContain("{{small");
+  });
+
+  it("italicises the lines of a wrapped split", () => {
+    // A split run can't carry a mark itself, so the marks go down onto its lines.
+    const out = html("A! !STR~~to ''{{BSsplit|planned|extension}}''");
+    expect(out).toContain("planned");
+    expect(out).toContain("extension");
+    expect(out).toContain("display:inline-table"); // still a split, not flattened
+    expect(out.match(/font-style:italic/g) ?? []).toHaveLength(2); // one per line
+  });
+
+  it("leaves marks alone when the inside resolves to nothing new", () => {
+    // No resolver: unwrapping would strip the marks and show the same source, so the run is
+    // left exactly as it was.
+    const out = html("A! !STR~~to '''{{tram|Derker}}'''");
+    expect(out).toContain("{{tram|Derker}}");
+  });
+});
+
+describe("{{BSsrws}} is a split, not layout", () => {
+  const EXPANSION =
+    '<templatestyles src="Routemap/styles.css"/> <table class="RMsplit">' +
+    '<tr><td style="padding:0">[[Ewood Bridge and Edenfield railway station|Ewood Bridge]]</td></tr>' +
+    '<tr><td style="padding:0">[[Ewood Bridge and Edenfield railway station|and Edenfield]]</td></tr></table>';
+
+  it("stacks its cells as split lines, each linked", () => {
+    // Filed as "genuine layout" because it expands to a <table>. It expands to a table
+    // because a split IS a table.
+    const out = renderToStaticMarkup(
+      <RouteMap
+        diagram={fromWikitext("A! !STR~~{{BSsrws|Ewood Bridge|and Edenfield}}")}
+        resolveText={createTextResolver({ "BSsrws|Ewood Bridge|and Edenfield": EXPANSION })}
+        resolveHref={(r) => `/${r}`}
+      />,
+    );
+    expect(out).toContain("display:inline-table"); // the split construct, not a <br>
+    expect(out).toContain(">Ewood Bridge<");
+    expect(out).toContain(">and Edenfield<");
+    expect(out).toContain('href="/Ewood Bridge and Edenfield railway station"');
+    // The diagram itself is an HTML table, so assert the EXPANSION's markup is gone.
+    expect(out).not.toContain("RMsplit");
+    expect(out).not.toContain("templatestyles");
+  });
+
+  it("keeps the placeholder when there aren't multiple cells", () => {
+    const out = renderToStaticMarkup(
+      <RouteMap
+        diagram={fromWikitext("A! !STR~~{{BSsrws|One}}")}
+        resolveText={createTextResolver({ "BSsrws|One": "<table><tr><td>only</td></tr></table>" })}
+      />,
+    );
+    expect(out).toContain("{{BSsrws");
+  });
+});
+
+describe("the collector sees through marks", () => {
+  it("fetches the call inside a mark wrapper", () => {
+    // Found in a browser, not by a test: the render path handled marks correctly, but the
+    // COLLECTOR asked `expandableCall` on the raw run, which isn't a bare call — so nothing
+    // was ever fetched and the label stayed a placeholder regardless.
+    const marked = "'''{{stl|Sofia Metro|Serdika}}'''";
+    expect(textTemplateCall(marked)).toBe(null); // per-family helpers must NOT unwrap
+    expect(expandableCall(marked)).toBe("stl|Sofia Metro|Serdika");
+    expect(collectTextTemplates(fromWikitext(`A! !STR~~to ${marked}`))).toEqual([
+      "stl|Sofia Metro|Serdika",
+    ]);
+  });
+
+  it("collects a {{BSsrws}} call, whose family expects markup back", () => {
+    expect(collectTextTemplates(fromWikitext("A! !STR~~{{BSsrws|Ewood Bridge|and Edenfield}}"))).toEqual(
+      ["BSsrws|Ewood Bridge|and Edenfield"],
+    );
+  });
+});

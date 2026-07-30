@@ -30,6 +30,7 @@ import { isWidthPrefix, prefixWidthFraction, type NormalizedSide } from "./norma
 import {
   badgeTemplateCall,
   createLogoResolver,
+  splitTableCall,
   iconTemplateCall,
   textTemplateCall,
   type ResolvedLogo,
@@ -538,10 +539,42 @@ function renderFragment(
  * caught `{{BSsrws}}` (looks like a station link, is a table), `{{rcb}}` (looks like a route
  * icon, is a styled span) and `{{enlarge}}` (looks like a text wrapper, is a file).
  */
-const WRAPPER_TEMPLATES = new Set(["left", "right", "small", "float"]);
+const WRAPPER_TEMPLATES = new Set(["left", "right", "small", "float", "center", "bs1/2"]);
 
 /** Templates that render as whitespace. Their argument is a length, never content. */
 const SPACER_TEMPLATES = new Set(["0", "pad"]);
+
+/** Whether a run is still the same opaque `{ raw }` we started from. */
+const sameRaw = (run: RenderRun, inner: string): boolean =>
+  typeof run === "object" && run != null && "raw" in run && run.raw.trim() === inner.trim();
+
+/**
+ * Push whole-run marks down onto the text they cover.
+ *
+ * Recurses into a split, because `''{{BSsplit|a|b}}''` italicises both lines and a split run
+ * has nowhere to carry a mark itself. Icons, breaks and unresolved raws are left alone — a mark
+ * means nothing on them.
+ */
+function applyMarks(runs: RenderRun[], marks: { bold: boolean; italic: boolean }): RenderRun[] {
+  const mark = <T extends object>(r: T): T => ({
+    ...r,
+    ...(marks.bold ? { bold: true } : {}),
+    ...(marks.italic ? { italic: true } : {}),
+  });
+  return runs.map((run) => {
+    if (typeof run === "string") return mark({ text: run }) as RenderRun;
+    if ("split" in run) {
+      return {
+        split: run.split.map((line) =>
+          typeof line === "string"
+            ? line
+            : (applyMarks(line, marks) as TextRun[]),
+        ),
+      };
+    }
+    return "text" in run || "rws" in run ? (mark(run) as RenderRun) : run;
+  });
+}
 
 function expandRawRuns(
   text: string | TextRun[],
@@ -562,6 +595,39 @@ function expandRawRuns(
       ];
     }
     if (!("raw" in run)) return [run];
+
+    /*
+     * Wiki marks wrapped around the WHOLE run: `'''{{stl|…}}'''`, `''{{small|(planned)}}''`,
+     * `''{{BSsplit|planned|extension}}''`. The mark span covers a single run, so the parser
+     * kept the lot as one `{ raw }` and none of the families below ever saw it.
+     *
+     * Handled by unwrapping, re-parsing the inside as a label, expanding THAT, and pushing the
+     * marks down onto the text runs it produced. Recursion rather than special cases, so a
+     * bolded station link, a bolded wrapper and a bolded split all work by the same route.
+     */
+    const marked = /^('{2,5})([\s\S]+)\1$/.exec(run.raw.trim());
+    if (marked) {
+      const [, ticks = "", inner = ""] = marked;
+      const marks = { bold: ticks.length !== 2, italic: ticks.length !== 3 };
+      const expanded = expandRawRuns(parseLabelText(inner), resolveText);
+      if (typeof expanded !== "string" && !(expanded.length === 1 && expanded[0] != null && sameRaw(expanded[0], inner))) {
+        return applyMarks(expanded, marks);
+      }
+    }
+
+    /*
+     * `{{BSsrws|Ewood Bridge|and Edenfield}}` expands to an `.RMsplit` table — a split, which
+     * we already model. Its lines can't be built from the args the way `{{BSto}}`'s can,
+     * because the article each line links to is derived the way `{{rws}}` derives one; only
+     * the expansion knows it. So the `<td>`s are read out and each becomes a line.
+     */
+    const splitCall = resolveText ? splitTableCall(run.raw) : null;
+    if (splitCall) {
+      const expanded = resolveText!(splitCall);
+      const cells = [...(expanded ?? "").matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => m[1] ?? "");
+      if (cells.length > 1) return [{ split: cells.map((c) => parseLabelText(c.trim())) }];
+      return [run];
+    }
 
     // A File link written straight into the label — `[[File:BSicon TRAM.svg|20px|…]]`, which
     // real diagrams use for the transport-mode glyphs. Already expanded wikitext, so it

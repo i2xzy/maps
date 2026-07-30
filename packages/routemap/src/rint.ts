@@ -336,6 +336,20 @@ export const ICON_TEMPLATES = new Set(["rmri", "ric", "enlarge"]);
 export const BADGE_TEMPLATES = new Set(["rcb"]);
 
 /**
+ * Templates that expand to an `.RMsplit` table — the same construct as `{{BSsplit}}`.
+ *
+ * `{{BSsrws|Ewood Bridge|and Edenfield}}` stacks a station name over two lines, BOTH linking
+ * to the article its args resolve to. Unlike `{{BSto}}` this can't be built from the args: the
+ * article is derived the way `{{rws}}` derives one (`… railway station`, disambiguators and
+ * all), so only the expansion knows the target.
+ *
+ * This was filed as "genuine layout, keep the placeholder" on the strength of it expanding to
+ * a `<table>`. It expands to a table because a split IS a table — the same mistake as reading
+ * `{{enlarge}}` as a text wrapper, in the opposite direction.
+ */
+export const SPLIT_TABLE_TEMPLATES = new Set(["bssrws"]);
+
+/**
  * The expandable call inside a `{ raw }` run, or null if it isn't one.
  *
  * `{{tram|Derker}}` -> `tram|Derker`, ready to be re-wrapped for the API.
@@ -356,9 +370,27 @@ export const iconTemplateCall = (raw: string): string | null => templateCall(raw
 /** The call inside a `{ raw }` run if it's a route-badge template, else null. */
 export const badgeTemplateCall = (raw: string): string | null => templateCall(raw, BADGE_TEMPLATES);
 
-/** Any family — what the collector fetches and the renderer substitutes. */
-export const expandableCall = (raw: string): string | null =>
-  textTemplateCall(raw) ?? iconTemplateCall(raw) ?? badgeTemplateCall(raw);
+/** The call inside a `{ raw }` run if it expands to an `.RMsplit` table, else null. */
+export const splitTableCall = (raw: string): string | null =>
+  templateCall(raw, SPLIT_TABLE_TEMPLATES);
+
+/**
+ * Any family, seeing through wiki marks wrapped round the whole run.
+ *
+ * This is what the COLLECTOR asks, and it has to unwrap: a run like `'''{{stl|X}}'''` is not a
+ * bare call, so the call was never fetched and the renderer had nothing to substitute — the
+ * label stayed a placeholder however well the render path handled marks.
+ *
+ * The per-family helpers deliberately do NOT unwrap. The renderer routes a marked run through
+ * its own branch so the marks get re-applied to the expansion; if `textTemplateCall` matched
+ * through marks, that branch would be skipped and the bold silently lost.
+ */
+export const expandableCall = (raw: string): string | null => {
+  const bare = /^('{2,5})([\s\S]+)\1$/.exec(raw.trim())?.[2]?.trim() ?? raw;
+  return (
+    textTemplateCall(bare) ?? iconTemplateCall(bare) ?? badgeTemplateCall(bare) ?? splitTableCall(bare)
+  );
+};
 
 /**
  * A separator that survives `expandtemplates` untouched.
@@ -396,7 +428,8 @@ async function fetchBatch(api: string, calls: string[]): Promise<void> {
     // A badge template is the exception, and only because we don't render its markup: we
     // extract two named fields from a shape we've checked. The guard stays for everything
     // else precisely so the next misfiled name fails closed.
-    const expectsMarkup = BADGE_TEMPLATES.has(call.split("|")[0]!.trim().toLowerCase());
+    const family = call.split("|")[0]!.trim().toLowerCase();
+    const expectsMarkup = BADGE_TEMPLATES.has(family) || SPLIT_TABLE_TEMPLATES.has(family);
     if (expectsMarkup || !/[<>]/.test(value)) textCache.set(call, value);
   });
 }
