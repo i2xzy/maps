@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 739 package + 98 editor |
+| tests | 739 package + 101 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -342,15 +342,39 @@ console output at all. Chakra/Ark generate ids and the tests already show `data-
 under jsdom, so it's most likely that. Recorded rather than chased: it costs nothing in the
 artefact that ships.
 
-### The last 39: `{ split }` needs a node WITH content
-**What:** The remaining 3%. A split's lines are editable text, which an atom can't hold.
-**How:** a ProseMirror node containing `splitLine` children, the way a table contains rows —
-TipTap's table extension is the reference. The work is all in the edges: caret in and out,
-Enter/Backspace at line boundaries, whole-node selection. None of it is testable under jsdom,
-so it needs browser-driven tests.
-**Depends on:** Nothing, but 3% is a far weaker case than 23% was. Worth reconsidering
-whether a simpler affordance — edit the split's lines in a small side panel rather than
-inline — buys most of it for a fraction of the work.
+### ~~The last 39: `{ split }`~~ — 3% -> **0.8%**
+**What:** A `{{BSsplit}}` label fell back to a dead-end message. The plan called for a
+ProseMirror node WITH content — a split containing `splitLine` children, TipTap's table
+extension as the reference — with all the work in the edges: caret in and out,
+Enter/Backspace at line boundaries, whole-node selection, and browser-driven tests because
+none of it works under jsdom.
+
+**Measuring the 39 made that unnecessary for most of them.** 30 of 39 splits (77%) ARE the
+whole label, with 2–4 lines of plain text and links. Every hard part of an inline node exists
+only to edit a split sitting INSIDE running text — which is the other 9. So a whole-label
+split gets **one editor per line**, reusing the existing RTE (links, marks and logos already
+work in it), with add/remove-line buttons.
+
+| | labels | rows |
+|---|---|---|
+| not editable, originally | 280/1199 (23%) | 229/915 (25%) |
+| after the raw atom chip | 39 (3%) | 36 (4%) |
+| **after per-line splits** | **9 (0.8%)** | **8 (0.9%)** |
+
+**Details worth keeping:**
+- Removing a line from a TWO-line split collapses it to the plain label — that's how you undo
+  a split. It was disabled at two at first, which left the collapse branch unreachable.
+- A line the RTE hands back can be the OBJECT form when it carries label-level marks, and a
+  split line has nowhere to put those, so they're pushed down onto the runs they cover.
+  Dropping them would silently un-italicise a line the moment its neighbour was edited.
+- The dead-end message now says WHY and points at the wikitext panel, not at a JSON pane that
+  isn't in the production build.
+
+### The last 9: a split among other runs
+**What:** `["to ", { split: […] }]` — the split shares its label with text. Per-line fields
+can't offer that text, so these still show the message.
+**How:** this is where the node-with-content actually earns itself, or an atom chip for the
+split plus a popover for its lines. At 0.8% neither is urgent.
 
 ### Mobile layout
 **What:** The editor is a three-pane splitter at `100dvh`. Unusable on a phone.

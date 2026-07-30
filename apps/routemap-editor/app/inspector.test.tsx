@@ -434,11 +434,58 @@ describe("Inspector: row selection (labels & colspan)", () => {
         select={{ kind: "row", row: 0 }}
       />,
     );
-    expect(screen.getByText(/Rich label — edit in JSON/)).toBeTruthy();
+    // The message now says WHY and points somewhere the user can actually go — the JSON
+    // pane it used to name isn't in the production build.
+    expect(screen.getByText(/can’t model — edit it in the wikitext panel/)).toBeTruthy();
   });
 
 
 
+
+  it("edits a whole-label {{BSsplit}} one line at a time", () => {
+    // 30 of the 39 splits in the fixture ARE the whole label, which is why this beats an
+    // inline node: every hard part of that (caret across a line boundary, Enter/Backspace at
+    // the edges) exists only for a split sitting inside running text.
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ right: [{ split: [["factory"], ["or works"]] }], cells: ["STR"] }] }}
+        select={{ kind: "row", row: 0 }}
+      />,
+    );
+    expect(screen.queryByText(/can’t model/)).toBeNull(); // no longer a dead end
+    fireEvent.change(screen.getByLabelText("Right main text line 2"), { target: { value: "or mill" } });
+    expect((model().rows![0] as { right: unknown }).right).toEqual([
+      { split: [["factory"], ["or mill"]] },
+    ]);
+  });
+
+  it("adds and removes split lines, collapsing below two", () => {
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ right: [{ split: [["a"], ["b"]] }], cells: ["STR"] }] }}
+        select={{ kind: "row", row: 0 }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Line/ }));
+    expect((model().rows![0] as unknown as { right: [{ split: unknown[] }] }).right[0].split).toHaveLength(3);
+
+    fireEvent.click(screen.getByTitle("Remove line 3"));
+    fireEvent.click(screen.getByTitle("Remove line 2"));
+    // One line isn't a split — it collapses, rather than leaving a stack of one nobody sees.
+    expect((model().rows![0] as { right: unknown }).right).toEqual(["a"]);
+  });
+
+  it("won't offer per-line editing when the split isn't the whole label", () => {
+    // Those 9 need the surrounding text editable too, which per-line fields can't give.
+    renderWithChakra(
+      <Controlled
+        initial={{ rows: [{ right: ["to ", { split: [["a"], ["b"]] }], cells: ["STR"] }] }}
+        select={{ kind: "row", row: 0 }}
+      />,
+    );
+    expect(screen.queryByLabelText("Right main text line 1")).toBeNull();
+    expect(screen.getByText(/can’t model/)).toBeTruthy();
+  });
 
   it("edits colspan text", () => {
     renderWithChakra(

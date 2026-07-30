@@ -152,6 +152,26 @@ export function labelToDoc(label: SideLabel | null | undefined): JSONContent {
   };
 }
 
+/**
+ * The lines of a label that is EXACTLY one `{{BSsplit}}`, or null.
+ *
+ * 30 of the 39 splits in the fixture are the whole label, so the useful editor for them is
+ * one field per line rather than an inline node with a caret that has to cross line
+ * boundaries. Returns null when the split sits alongside other content, or when a line holds
+ * something the RTE can't take (a nested split), because then per-line editing would lose it.
+ */
+export function splitLinesOf(label: SideLabel | null | undefined): TextRun[][] | null {
+  if (label == null || typeof label === "string") return null;
+  const runs = Array.isArray(label) ? label : asRuns(label.text as SideLabel | undefined);
+  if (runs.length !== 1) return null;
+  const only = runs[0];
+  if (only == null || typeof only !== "object" || !("split" in only)) return null;
+  // A label-level title has nowhere to go in a per-line editor.
+  if (!Array.isArray(label) && label.title != null) return null;
+  const lines = only.split.map((line) => (typeof line === "string" ? [line] : line));
+  return lines.every((line) => labelIsRteEditable(line)) ? lines : null;
+}
+
 const markOf = (node: JSONContent, type: string) => node.marks?.find((m) => m.type === type);
 
 /** Convert a TipTap doc back to a `SideLabel` (collapsed to a plain string when

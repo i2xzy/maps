@@ -54,12 +54,13 @@ import {
   type RouteDiagram,
   type Selection,
   type SideLabel,
+  type TextRun,
   type SideSlots,
   type SlotName,
 } from "@repo/routemap";
 import { LabelRichEditor } from "./label-editor";
 import { useTextBuffer } from "./use-text-buffer";
-import { labelIsRteEditable } from "./label-doc";
+import { labelIsRteEditable, splitLinesOf } from "./label-doc";
 import type { LogoResolver } from "./rint-node";
 import type { RwsResolver } from "./rws-node";
 
@@ -654,6 +655,8 @@ function LabelSlot({
   resolveRws?: RwsResolver;
   resolveLogo?: LogoResolver;
 }): ReactNode {
+  // A `{{BSsplit}}` that is the WHOLE label gets one editor per line — see below.
+  const splitLines = splitLinesOf(value);
   return (
     <Stack gap="1">
       <Flex align="center" justify="space-between">
@@ -680,13 +683,86 @@ function LabelSlot({
             resolveLogo={resolveLogo}
           />
         </>
+      ) : splitLines ? (
+        /*
+         * A `{{BSsplit}}` that IS the whole label: one editor per line.
+         *
+         * 30 of the 39 splits in the fixture are shaped this way, which is why this beats an
+         * inline node whose caret has to cross line boundaries — all the hard parts of that
+         * (Enter/Backspace at a boundary, whole-node selection) exist only to edit a split
+         * that sits INSIDE running text, and that's the other 9.
+         *
+         * A split stacks lines WITHOUT splitting the label around it, which is exactly the
+         * distinction the document can't hold — so the lines are edited apart from it.
+         */
+        <Stack gap="1">
+          {splitLines.map((line, i) => (
+            <HStack key={i} gap="1" align="start">
+              <Box flex="1">
+                <LabelRichEditor
+                  value={line}
+                  onChange={(next) => {
+                    const lines = splitLines.map((l, j) => (j === i ? asLine(next) : l));
+                    onChange([{ split: lines }]);
+                  }}
+                  ariaLabel={`${capitalize(side)} ${caption.toLowerCase()} line ${i + 1}`}
+                  resolveRws={resolveRws}
+                  resolveLogo={resolveLogo}
+                />
+              </Box>
+              <MiniBtn
+                title={`Remove line ${i + 1}`}
+                onClick={() => {
+                  // Below two lines it isn't a split any more, so collapse to the plain
+                  // label. Not disabled at two: removing a line from a two-line split is how
+                  // you undo the split, and blocking it left the collapse unreachable.
+                  const kept = splitLines.filter((_, j) => j !== i);
+                  onChange(kept.length > 1 ? [{ split: kept }] : (kept[0] ?? undefined));
+                }}
+              >
+                <Trash2 size={ICON} />
+              </MiniBtn>
+            </HStack>
+          ))}
+          <Button
+            size="xs"
+            variant="outline"
+            alignSelf="flex-start"
+            onClick={() => onChange([{ split: [...splitLines, [""]] }])}
+          >
+            <Plus size={ICON} /> Line
+          </Button>
+        </Stack>
       ) : (
         <Text fontSize="xs" color="fg.muted">
-          (Rich label — edit in JSON)
+          {/* Say WHY. "Rich label" told the user nothing about what to do next, and with no
+              JSON pane in production it named a place they can't go. */}
+          Contains wikitext this form can’t model — edit it in the wikitext panel.
         </Text>
       )}
     </Stack>
   );
+}
+
+/**
+ * A line the RTE handed back, as the run array a split holds.
+ *
+ * The RTE collapses simple content to a plain string and rich content to runs, but returns the
+ * OBJECT form when the line carries label-level marks. A split line has nowhere to put those,
+ * so they're pushed down onto the text runs they cover — dropping them would silently
+ * un-italicise a line the moment its neighbour was edited.
+ */
+function asLine(value: SideLabel | undefined): TextRun[] {
+  if (value == null) return [""];
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value;
+  const { text, ...marks } = value;
+  const runs: TextRun[] = typeof text === "string" ? [text] : (text ?? []);
+  return runs.map((run) => {
+    if (typeof run === "string") return { text: run, ...marks };
+    // Only text runs can carry marks; an icon, break, raw or nested split can't.
+    return "text" in run || "rws" in run ? { ...run, ...marks } : run;
+  });
 }
 
 function ColspanBody({ row, onChange }: { row: ColspanRow; onChange: (r: DiagramRow) => void }): ReactNode {
