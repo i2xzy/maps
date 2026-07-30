@@ -60,7 +60,7 @@ import {
 } from "@repo/routemap";
 import { LabelRichEditor } from "./label-editor";
 import { useTextBuffer } from "./use-text-buffer";
-import { labelIsRteEditable, splitLinesOf } from "./label-doc";
+import { labelIsRteEditable, splitLinesOf, splitsIn } from "./label-doc";
 import type { LogoResolver } from "./rint-node";
 import type { RwsResolver } from "./rws-node";
 
@@ -657,6 +657,10 @@ function LabelSlot({
 }): ReactNode {
   // A `{{BSsplit}}` that is the WHOLE label gets one editor per line — see below.
   const splitLines = splitLinesOf(value);
+  // A split that SHARES the label: the RTE handles the surrounding text with the split as an
+  // atom chip, and its lines get the same per-line editors underneath. Only reached when this
+  // isn't a whole-label split, which the branch order below guarantees.
+  const splitsHere = splitsIn(value);
   return (
     <Stack gap="1">
       <Flex align="center" justify="space-between">
@@ -670,7 +674,24 @@ function LabelSlot({
           <Trash2 size={ICON} />
         </MiniBtn>
       </Flex>
-      {labelIsRteEditable(value) ? (
+      {/* A whole-label split is checked FIRST. Splits became RTE-editable (as an atom
+          chip), so testing `labelIsRteEditable` first sent every split to the RTE and the
+          per-line editor was never reached. */}
+      {splitLines ? (
+        /*
+         * A `{{BSsplit}}` that IS the whole label. 30 of the 39 splits in the fixture are
+         * shaped this way; the rest share their label and are handled above, with the RTE.
+         */
+        <SplitLines
+          lines={splitLines}
+          label={`${capitalize(side)} ${caption.toLowerCase()}`}
+          onChange={(next) =>
+            onChange(next == null ? undefined : next.length > 1 ? [{ split: next }] : next[0])
+          }
+          resolveRws={resolveRws}
+          resolveLogo={resolveLogo}
+        />
+      ) : labelIsRteEditable(value) ? (
         <>
           {/* No separate logo strip any more. A logo is an `{ icon }` run, so the
               toolbar's logo button puts it in the document like any other content —
@@ -682,57 +703,19 @@ function LabelSlot({
             resolveRws={resolveRws}
             resolveLogo={resolveLogo}
           />
-        </>
-      ) : splitLines ? (
-        /*
-         * A `{{BSsplit}}` that IS the whole label: one editor per line.
-         *
-         * 30 of the 39 splits in the fixture are shaped this way, which is why this beats an
-         * inline node whose caret has to cross line boundaries — all the hard parts of that
-         * (Enter/Backspace at a boundary, whole-node selection) exist only to edit a split
-         * that sits INSIDE running text, and that's the other 9.
-         *
-         * A split stacks lines WITHOUT splitting the label around it, which is exactly the
-         * distinction the document can't hold — so the lines are edited apart from it.
-         */
-        <Stack gap="1">
-          {splitLines.map((line, i) => (
-            <HStack key={i} gap="1" align="start">
-              <Box flex="1">
-                <LabelRichEditor
-                  value={line}
-                  onChange={(next) => {
-                    const lines = splitLines.map((l, j) => (j === i ? asLine(next) : l));
-                    onChange([{ split: lines }]);
-                  }}
-                  ariaLabel={`${capitalize(side)} ${caption.toLowerCase()} line ${i + 1}`}
-                  resolveRws={resolveRws}
-                  resolveLogo={resolveLogo}
-                />
-              </Box>
-              <MiniBtn
-                title={`Remove line ${i + 1}`}
-                onClick={() => {
-                  // Below two lines it isn't a split any more, so collapse to the plain
-                  // label. Not disabled at two: removing a line from a two-line split is how
-                  // you undo the split, and blocking it left the collapse unreachable.
-                  const kept = splitLines.filter((_, j) => j !== i);
-                  onChange(kept.length > 1 ? [{ split: kept }] : (kept[0] ?? undefined));
-                }}
-              >
-                <Trash2 size={ICON} />
-              </MiniBtn>
-            </HStack>
+          {/* A split sharing this label is an atom chip in the editor above — the caret can
+              reach the words either side of it, but not into it. Its lines are edited here. */}
+          {splitsHere.map((sp, n) => (
+            <SplitLines
+              key={n}
+              lines={sp.lines}
+              label={`${capitalize(side)} ${caption.toLowerCase()}${splitsHere.length > 1 ? ` split ${n + 1}` : ""}`}
+              onChange={(next) => onChange(sp.replace(next))}
+              resolveRws={resolveRws}
+              resolveLogo={resolveLogo}
+            />
           ))}
-          <Button
-            size="xs"
-            variant="outline"
-            alignSelf="flex-start"
-            onClick={() => onChange([{ split: [...splitLines, [""]] }])}
-          >
-            <Plus size={ICON} /> Line
-          </Button>
-        </Stack>
+        </>
       ) : (
         <Text fontSize="xs" color="fg.muted">
           {/* Say WHY. "Rich label" told the user nothing about what to do next, and with no
@@ -740,6 +723,62 @@ function LabelSlot({
           Contains wikitext this form can’t model — edit it in the wikitext panel.
         </Text>
       )}
+    </Stack>
+  );
+}
+
+/**
+ * One editor per line of a `{{BSsplit}}`.
+ *
+ * Used for both split cases: a split that IS the whole label (30 of the 39 in the fixture) and
+ * one that shares its label with text, where the RTE above handles the surrounding words with
+ * the split as an atom chip. Either way the lines are edited here, which avoids a ProseMirror
+ * node-with-content and everything that comes with it — caret entry, Enter/Backspace at line
+ * boundaries, whole-node selection, none of it testable under jsdom.
+ *
+ * `onChange(null)` removes the split; dropping to one line collapses it, since a stack of one
+ * is a split nobody can see.
+ */
+function SplitLines({
+  lines,
+  label,
+  onChange,
+  resolveRws,
+  resolveLogo,
+}: {
+  lines: TextRun[][];
+  label: string;
+  onChange: (lines: TextRun[][] | null) => void;
+  resolveRws?: RwsResolver;
+  resolveLogo?: LogoResolver;
+}): ReactNode {
+  return (
+    <Stack gap="1">
+      {lines.map((line, i) => (
+        <HStack key={i} gap="1" align="start">
+          <Box flex="1">
+            <LabelRichEditor
+              value={line}
+              onChange={(next) => onChange(lines.map((l, j) => (j === i ? asLine(next) : l)))}
+              ariaLabel={`${label} line ${i + 1}`}
+              resolveRws={resolveRws}
+              resolveLogo={resolveLogo}
+            />
+          </Box>
+          <MiniBtn
+            title={`Remove line ${i + 1}`}
+            onClick={() => {
+              const kept = lines.filter((_, j) => j !== i);
+              onChange(kept.length ? kept : null);
+            }}
+          >
+            <Trash2 size={ICON} />
+          </MiniBtn>
+        </HStack>
+      ))}
+      <Button size="xs" variant="outline" alignSelf="flex-start" onClick={() => onChange([...lines, [""]])}>
+        <Plus size={ICON} /> Line
+      </Button>
     </Stack>
   );
 }

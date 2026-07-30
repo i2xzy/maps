@@ -23,7 +23,7 @@ Measured against a committed fixture of **21 real Wikipedia diagrams (917 rows)*
 | BSicon cells the editor's semantic controls can edit | **~71%** |
 | rows showing a muted placeholder for an unexpanded template | **~22%** |
 | `{{rint}}` logo codes in the generated catalog | 2,130 (1,155 files, 266 needing credit) |
-| tests | 747 package + 101 editor |
+| tests | 747 package + 108 editor |
 
 The corpus was corrected on 2026-07-28: the extractor had run to the end of the page rather
 than the end of the `{{Routemap}}` call, counting 119 lines of `|map2 =`, `}}<noinclude>` and
@@ -386,11 +386,33 @@ work in it), with add/remove-line buttons.
 - The dead-end message now says WHY and points at the wikitext panel, not at a JSON pane that
   isn't in the production build.
 
-### The last 9: a split among other runs
-**What:** `["to ", { split: […] }]` — the split shares its label with text. Per-line fields
-can't offer that text, so these still show the message.
-**How:** this is where the node-with-content actually earns itself, or an atom chip for the
-split plus a popover for its lines. At 0.8% neither is urgent.
+### ~~The last 9: a split among other runs~~ — **0 of 1199 labels now fall back**
+**What:** `["to ", { split: […] }, " today"]` — the split shares its label with text, so
+per-line fields alone couldn't offer that text.
+**Done, by combining the two mechanisms already built rather than adding a third:**
+- The split is an **atom chip** in the RTE (`split-node.tsx`), like the logo, station and raw
+  chips. The caret steps over it, so the words either side are editable.
+- Its **lines** get the same per-line editors, in a panel beneath the RTE.
+
+That is what made a ProseMirror node-with-content unnecessary. Caret entry, Enter/Backspace at
+line boundaries and whole-node selection all exist to type INTO the split inline — and none of
+it is testable under jsdom. Editing the lines beside it needs none of them.
+
+| | labels | rows |
+|---|---|---|
+| originally | 280/1199 (23%) | 229/915 (25%) |
+| raw atom chip | 39 (3%) | 36 (4%) |
+| whole-label per-line | 9 (0.8%) | 8 (0.9%) |
+| **split atom + lines panel** | **0** | **0** |
+
+**Ordering bug worth remembering:** making splits RTE-editable sent *every* split to the RTE
+branch, so the whole-label per-line editor became unreachable. The whole-label case has to be
+tested BEFORE `labelIsRteEditable`, not after. Three tests caught it, having been written
+against the previous rules.
+
+**Kept:** a split stays an ATOM rather than becoming the `|` paragraph-break sugar. Sugar
+splits the whole label, which would move the words either side of it onto separate lines — the
+one distinction the document genuinely can't hold.
 
 ### Mobile layout
 **What:** The editor is a three-pane splitter at `100dvh`. Unusable on a phone.

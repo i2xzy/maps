@@ -36,11 +36,7 @@ type RunObj = Exclude<TextRun, string | SplitRun | BreakRun | IconRun | RawRun>;
  * filter always let raw runs through, but the return type didn't say so, which is why
  * putting one back required widening this rather than changing any logic.
  */
-const docRuns = (runs: TextRun[]): (string | RunObj | BreakRun | IconRun | RawRun)[] =>
-  runs.filter(
-    (r): r is string | RunObj | BreakRun | IconRun | RawRun =>
-      typeof r === "string" || !("split" in r),
-  );
+const docRuns = (runs: TextRun[]): TextRun[] => runs;
 
 const asRuns = (text: SideLabel | undefined): TextRun[] => {
   if (text == null) return [];
@@ -53,11 +49,9 @@ const asRuns = (text: SideLabel | undefined): TextRun[] => {
 export function labelIsRteEditable(label: SideLabel | null | undefined): boolean {
   if (label == null || typeof label === "string") return true;
   const runs = Array.isArray(label) ? label : asRuns(label.text as SideLabel | undefined);
-  // A `{ split }` run has no node type in the document. The `|` sugar does (a
-  // paragraph break), but an explicit split stacks lines WITHOUT splitting the label
-  // around it, and that distinction is precisely what the document can't hold — so
-  // editing one here would flatten it into sugar and move its neighbours.
-  if (runs.some((r) => typeof r === "object" && "split" in r)) return false;
+  // A `{ split }` IS editable now, as the atom chip in `split-node.tsx`. It must stay an
+  // atom rather than becoming the `|` paragraph-break sugar: a split stacks lines WITHOUT
+  // splitting the label around it, and flattening it to sugar would move its neighbours.
   // Raw wikitext IS editable now — as an atom node (`raw-node.tsx`), so the text around it
   // can be edited while the run itself stays an indivisible chip. Flattening it to text is
   // what we must not do: the serializer would read its argument pipes as line breaks.
@@ -130,6 +124,11 @@ export function labelToDoc(label: SideLabel | null | undefined): JSONContent {
       pushNode({ type: "raw", attrs: { raw: r.raw } });
       continue;
     }
+    // A split is an atom too. Its lines are edited in the panel below, not in here.
+    if (typeof r !== "string" && "split" in r) {
+      pushNode({ type: "split", attrs: { lines: JSON.stringify(r.split) } });
+      continue;
+    }
     if (typeof r !== "string" && r.rws) {
       pushNode({ type: "rws", attrs: { args: r.rws } });
     } else {
@@ -172,15 +171,52 @@ export function splitLinesOf(label: SideLabel | null | undefined): TextRun[][] |
   return lines.every((line) => labelIsRteEditable(line)) ? lines : null;
 }
 
+/**
+ * Every `{ split }` in a label, with a setter that puts an edited copy back.
+ *
+ * For a split that SHARES its label with other content: the chip in the RTE lets the caret
+ * reach the words either side of it, and these let the lines themselves be edited. Indexed by
+ * position so the setter can rebuild the label without disturbing anything else.
+ */
+export function splitsIn(label: SideLabel | null | undefined): {
+  lines: TextRun[][];
+  replace: (next: TextRun[][] | null) => SideLabel | undefined;
+}[] {
+  if (label == null || typeof label === "string") return [];
+  const runs = Array.isArray(label) ? label : asRuns(label.text as SideLabel | undefined);
+  const rebuild = (nextRuns: TextRun[]): SideLabel | undefined => {
+    if (nextRuns.length === 0) return undefined;
+    return Array.isArray(label) ? nextRuns : { ...label, text: nextRuns };
+  };
+  return runs.flatMap((run, i) => {
+    if (run == null || typeof run !== "object" || !("split" in run)) return [];
+    const lines = run.split.map((line) => (typeof line === "string" ? [line] : line));
+    return [
+      {
+        lines,
+        // `null` removes the split entirely; one line collapses it to that line's runs, since
+        // a stack of one is a split nobody can see.
+        replace: (next: TextRun[][] | null) =>
+          rebuild(
+            next == null
+              ? runs.filter((_, j) => j !== i)
+              : next.length > 1
+                ? runs.map((r, j) => (j === i ? { split: next } : r))
+                : runs.flatMap((r, j) => (j === i ? (next[0] ?? []) : [r])),
+          ),
+      },
+    ];
+  });
+}
+
 const markOf = (node: JSONContent, type: string) => node.marks?.find((m) => m.type === type);
 
 /** Convert a TipTap doc back to a `SideLabel` (collapsed to a plain string when
  *  there are no marks/links and a single line). */
 export function docToLabel(doc: JSONContent): SideLabel | undefined {
-  // Never a `{ split }`: the document has no node for one, which is why
-  // `labelIsRteEditable` keeps split-bearing labels out of the editor entirely. A
-  // `{ raw }` DOES round-trip, as the atom chip in `raw-node.tsx`.
-  const runs: (string | RunObj | BreakRun | IconRun | RawRun)[] = [];
+  // Splits and raws both round-trip, as the atom chips in `split-node.tsx` and
+  // `raw-node.tsx`.
+  const runs: TextRun[] = [];
   const paras = doc.content ?? [];
   paras.forEach((para, pi) => {
     if (pi > 0) runs.push("|"); // paragraph boundary -> BSsplit line break
@@ -195,6 +231,15 @@ export function docToLabel(doc: JSONContent): SideLabel | undefined {
       }
       if (node.type === "rws") {
         runs.push({ rws: (node.attrs?.args as string) ?? "" });
+        continue;
+      }
+      if (node.type === "split") {
+        try {
+          const lines = JSON.parse((node.attrs?.lines as string) ?? "[]") as TextRun[][];
+          if (lines.length) runs.push({ split: lines });
+        } catch {
+          // a malformed chip carries nothing rather than corrupting the label
+        }
         continue;
       }
       if (node.type === "raw") {

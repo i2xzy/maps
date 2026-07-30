@@ -3,6 +3,8 @@ import type { SideLabel } from "@repo/routemap";
 import {
   docToLabel,
   labelIsRteEditable,
+  splitLinesOf,
+  splitsIn,
   labelToDoc,
   logoInsertContent,
 } from "./label-doc";
@@ -205,10 +207,12 @@ describe("<br> vs {{BSsplit}} in the document", () => {
     expect(docToLabel(labelToDoc(label as never))).toEqual(label);
   });
 
-  it("keeps a <br>-bearing label editable, unlike one holding a split", () => {
-    // A <br> has a node in the document (hardBreak); a split does not.
+  it("keeps both a <br>- and a split-bearing label editable, by different nodes", () => {
+    // A <br> is a hardBreak; a split is an ATOM, so the caret steps over it rather than into
+    // it. The distinction that matters is preserved elsewhere: a hardBreak breaks WITHIN a
+    // line while a split stacks lines without splitting the label around it.
     expect(labelIsRteEditable(["a", { br: true }, "b"] as never)).toBe(true);
-    expect(labelIsRteEditable([{ split: ["a", "b"] }] as never)).toBe(false);
+    expect(labelIsRteEditable([{ split: ["a", "b"] }] as never)).toBe(true);
   });
 
   it("keeps a logo after a break as its own run", () => {
@@ -238,8 +242,9 @@ describe("raw wikitext survives the document as an atom", () => {
 
   it("is editable at all now", () => {
     expect(labelIsRteEditable(label)).toBe(true);
-    // A split still isn't: its lines are editable text, which an atom can't hold.
-    expect(labelIsRteEditable([{ split: [["a"], ["b"]] }])).toBe(false);
+    // A split is editable now too — as its own atom chip, with its LINES edited in the panel
+    // beside it rather than inside the document.
+    expect(labelIsRteEditable([{ split: [["a"], ["b"]] }])).toBe(true);
   });
 
   it("round-trips through the document unchanged", () => {
@@ -260,5 +265,63 @@ describe("raw wikitext survives the document as an atom", () => {
   it("drops an emptied chip instead of writing an empty run", () => {
     const doc = { type: "doc", content: [{ type: "paragraph", content: [{ type: "raw", attrs: { raw: "" } }] }] };
     expect(docToLabel(doc)).toBeUndefined();
+  });
+});
+
+describe("a split sharing its label survives the document as an atom", () => {
+  // The last 9 of the 39. The caret has to reach the words either side of the split, which an
+  // atom gives; its LINES are edited in the panel beside the editor, which is what avoids a
+  // node-with-content and its untestable caret handling.
+  const label = ["to ", { split: [["a"], ["b"]] }, " today"];
+
+  it("round-trips through the document unchanged", () => {
+    expect(docToLabel(labelToDoc(label as never))).toEqual(label);
+  });
+
+  it("carries its lines in an attribute, never as document text", () => {
+    const doc = labelToDoc(label as never);
+    expect(JSON.stringify(doc)).toContain('"type":"split"');
+    const texts = (doc.content ?? []).flatMap((p) => (p.content ?? []).filter((n) => n.type === "text"));
+    // "to " and " today" are text; the split's own content is not.
+    expect(texts.map((t) => t.text)).toEqual(["to ", " today"]);
+  });
+
+  it("stays a split rather than collapsing into | line-break sugar", () => {
+    // The distinction the document can't otherwise hold: sugar would split the whole label and
+    // move the words either side of it onto separate lines.
+    const back = docToLabel(labelToDoc(label as never));
+    expect(JSON.stringify(back)).toContain('"split"');
+    expect(JSON.stringify(back)).not.toContain('"|"');
+  });
+
+  it("drops a malformed chip rather than corrupting the label", () => {
+    const doc = {
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text: "x" }, { type: "split", attrs: { lines: "not json" } }] }],
+    };
+    expect(docToLabel(doc)).toEqual("x");
+  });
+});
+
+describe("splitsIn", () => {
+  it("finds a split sharing its label, and puts an edited copy back", () => {
+    const label = ["to ", { split: [["a"], ["b"]] }] as never;
+    const [only] = splitsIn(label);
+    expect(only!.lines).toEqual([["a"], ["b"]]);
+    expect(only!.replace([["a"], ["B"]])).toEqual(["to ", { split: [["a"], ["B"]] }]);
+  });
+
+  it("collapses a one-line result and removes a null one", () => {
+    const label = ["to ", { split: [["a"], ["b"]] }] as never;
+    const [only] = splitsIn(label);
+    // One line isn't a split — its runs are spliced in where the split was.
+    expect(only!.replace([["solo"]])).toEqual(["to ", "solo"]);
+    expect(only!.replace(null)).toEqual(["to "]);
+  });
+
+  it("ignores a whole-label split, which is edited per line instead", () => {
+    // Not because it can't be handled here, but so the two paths can't both claim it.
+    expect(splitsIn([{ split: [["a"], ["b"]] }] as never)).toHaveLength(1);
+    expect(splitLinesOf([{ split: [["a"], ["b"]] }] as never)).toEqual([["a"], ["b"]]);
   });
 });

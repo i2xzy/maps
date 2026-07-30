@@ -13,6 +13,7 @@ import { docToLabel, labelToDoc, logoInsertContent } from "./label-doc";
 import { RwsNode, RwsResolverProvider, type RwsResolver } from "./rws-node";
 import { RintNode, LogoResolverProvider, type LogoResolver } from "./rint-node";
 import { RawNode } from "./raw-node";
+import { SplitNode } from "./split-node";
 import { RintPickerPopover } from "./rint-picker";
 
 // Labels only take the wiki's bold/italic + links; block/list nodes are turned
@@ -35,6 +36,7 @@ const labelExtensions = [
   RwsNode,
   RintNode,
   RawNode,
+  SplitNode,
 ];
 
 const key = (v: SideLabel | null | undefined): string => JSON.stringify(v ?? null);

@@ -475,16 +475,22 @@ describe("Inspector: row selection (labels & colspan)", () => {
     expect((model().rows![0] as { right: unknown }).right).toEqual(["a"]);
   });
 
-  it("won't offer per-line editing when the split isn't the whole label", () => {
-    // Those 9 need the surrounding text editable too, which per-line fields can't give.
+  it("edits both the text and the lines when a split shares its label", () => {
+    // The other 9. The split is an atom chip in the RTE so the caret can reach the words
+    // either side of it, and its lines get the same per-line editors underneath — which is
+    // why this needed no ProseMirror node-with-content.
     renderWithChakra(
       <Controlled
         initial={{ rows: [{ right: ["to ", { split: [["a"], ["b"]] }], cells: ["STR"] }] }}
         select={{ kind: "row", row: 0 }}
       />,
     );
-    expect(screen.queryByLabelText("Right main text line 1")).toBeNull();
-    expect(screen.getByText(/can’t model/)).toBeTruthy();
+    expect(screen.queryByText(/can’t model/)).toBeNull();
+    // The surrounding text is editable...
+    expect(screen.getByLabelText("Right main text")).toBeTruthy();
+    // ...and so is each line of the split.
+    fireEvent.change(screen.getByLabelText("Right main text line 2"), { target: { value: "B!" } });
+    expect((model().rows![0] as { right: unknown }).right).toEqual(["to ", { split: [["a"], ["B!"]] }]);
   });
 
   it("edits colspan text", () => {
