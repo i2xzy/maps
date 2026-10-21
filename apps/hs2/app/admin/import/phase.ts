@@ -38,9 +38,8 @@ export function derivePhase(plan: ImportPlan): Exclude<Phase, 'upload'> {
   return 'review';
 }
 
-// One shape for both insert and relink so the reviewer walks a single list with
-// one commit path. creatorId is null for relink: the media row already exists,
-// and commitPin's ignore-duplicates upsert never overwrites its creator.
+// The media fields a new pin writes. Already-imported pins (relink) are excluded
+// from review, so every reviewed pin is a fresh insert with a resolved creator.
 export type ReviewMedia = {
   url: Url;
   description: string | null;
@@ -55,65 +54,43 @@ export type ReviewMedia = {
 
 export type ReviewItem = {
   ordinal: number;
-  action: 'insert' | 'relink';
-  channel: string;
-  creatorName: string | null;
+  creatorName: string;
   media: ReviewMedia;
   initialTitle: string;
   initialFeatures: ReadonlyArray<FeatureRef>;
 };
 
-// Importable pins in plan (ordinal) order. A relink without a url or shot type
-// can't form a media row, but issue-gating keeps such pins out of Review, so in
-// practice this filter drops nothing.
+// New pins to review, in plan (ordinal) order. A relink pin's url is already in
+// the DB, so it is skipped automatically; re-uploading the same file therefore
+// resumes at the first pin not yet committed.
 export function reviewItems(plan: ImportPlan): ReviewItem[] {
   const out: ReviewItem[] = [];
   for (const p of plan.pins) {
-    if (p.kind === 'insert') {
-      out.push({
-        ordinal: p.pin.ordinal,
-        action: 'insert',
-        channel: p.pin.channel,
-        creatorName: p.creator.displayName,
-        media: {
-          url: p.draft.url,
-          description: p.draft.description,
-          youtubeId: p.draft.youtubeId,
-          shotType: p.draft.shotType,
-          type: p.draft.type,
-          publishedAt: p.draft.publishedAt,
-          recordedDate: p.draft.recordedDate,
-          creatorId: p.creator.id,
-          geometry: p.draft.geometry,
-        },
-        initialTitle: p.draft.title,
-        initialFeatures: p.links,
-      });
-    } else if (p.kind === 'relink') {
-      const { pin } = p;
-      if (pin.url === null || pin.shotType === null) continue;
-      out.push({
-        ordinal: pin.ordinal,
-        action: 'relink',
-        channel: pin.channel,
-        creatorName: null,
-        media: {
-          url: pin.url,
-          description: pin.description,
-          youtubeId: pin.youtubeId,
-          shotType: pin.shotType,
-          type: 'video',
-          publishedAt: pin.publishedAt,
-          recordedDate: pin.recordedDate,
-          creatorId: null,
-          geometry: pin.geometry,
-        },
-        initialTitle: p.title,
-        initialFeatures: p.links,
-      });
-    }
+    if (p.kind !== 'insert') continue;
+    out.push({
+      ordinal: p.pin.ordinal,
+      creatorName: p.creator.displayName,
+      media: {
+        url: p.draft.url,
+        description: p.draft.description,
+        youtubeId: p.draft.youtubeId,
+        shotType: p.draft.shotType,
+        type: p.draft.type,
+        publishedAt: p.draft.publishedAt,
+        recordedDate: p.draft.recordedDate,
+        creatorId: p.creator.id,
+        geometry: p.draft.geometry,
+      },
+      initialTitle: p.draft.title,
+      initialFeatures: p.links,
+    });
   }
   return out;
+}
+
+/** Pins whose url is already in the DB, auto-skipped (shown in the summary). */
+export function alreadyImportedCount(plan: ImportPlan): number {
+  return plan.pins.filter((p) => p.kind === 'relink').length;
 }
 
 export function geometryKind(geometry: Geometry | null): 'point' | 'line' | 'none' {

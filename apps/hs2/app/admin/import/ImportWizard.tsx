@@ -34,6 +34,7 @@ import { IssuesTab } from './tabs/IssuesTab';
 import { CreatorsTab } from './tabs/CreatorsTab';
 import { ReviewStep } from './ReviewStep';
 import {
+  alreadyImportedCount,
   derivePhase,
   phaseIndex,
   PHASE_LABELS,
@@ -232,6 +233,7 @@ export function ImportWizard() {
         <ReviewStep
           items={items}
           features={rows.features}
+          alreadyImported={alreadyImportedCount(plan)}
           commitPin={commitPin}
           finishImport={finishImport}
           onRestart={clearDraft}

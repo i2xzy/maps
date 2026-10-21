@@ -5,7 +5,6 @@ import ReactPlayer from 'react-player';
 import {
   Alert,
   AspectRatio,
-  Badge,
   Button,
   Card,
   Field,
@@ -28,21 +27,24 @@ type Edit = { title: string; featureIds: string[] };
 type Props = {
   items: ReviewItem[];
   features: CatalogueRows['features'];
+  alreadyImported: number;
   commitPin: (input: CommitPinInput) => Promise<CommitPinResult>;
   finishImport: () => Promise<void>;
   onRestart: () => void;
 };
 
-type Counts = { inserted: number; relinked: number; skipped: number; linksAdded: number };
+type Counts = { imported: number; skipped: number; linksAdded: number };
 
-export function ReviewStep({ items, features, commitPin, finishImport, onRestart }: Props) {
+export function ReviewStep({
+  items,
+  features,
+  alreadyImported,
+  commitPin,
+  finishImport,
+  onRestart,
+}: Props) {
   const [index, setIndex] = useState(0);
-  const [counts, setCounts] = useState<Counts>({
-    inserted: 0,
-    relinked: 0,
-    skipped: 0,
-    linksAdded: 0,
-  });
+  const [counts, setCounts] = useState<Counts>({ imported: 0, skipped: 0, linksAdded: 0 });
   const done = index >= items.length;
   const finishedRef = useRef(false);
 
@@ -68,8 +70,7 @@ export function ReviewStep({ items, features, commitPin, finishImport, onRestart
       featureIds: edit.featureIds,
     });
     setCounts((c) => ({
-      inserted: c.inserted + (res.inserted ? 1 : 0),
-      relinked: c.relinked + (res.inserted ? 0 : 1),
+      imported: c.imported + 1,
       skipped: c.skipped,
       linksAdded: c.linksAdded + res.linksAdded,
     }));
@@ -82,7 +83,14 @@ export function ReviewStep({ items, features, commitPin, finishImport, onRestart
   };
 
   if (done) {
-    return <DoneSummary total={items.length} counts={counts} onRestart={onRestart} />;
+    return (
+      <DoneSummary
+        total={items.length}
+        counts={counts}
+        alreadyImported={alreadyImported}
+        onRestart={onRestart}
+      />
+    );
   }
 
   const item = items[index];
@@ -148,23 +156,16 @@ function PinReviewCard({
     <Card.Root variant='elevated'>
       <Card.Body>
         <Stack gap={4}>
-          <HStack justify='space-between' align='start'>
-            <Heading size='md'>
-              Row {rowNumber} of {total}
-            </Heading>
-            <Badge colorPalette={item.action === 'insert' ? 'green' : 'purple'}>
-              {item.action === 'insert' ? 'New video' : 'Existing video, add links'}
-            </Badge>
-          </HStack>
+          <Heading size='md'>
+            Row {rowNumber} of {total}
+          </Heading>
 
           <AspectRatio ratio={16 / 9} w='full' maxW='2xl'>
             <ReactPlayer src={item.media.url} controls width='100%' height='100%' />
           </AspectRatio>
 
           <Stack gap={1}>
-            <DetailRow label='Creator'>
-              {item.creatorName ?? 'Keeps the existing video’s creator'}
-            </DetailRow>
+            <DetailRow label='Creator'>{item.creatorName}</DetailRow>
             <DetailRow label='Shot type'>{item.media.shotType}</DetailRow>
             <DetailRow label='Published'>{item.media.publishedAt ?? '—'}</DetailRow>
             <DetailRow label='Recorded'>{item.media.recordedDate ?? '—'}</DetailRow>
@@ -207,10 +208,12 @@ function PinReviewCard({
 function DoneSummary({
   total,
   counts,
+  alreadyImported,
   onRestart,
 }: {
   total: number;
   counts: Counts;
+  alreadyImported: number;
   onRestart: () => void;
 }) {
   return (
@@ -219,13 +222,13 @@ function DoneSummary({
         <Stack gap={4} align='start'>
           <Heading size='md'>Import complete</Heading>
           <Text color='fg.muted' fontSize='sm'>
-            {total === 0 ? 'No pins needed importing.' : `Handled ${total} pins.`}
+            {total === 0 ? 'No new pins to import.' : `Reviewed ${total} new pins.`}
           </Text>
           <Stack gap={1}>
-            <DetailRow label='Inserted'>{counts.inserted}</DetailRow>
-            <DetailRow label='Relinked'>{counts.relinked}</DetailRow>
-            <DetailRow label='Skipped'>{counts.skipped}</DetailRow>
+            <DetailRow label='Imported'>{counts.imported}</DetailRow>
             <DetailRow label='Links added'>{counts.linksAdded}</DetailRow>
+            <DetailRow label='Skipped'>{counts.skipped}</DetailRow>
+            <DetailRow label='Already in database'>{alreadyImported}</DetailRow>
           </Stack>
           <Button onClick={onRestart}>Import another layer</Button>
         </Stack>
