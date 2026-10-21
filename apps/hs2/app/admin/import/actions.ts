@@ -6,7 +6,6 @@ import { z } from 'zod';
 import { requireAdmin } from '@/lib/admin';
 import {
   creatorIdSchema,
-  DecisionSchema,
   featureIdSchema,
   isoDateSchema,
   mediaTypeSchema,
@@ -17,7 +16,6 @@ import {
   type CreatorId,
   type CreatorRef,
   type Geometry,
-  type ImportDraft,
   type IsoDate,
   type MediaType,
   type ShotType,
@@ -27,7 +25,6 @@ import {
 import { readCatalogueRows } from '@/lib/import-server/catalogue';
 import { serverSpanLookup } from '@/lib/import-server/plan';
 import { geometryToEwkt } from '@/lib/import-server/geometry';
-import { commitImport as runCommit, type ApplyResult } from '@/lib/import-server/commit';
 
 const urlsSchema = z.array(z.string());
 
@@ -189,16 +186,3 @@ export async function finishImport(): Promise<void> {
   revalidatePath('/', 'layout');
 }
 
-export async function commitImport(draft: ImportDraft): Promise<ApplyResult> {
-  const { supabase } = await requireAdmin();
-  // Decisions drive the writes, so validate them strictly. The layer is only
-  // shape-guarded: deep ParsedLayer re-validation would duplicate types.ts for
-  // little gain behind the admin gate, so the parsed layer's structure is trusted.
-  const decisions = z.array(DecisionSchema).parse(draft.decisions);
-  if (!Array.isArray(draft.layer?.pins) || draft.layer.pins.length === 0) {
-    throw new Error('Import draft has no pins.');
-  }
-  const result = await runCommit(supabase, { layer: draft.layer, decisions });
-  revalidatePath('/', 'layout');
-  return result;
-}
