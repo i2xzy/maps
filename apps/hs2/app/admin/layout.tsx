@@ -1,4 +1,4 @@
-import { Button, Container, Flex, HStack, Heading, Text } from '@chakra-ui/react';
+import { Button, Container, Flex, HStack, Heading, Link, Text } from '@chakra-ui/react';
 
 import { requireAdmin } from '@/lib/admin';
 import { signOut } from '../sign-in/actions';
@@ -16,7 +16,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         py={3}
         borderBottomWidth='1px'
       >
-        <Heading size='md'>Admin</Heading>
+        <HStack gap={4}>
+          <Heading size='md'>Admin</Heading>
+          <Link href='/' fontSize='sm' color='fg.muted'>
+            View site
+          </Link>
+        </HStack>
         <HStack gap={4}>
           <Text fontSize='sm' color='fg.muted'>
             {user.email}
