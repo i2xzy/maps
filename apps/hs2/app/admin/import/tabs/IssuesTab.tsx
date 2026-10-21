@@ -16,8 +16,10 @@ function describeWarning(w: ParseWarning): string {
       return w.raw ? `Unrecognised shot type: “${w.raw}”` : 'No shot type set';
     case 'unparsed-date':
       return `Couldn't parse the ${w.field} date: “${w.raw}”`;
-    case 'date-from-title':
-      return `Used the title's date (the date field was “${w.raw}”)`;
+    case 'date-from-title': {
+      const problem = /\d{4}/.test(w.raw) ? "couldn't be parsed" : 'is missing the year';
+      return `The date field “${w.raw}” ${problem}, so the title's date was used instead`;
+    }
     case 'misplaced-date':
       return `The ${w.field} field holds a date (“${w.value}”) — looks swapped`;
     case 'channel-is-url':
