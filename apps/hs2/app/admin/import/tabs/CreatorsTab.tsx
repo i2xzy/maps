@@ -50,6 +50,16 @@ function urlsForChannel(pins: ReadonlyArray<PinPlan>, channel: string): Url[] {
   return urls;
 }
 
+// Pull the channel handle out of a URL: youtube.com/@handle, /c/Name, /user/Name.
+// Returns '' when there's none (e.g. a /channel/UC… id URL), so the admin types it.
+function deriveHandle(url: string): string {
+  const at = url.match(/@([A-Za-z0-9._-]+)/);
+  if (at) return at[1] ?? '';
+  const path = url.match(/\/(?:c|user)\/([^/?#]+)/);
+  if (path) return path[1] ?? '';
+  return '';
+}
+
 function CreatorRow({ entry, pins, creators, onCreateCreator, upsertDecision }: {
   entry: MissingCreator;
   pins: ReadonlyArray<PinPlan>;
@@ -62,6 +72,7 @@ function CreatorRow({ entry, pins, creators, onCreateCreator, upsertDecision }: 
   const [externalId, setExternalId] = useState('');
   const [url, setUrl] = useState('');
   const [profileImageUrl, setProfileImageUrl] = useState('');
+  const [handleTouched, setHandleTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,7 +93,7 @@ function CreatorRow({ entry, pins, creators, onCreateCreator, upsertDecision }: 
     try {
       const created = await onCreateCreator({
         displayName,
-        externalId,
+        externalId: externalId.replace(/^@+/, '').trim(),
         url,
         platform: 'youtube',
         profileImageUrl: profileImageUrl.trim() || undefined,
@@ -143,22 +154,32 @@ function CreatorRow({ entry, pins, creators, onCreateCreator, upsertDecision }: 
                 <Input size='sm' value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
               </Field.Root>
               <Field.Root required>
-                <Field.Label fontSize='xs'>Channel handle (external id)</Field.Label>
-                <Input
-                  size='sm'
-                  value={externalId}
-                  onChange={(e) => setExternalId(e.target.value)}
-                  placeholder='@channelhandle'
-                />
-              </Field.Root>
-              <Field.Root required>
                 <Field.Label fontSize='xs'>Channel URL</Field.Label>
                 <Input
                   size='sm'
                   value={url}
-                  onChange={(e) => setUrl(e.target.value)}
+                  onChange={(e) => {
+                    setUrl(e.target.value);
+                    if (!handleTouched) setExternalId(deriveHandle(e.target.value));
+                  }}
                   placeholder='https://youtube.com/@channelhandle'
                 />
+              </Field.Root>
+              <Field.Root required>
+                <Field.Label fontSize='xs'>Channel handle</Field.Label>
+                <Input
+                  size='sm'
+                  value={externalId}
+                  onChange={(e) => {
+                    setExternalId(e.target.value);
+                    setHandleTouched(true);
+                  }}
+                  placeholder='channelhandle'
+                />
+                <Field.HelperText fontSize='xs'>
+                  Pulled from the URL, shown on the site as @
+                  {externalId.replace(/^@+/, '') || 'handle'}. Edit if the URL has no handle.
+                </Field.HelperText>
               </Field.Root>
               <Field.Root>
                 <Field.Label fontSize='xs'>Profile image URL (optional)</Field.Label>
