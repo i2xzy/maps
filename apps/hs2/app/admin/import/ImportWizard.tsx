@@ -1,9 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  Badge,
   Button,
   Card,
   Heading,
@@ -11,7 +10,7 @@ import {
   Icon,
   Spinner,
   Stack,
-  Tabs,
+  Steps,
   Text,
 } from '@chakra-ui/react';
 import { LuUpload } from 'react-icons/lu';
@@ -20,27 +19,29 @@ import {
   parseLayer,
   type CatalogueRows,
   type CreatorRef,
-  type ImportDraft,
   type ParsedLayer,
   type Url,
 } from '@/lib/import';
 
 import {
-  addAlias as addAliasAction,
-  commitImport as commitImportAction,
+  commitPin,
   createCreator as createCreatorAction,
+  finishImport,
   loadCatalogue,
 } from './actions';
 import { useImportPlan } from './use-import-plan';
-import { SummaryTab } from './tabs/SummaryTab';
-import { IssuesTab, collectIssues } from './tabs/IssuesTab';
+import { IssuesTab } from './tabs/IssuesTab';
 import { CreatorsTab } from './tabs/CreatorsTab';
-import { TitlesTab } from './tabs/TitlesTab';
-import { RangesTab } from './tabs/RangesTab';
-import { PinsTab } from './tabs/PinsTab';
-import { ApplyTab } from './tabs/ApplyTab';
+import { ReviewStep } from './ReviewStep';
+import {
+  derivePhase,
+  phaseIndex,
+  PHASE_LABELS,
+  PHASE_ORDER,
+  reviewItems,
+  type Phase,
+} from './phase';
 
-type ApplyResult = Awaited<ReturnType<typeof commitImportAction>>;
 type CreatorInput = Parameters<typeof createCreatorAction>[0];
 
 function layerUrls(layer: ParsedLayer): string[] {
@@ -51,13 +52,9 @@ export function ImportWizard() {
   const [rows, setRows] = useState<CatalogueRows | null>(null);
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [applyResult, setApplyResult] = useState<ApplyResult | null>(null);
-  const [applyError, setApplyError] = useState<string | null>(null);
-  const [isApplying, setIsApplying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { draft, plan, isDeriving, startDraft, clearDraft, upsertDecision, removeDecision } =
-    useImportPlan(rows);
+  const { draft, plan, isDeriving, startDraft, clearDraft, upsertDecision } = useImportPlan(rows);
 
   const layer = draft?.layer;
   useEffect(() => {
@@ -95,35 +92,9 @@ export function ImportWizard() {
     [refetchCatalogue],
   );
 
-  const handleAddAlias = useCallback(
-    async (alias: string, featureNames: string[]) => {
-      await addAliasAction(alias, featureNames);
-      await refetchCatalogue();
-    },
-    [refetchCatalogue],
-  );
-
-  const handleApply = useCallback(async () => {
-    if (!draft) return;
-    setIsApplying(true);
-    setApplyError(null);
-    try {
-      const importDraft: ImportDraft = {
-        layer: draft.layer,
-        decisions: [...draft.decisions.values()],
-      };
-      setApplyResult(await commitImportAction(importDraft));
-    } catch {
-      setApplyError('The import failed. You can fix the issue and apply again; writes are idempotent.');
-    } finally {
-      setIsApplying(false);
-    }
-  }, [draft]);
-
   const handleFile = useCallback(
     async (file: File) => {
       setUploadError(null);
-      setApplyResult(null);
       try {
         const parsed = parseLayer(await file.text());
         if (parsed.pins.length === 0) {
@@ -138,68 +109,45 @@ export function ImportWizard() {
     [startDraft],
   );
 
-  if (!draft) {
-    return (
-      <Card.Root variant='elevated' maxW='xl'>
-        <Card.Body>
-          <Stack gap={5} align='start'>
-            <Stack gap={1}>
-              <Heading size='lg'>Import a layer</Heading>
-              <Text color='fg.muted' fontSize='sm'>
-                Upload a Google My Maps KML export. It is parsed in your browser; nothing is
-                written until you apply.
-              </Text>
-            </Stack>
-            <input
-              ref={fileInputRef}
-              type='file'
-              accept='.kml,application/vnd.google-earth.kml+xml'
-              hidden
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleFile(file);
-                e.target.value = '';
-              }}
-            />
-            <Button onClick={() => fileInputRef.current?.click()}>
-              <Icon>
-                <LuUpload />
-              </Icon>
-              Choose KML file
-            </Button>
-            {uploadError && (
-              <Alert.Root status='error'>
-                <Alert.Indicator />
-                <Alert.Title>{uploadError}</Alert.Title>
-              </Alert.Root>
-            )}
-          </Stack>
-        </Card.Body>
-      </Card.Root>
-    );
-  }
+  const openPicker = () => fileInputRef.current?.click();
 
-  const issueCount = plan ? collectIssues(plan.pins).length : 0;
-  const missing = plan?.worklists.missingCreators.length ?? 0;
-  const unmatched = plan?.worklists.unmatchedCandidates.length ?? 0;
-  const rangeCount = plan?.worklists.ranges.length ?? 0;
+  const items = useMemo(() => (plan ? reviewItems(plan) : []), [plan]);
+  const phase: Phase = !draft ? 'upload' : plan ? derivePhase(plan) : 'issues';
 
   return (
-    <Stack gap={5}>
-      <HStack justify='space-between' align='center'>
-        <Stack gap={0}>
-          <Heading size='lg'>Import a layer</Heading>
+    <Stack gap={6}>
+      <input
+        ref={fileInputRef}
+        type='file'
+        accept='.kml,application/vnd.google-earth.kml+xml'
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleFile(file);
+          e.target.value = '';
+        }}
+      />
+
+      <Stack gap={1}>
+        <Heading size='lg'>Import a layer</Heading>
+        {draft && (
           <Text fontSize='sm' color='fg.muted'>
             {draft.fileName} · {draft.layer.pins.length} pins
           </Text>
-        </Stack>
-        <HStack gap={3}>
-          {isDeriving && <Spinner size='sm' />}
-          <Button variant='outline' size='sm' onClick={clearDraft}>
-            Start over
-          </Button>
-        </HStack>
-      </HStack>
+        )}
+      </Stack>
+
+      <Steps.Root step={phaseIndex(phase)} count={PHASE_ORDER.length} size='sm'>
+        <Steps.List>
+          {PHASE_ORDER.map((p, i) => (
+            <Steps.Item key={p} index={i} title={PHASE_LABELS[p]}>
+              <Steps.Indicator />
+              <Steps.Title>{PHASE_LABELS[p]}</Steps.Title>
+              <Steps.Separator />
+            </Steps.Item>
+          ))}
+        </Steps.List>
+      </Steps.Root>
 
       {catalogueError && (
         <Alert.Root status='error'>
@@ -208,98 +156,86 @@ export function ImportWizard() {
         </Alert.Root>
       )}
 
-      {!plan || !rows ? (
+      {phase === 'upload' ? (
+        <Card.Root variant='elevated' maxW='xl'>
+          <Card.Body>
+            <Stack gap={5} align='start'>
+              <Text color='fg.muted' fontSize='sm'>
+                Upload a Google My Maps KML export. It is parsed in your browser, then you confirm
+                each pin one at a time.
+              </Text>
+              <Button onClick={openPicker}>
+                <Icon>
+                  <LuUpload />
+                </Icon>
+                Choose KML file
+              </Button>
+              {uploadError && (
+                <Alert.Root status='error'>
+                  <Alert.Indicator />
+                  <Alert.Title>{uploadError}</Alert.Title>
+                </Alert.Root>
+              )}
+            </Stack>
+          </Card.Body>
+        </Card.Root>
+      ) : !plan || !rows ? (
         <HStack color='fg.muted'>
           <Spinner size='sm' />
           <Text>Deriving the plan…</Text>
         </HStack>
+      ) : phase === 'issues' ? (
+        <Stack gap={4} align='start'>
+          <Text fontSize='sm' color='fg.muted'>
+            Fix these in Google My Maps, re-export, and upload the corrected file. The step clears
+            itself once a file parses with no issues.
+          </Text>
+          <HStack gap={3}>
+            <Button onClick={openPicker}>
+              <Icon>
+                <LuUpload />
+              </Icon>
+              Upload corrected file
+            </Button>
+            <Button variant='outline' colorPalette='gray' onClick={clearDraft}>
+              Start over
+            </Button>
+          </HStack>
+          {uploadError && (
+            <Alert.Root status='error'>
+              <Alert.Indicator />
+              <Alert.Title>{uploadError}</Alert.Title>
+            </Alert.Root>
+          )}
+          {isDeriving && <Spinner size='sm' />}
+          <IssuesTab pins={plan.pins} />
+        </Stack>
+      ) : phase === 'creators' ? (
+        <Stack gap={4} align='start'>
+          <Text fontSize='sm' color='fg.muted'>
+            Create or map each channel to a creator. The step clears itself once every channel
+            resolves.
+          </Text>
+          <Button variant='outline' colorPalette='gray' size='sm' onClick={clearDraft}>
+            Start over
+          </Button>
+          {isDeriving && <Spinner size='sm' />}
+          <CreatorsTab
+            missingCreators={plan.worklists.missingCreators}
+            pins={plan.pins}
+            creators={rows.creators}
+            onCreateCreator={handleCreateCreator}
+            upsertDecision={upsertDecision}
+          />
+        </Stack>
       ) : (
-        <Tabs.Root defaultValue='summary' variant='enclosed'>
-          <Tabs.List flexWrap='wrap'>
-            <Tabs.Trigger value='summary'>Summary</Tabs.Trigger>
-            <Tabs.Trigger value='issues'>
-              Issues
-              {issueCount > 0 && (
-                <Badge ml={2} colorPalette='red'>
-                  {issueCount}
-                </Badge>
-              )}
-            </Tabs.Trigger>
-            <Tabs.Trigger value='creators'>
-              Creators
-              {missing > 0 && (
-                <Badge ml={2} colorPalette='orange'>
-                  {missing}
-                </Badge>
-              )}
-            </Tabs.Trigger>
-            <Tabs.Trigger value='titles'>
-              Titles
-              {unmatched > 0 && (
-                <Badge ml={2} colorPalette='orange'>
-                  {unmatched}
-                </Badge>
-              )}
-            </Tabs.Trigger>
-            <Tabs.Trigger value='ranges'>
-              Ranges
-              {rangeCount > 0 && (
-                <Badge ml={2} colorPalette='gray'>
-                  {rangeCount}
-                </Badge>
-              )}
-            </Tabs.Trigger>
-            <Tabs.Trigger value='pins'>Pins</Tabs.Trigger>
-            <Tabs.Trigger value='apply'>Apply</Tabs.Trigger>
-          </Tabs.List>
-
-          <Tabs.Content value='summary'>
-            <SummaryTab plan={plan} isDeriving={isDeriving} />
-          </Tabs.Content>
-          <Tabs.Content value='issues'>
-            <IssuesTab pins={plan.pins} />
-          </Tabs.Content>
-          <Tabs.Content value='creators'>
-            <CreatorsTab
-              missingCreators={plan.worklists.missingCreators}
-              pins={plan.pins}
-              creators={rows.creators}
-              onCreateCreator={handleCreateCreator}
-              upsertDecision={upsertDecision}
-            />
-          </Tabs.Content>
-          <Tabs.Content value='titles'>
-            <TitlesTab
-              candidates={plan.worklists.unmatchedCandidates}
-              features={rows.features}
-              onAddAlias={handleAddAlias}
-              upsertDecision={upsertDecision}
-            />
-          </Tabs.Content>
-          <Tabs.Content value='ranges'>
-            <RangesTab
-              ranges={plan.worklists.ranges}
-              upsertDecision={upsertDecision}
-              removeDecision={removeDecision}
-            />
-          </Tabs.Content>
-          <Tabs.Content value='pins'>
-            <PinsTab
-              pins={plan.pins}
-              upsertDecision={upsertDecision}
-              removeDecision={removeDecision}
-            />
-          </Tabs.Content>
-          <Tabs.Content value='apply'>
-            <ApplyTab
-              summary={plan.summary}
-              onApply={handleApply}
-              isApplying={isApplying}
-              result={applyResult}
-              error={applyError}
-            />
-          </Tabs.Content>
-        </Tabs.Root>
+        <ReviewStep
+          items={items}
+          features={rows.features}
+          commitPin={commitPin}
+          finishImport={finishImport}
+          onRestart={clearDraft}
+        />
       )}
     </Stack>
   );
