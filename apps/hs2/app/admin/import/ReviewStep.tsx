@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import ReactPlayer from 'react-player';
 import {
   Alert,
+  AspectRatio,
   Badge,
   Button,
   Card,
@@ -155,8 +157,11 @@ function PinReviewCard({
             </Badge>
           </HStack>
 
+          <AspectRatio ratio={16 / 9} w='full' maxW='2xl'>
+            <ReactPlayer src={item.media.url} controls width='100%' height='100%' />
+          </AspectRatio>
+
           <Stack gap={1}>
-            <DetailRow label='Channel'>{item.channel}</DetailRow>
             <DetailRow label='Creator'>
               {item.creatorName ?? 'Keeps the existing video’s creator'}
             </DetailRow>
