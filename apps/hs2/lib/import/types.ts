@@ -4,6 +4,8 @@
 
 import { z } from 'zod';
 import { Constants, type Database } from '@supabase/types/database';
+// Type-only, erased at runtime, so the types <-> decisions cycle stays compile-time.
+import type { Decision } from './decisions';
 
 // ---------------------------------------------------------------------------
 // Enums, sourced from the generated types so they cannot drift from the DB.
@@ -269,3 +271,11 @@ export type ApplyOutcome = {
   /** provenance without a media.import_id column. */
   insertedMediaIds: ReadonlyArray<MediaId>;
 };
+
+// ---------------------------------------------------------------------------
+// The transport shape the client holds and the commit action receives. The KML
+// is parsed once in the browser; what crosses to the server is the parsed layer
+// plus the admin's decision rows. The plan is always re-derived, never carried.
+// ---------------------------------------------------------------------------
+
+export type ImportDraft = { layer: ParsedLayer; decisions: ReadonlyArray<Decision> };

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildIndex } from './matching';
 import { TYPO_THRESHOLD } from './trigram';
-import { buildCatalogue, creator, feature } from './test-support';
+import { catalogueFixture, creator, feature } from './test-support';
 
 const wendover = feature('f1', 'Wendover Dean Viaduct');
 const curzon = feature('f2', 'Curzon Street Station');
@@ -10,7 +10,7 @@ const waterOrton1 = feature('f3', 'Water Orton No. 1 Viaduct');
 const waterOrton2 = feature('f4', 'Water Orton No. 2 Viaduct');
 
 const index = buildIndex(
-  buildCatalogue({
+  catalogueFixture({
     features: [wendover, curzon, waterOrton1, waterOrton2],
     aliases: [['Water Orton Viaducts', [waterOrton1, waterOrton2]]],
     creators: [creator('c1', 'djsviews'), creator('c2', 'cuemaster')],

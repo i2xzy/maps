@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { foldDecisions, type Decision } from './decisions';
 import { resolveLayer } from './resolve';
-import { buildCatalogue, creator, feature, sessionMeta } from './test-support';
+import { catalogueFixture, creator, feature, sessionMeta } from './test-support';
 import type { Decisions, ParsedLayer, Pin, ParseWarning, ShotType, SpanLookup, Url } from './types';
 import { emptyDecisions } from './types';
 
@@ -14,7 +14,7 @@ const mid = feature('f5', 'Marston Road Overbridge', 20);
 
 const djs = creator('c1', 'djsviews');
 
-const catalogue = buildCatalogue({
+const catalogue = catalogueFixture({
   features: [wendover, curzon, aston, leather, mid],
   aliases: [['Water Orton Viaducts', [wendover, curzon]]],
   creators: [djs],
