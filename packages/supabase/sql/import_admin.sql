@@ -26,12 +26,8 @@ drop policy if exists admin_insert on public.feature_title_aliases;
 create policy admin_insert on public.feature_title_aliases
   for insert to authenticated with check ((auth.jwt()->'app_metadata'->>'role') = 'admin');
 
--- Triage needs to READ aliases. media/creators/features are already readable
--- (the public site reads them); feature_title_aliases likely is not. If a plain
--- authenticated select on it already works when you apply this, drop this policy.
-drop policy if exists admin_read on public.feature_title_aliases;
-create policy admin_read on public.feature_title_aliases
-  for select to authenticated using ((auth.jwt()->'app_metadata'->>'role') = 'admin');
+-- Reads need no policy here: media/creators/features are read by the public site,
+-- and the operator enabled public read on feature_title_aliases.
 
 -- Geometry probe (run once; rolls itself back). Confirms media.location accepts an
 -- EWKT string straight from the client, so the commit needs no ST_GeomFromText RPC.
