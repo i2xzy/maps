@@ -37,7 +37,7 @@ function refKey(ref: DecisionRef): string {
 function loadPersisted(): PersistedDraft | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.sessionStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(STORAGE_KEY);
     return raw ? (JSON.parse(raw) as PersistedDraft) : null;
   } catch {
     return null;
@@ -70,18 +70,21 @@ export function useImportPlan(rows: CatalogueRows | null) {
     };
   }, []);
 
+  // Persist the draft so a refresh (or reopening the tab) restores it without a
+  // re-upload. Only written when there is a draft; removal is explicit (clearDraft),
+  // so this can't wipe the stored draft before the restore above reads it.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!draft) {
-      window.sessionStorage.removeItem(STORAGE_KEY);
-      return;
-    }
+    if (typeof window === 'undefined' || !draft) return;
     const persisted: PersistedDraft = {
       fileName: draft.fileName,
       layer: draft.layer,
       decisions: [...draft.decisions.values()],
     };
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    } catch {
+      // storage full or unavailable; persistence is best-effort.
+    }
   }, [draft]);
 
   const catalogue = useMemo(() => (rows ? buildCatalogue(rows) : null), [rows]);
@@ -126,7 +129,10 @@ export function useImportPlan(rows: CatalogueRows | null) {
     setDraft({ fileName, layer, decisions: new Map() });
   }, []);
 
-  const clearDraft = useCallback(() => setDraft(null), []);
+  const clearDraft = useCallback(() => {
+    if (typeof window !== 'undefined') window.localStorage.removeItem(STORAGE_KEY);
+    setDraft(null);
+  }, []);
 
   const upsertDecision = useCallback((d: Decision) => {
     setDraft((cur) => {
