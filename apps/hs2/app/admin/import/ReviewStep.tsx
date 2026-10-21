@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import ReactPlayer from 'react-player';
 import {
   Alert,
   AspectRatio,
@@ -34,6 +33,23 @@ type Props = {
 };
 
 type Counts = { imported: number; skipped: number; linksAdded: number };
+
+// A plain YouTube embed iframe, which always renders the full native player.
+// Carry the pin's ?t= timestamp across as ?start= so it opens at the moment.
+function embedSrc(youtubeId: string, sourceUrl: string): string {
+  const start = startSeconds(sourceUrl);
+  return `https://www.youtube.com/embed/${youtubeId}${start > 0 ? `?start=${start}` : ''}`;
+}
+
+function startSeconds(url: string): number {
+  const raw = /[?&]t=([^&]+)/.exec(url)?.[1];
+  if (raw === undefined) return 0;
+  if (/^\d+s?$/.test(raw)) return parseInt(raw, 10);
+  const h = Number(/(\d+)h/.exec(raw)?.[1] ?? 0);
+  const m = Number(/(\d+)m/.exec(raw)?.[1] ?? 0);
+  const s = Number(/(\d+)s/.exec(raw)?.[1] ?? 0);
+  return h * 3600 + m * 60 + s;
+}
 
 export function ReviewStep({
   items,
@@ -140,7 +156,6 @@ function PinReviewCard({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const playerRef = useRef<HTMLVideoElement | null>(null);
 
   const confirm = async () => {
     setBusy(true);
@@ -163,12 +178,12 @@ function PinReviewCard({
 
           {item.media.youtubeId && (
             <AspectRatio ratio={16 / 9} w='full' maxW='2xl'>
-              <ReactPlayer
-                ref={playerRef}
-                src={`https://www.youtube.com/embed/${item.media.youtubeId}`}
-                controls
-                width='100%'
-                height='100%'
+              <iframe
+                src={embedSrc(item.media.youtubeId, item.media.url)}
+                title='Pin video'
+                allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+                allowFullScreen
+                style={{ border: 0 }}
               />
             </AspectRatio>
           )}
