@@ -147,16 +147,15 @@ async function prepare(
 
     for (const text of splitTitle(title).candidates) {
       const res = index.resolveCandidate(text);
-      const ends = rangeEndpoints(text);
-      // A direct feature-name match always wins (feature names can contain "to").
-      // But an alias match on an "A to B" phrase is a stale/accidental whole-phrase
-      // alias; prefer the range so the span gets chainage and branch filtering.
-      if (res.kind === 'features' && (res.via === 'name' || ends === null)) {
+      // A direct feature match or a whole-phrase alias (incl. a "place to place"
+      // alias that maps to real features) wins: use its features as-is.
+      if (res.kind === 'features') {
         const via = fixTargets.has(norm(text)) ? 'fix' : res.via;
         candidates.push({ text, kind: 'features', via, features: res.features });
         links.push(...res.features);
         continue;
       }
+      const ends = rangeEndpoints(text);
       if (ends) {
         const decided = decisions.spans.get(spanKey(ends.from, ends.to));
         const choice = decided ?? defaultSpanChoice(resolvedShotType);
@@ -173,13 +172,7 @@ async function prepare(
         }
         continue;
       }
-      // Reached only when res is unmatched (every 'features' case continued above);
-      // the guard keeps the compiler's narrowing honest.
-      candidates.push({
-        text,
-        kind: 'unmatched',
-        closest: res.kind === 'unmatched' ? res.closest : null,
-      });
+      candidates.push({ text, kind: 'unmatched', closest: res.closest });
     }
 
     const mapped = decisions.channelMap.get(norm(pin.channel));
