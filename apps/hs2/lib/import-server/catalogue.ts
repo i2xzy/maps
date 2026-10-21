@@ -9,7 +9,7 @@ import { chunk, URL_BATCH } from './batch';
 export async function readCatalogueRows(supabase: Client, urls: string[]): Promise<CatalogueRows> {
   const [creatorsRes, featuresRes, aliasesRes] = await Promise.all([
     supabase.from('creators').select('id, display_name'),
-    supabase.from('features').select('id, name, chainage'),
+    supabase.from('features').select('id, name, chainage, route_element_id'),
     supabase.from('feature_title_aliases').select('alias, feature_name'),
   ]);
   if (creatorsRes.error) throw creatorsRes.error;
@@ -18,7 +18,12 @@ export async function readCatalogueRows(supabase: Client, urls: string[]): Promi
 
   return {
     creators: (creatorsRes.data ?? []).map((c) => ({ id: c.id, displayName: c.display_name })),
-    features: (featuresRes.data ?? []).map((f) => ({ id: f.id, name: f.name, chainage: f.chainage })),
+    features: (featuresRes.data ?? []).map((f) => ({
+      id: f.id,
+      name: f.name,
+      chainage: f.chainage,
+      routeElementId: f.route_element_id,
+    })),
     aliases: (aliasesRes.data ?? []).map((a) => ({ alias: a.alias, featureName: a.feature_name })),
     existingMedia: await readExistingMedia(supabase, urls),
   };

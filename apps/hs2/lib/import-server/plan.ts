@@ -14,11 +14,10 @@ import {
 import { readCatalogueRows } from './catalogue';
 
 export function serverSpanLookup(supabase: Client): SpanLookup {
-  return async (from, to, routePrefix) => {
+  return async (from, to) => {
     const { data, error } = await supabase.rpc('chainage_span', {
       p_start: from,
       p_end: to,
-      p_route_prefix: routePrefix ?? undefined,
     });
     if (error) throw error;
     return (data ?? []).map((row) => row.feature_name);

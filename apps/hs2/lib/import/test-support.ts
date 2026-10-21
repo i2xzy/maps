@@ -2,6 +2,7 @@
 // surface (never re-exported from index.ts); vitest ignores it (no .test.ts).
 
 import type {
+  Branch,
   Catalogue,
   CreatorId,
   CreatorRef,
@@ -13,8 +14,13 @@ import type {
 } from './types';
 import { norm } from './titles';
 
-export function feature(id: string, name: string, chainage: number | null = null): FeatureRef {
-  return { id: id as FeatureId, name, chainage };
+export function feature(
+  id: string,
+  name: string,
+  chainage: number | null = null,
+  branch: Branch = 'main',
+): FeatureRef {
+  return { id: id as FeatureId, name, chainage, branch };
 }
 
 export function creator(id: string, displayName: string): CreatorRef {

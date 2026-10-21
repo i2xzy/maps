@@ -8,7 +8,6 @@ import {
   EmptyState,
   Field,
   HStack,
-  Input,
   NativeSelect,
   Stack,
   Text,
@@ -18,12 +17,19 @@ import {
 
 import {
   decisionRef,
+  type Branch,
   type Decision,
   type DecisionRef,
   type RangeWork,
   type SpanChoice,
   type SpanPlan,
 } from '@/lib/import';
+
+const BRANCH_LABELS: Record<Branch, string> = {
+  main: 'Main Line',
+  spur: 'Birmingham Spur',
+  north: 'North Chord',
+};
 
 type Props = {
   ranges: ReadonlyArray<RangeWork>;
@@ -65,8 +71,8 @@ function RangeRow({ entry, upsertDecision, removeDecision }: {
   removeDecision: (ref: DecisionRef) => void;
 }) {
   const [mode, setMode] = useState<Mode>(entry.choice.kind);
-  const [routePrefix, setRoutePrefix] = useState(
-    entry.choice.kind === 'auto' ? (entry.choice.routePrefix ?? '') : '',
+  const [branch, setBranch] = useState<Branch | ''>(
+    entry.choice.kind === 'auto' ? (entry.choice.branch ?? '') : '',
   );
   const resolvedNames = entry.span.kind === 'manual' ? [] : entry.span.features.map((f) => f.name);
   const [explicit, setExplicit] = useState(
@@ -77,7 +83,7 @@ function RangeRow({ entry, upsertDecision, removeDecision }: {
     let choice: SpanChoice;
     switch (mode) {
       case 'auto':
-        choice = { kind: 'auto', routePrefix: routePrefix.trim() === '' ? null : routePrefix.trim() };
+        choice = { kind: 'auto', branch: branch === '' ? null : branch };
         break;
       case 'endpointsOnly':
         choice = { kind: 'endpointsOnly' };
@@ -130,19 +136,23 @@ function RangeRow({ entry, upsertDecision, removeDecision }: {
                 <NativeSelect.Indicator />
               </NativeSelect.Root>
             </Field.Root>
-            {mode === 'auto' && (
+            {mode === 'auto' && entry.branchesPresent.length > 1 && (
               <Field.Root width='auto'>
                 <Field.Label fontSize='xs'>Limit Auto to a branch</Field.Label>
-                <Input
-                  size='sm'
-                  width='170px'
-                  value={routePrefix}
-                  onChange={(e) => setRoutePrefix(e.target.value)}
-                  placeholder='blank = whole route'
-                />
-                <Field.HelperText fontSize='xs'>
-                  e.g. B- (Birmingham spur), N- (north). Blank spans the whole route.
-                </Field.HelperText>
+                <NativeSelect.Root size='sm' width='170px'>
+                  <NativeSelect.Field
+                    value={branch}
+                    onChange={(e) => setBranch(e.currentTarget.value as Branch | '')}
+                  >
+                    <option value=''>Whole route</option>
+                    {entry.branchesPresent.map((b) => (
+                      <option key={b} value={b}>
+                        {BRANCH_LABELS[b]}
+                      </option>
+                    ))}
+                  </NativeSelect.Field>
+                  <NativeSelect.Indicator />
+                </NativeSelect.Root>
               </Field.Root>
             )}
             <Button size='sm' variant='subtle' onClick={apply}>

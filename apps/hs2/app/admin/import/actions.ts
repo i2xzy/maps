@@ -25,17 +25,12 @@ export async function loadCatalogue(urls: string[]): Promise<CatalogueRows> {
 const spanSchema = z.object({
   from: z.string(),
   to: z.string(),
-  routePrefix: z.string().nullable(),
 });
 
-export async function spanLookup(
-  from: string,
-  to: string,
-  routePrefix: string | null,
-): Promise<string[]> {
+export async function spanLookup(from: string, to: string): Promise<string[]> {
   const { supabase } = await requireAdmin();
-  const p = spanSchema.parse({ from, to, routePrefix });
-  return [...(await serverSpanLookup(supabase)(p.from, p.to, p.routePrefix))];
+  const p = spanSchema.parse({ from, to });
+  return [...(await serverSpanLookup(supabase)(p.from, p.to))];
 }
 
 const createCreatorSchema = z.object({

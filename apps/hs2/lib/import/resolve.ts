@@ -5,6 +5,7 @@
 
 import type {
   BlockReason,
+  Branch,
   CandidatePlan,
   Catalogue,
   CreatorRef,
@@ -24,6 +25,7 @@ import type {
   SpanPlan,
   Url,
 } from './types';
+import { distinctBranches } from './catalogue';
 import { spanKey } from './decisions';
 import { buildIndex } from './matching';
 import { applyCandidateFixes, norm, rangeEndpoints, splitTitle } from './titles';
@@ -43,7 +45,7 @@ type Prepared = {
 
 function defaultSpanChoice(shotType: ShotType | null): SpanChoice {
   if (shotType === 'ground' || shotType === 'vehicle') return { kind: 'manual' };
-  return { kind: 'auto', routePrefix: null };
+  return { kind: 'auto', branch: null };
 }
 
 // A channel holding a date or a URL is a source-data mistake, not a real name.
@@ -70,11 +72,11 @@ function dedupeById(refs: ReadonlyArray<FeatureRef>): FeatureRef[] {
 
 function makeSpanResolver(index: Index, lookupSpan: SpanLookup) {
   const cache = new Map<string, Promise<FeatureRef[]>>();
-  return (from: string, to: string, routePrefix: string | null): Promise<FeatureRef[]> => {
-    const key = `${spanKey(from, to)}\u0000${routePrefix ?? ''}`;
+  return (from: string, to: string): Promise<FeatureRef[]> => {
+    const key = spanKey(from, to);
     let pending = cache.get(key);
     if (!pending) {
-      pending = lookupSpan(from, to, routePrefix).then((names) => index.featuresByNames(names));
+      pending = lookupSpan(from, to).then((names) => index.featuresByNames(names));
       cache.set(key, pending);
     }
     return pending;
@@ -151,24 +153,28 @@ async function buildSpanPlan(
     case 'manual':
       return { kind: 'manual', reason: fromDecision ? 'admin' : 'ground-or-vehicle' };
     case 'auto': {
-      const features = await resolveSpan(ends.from, ends.to, choice.routePrefix);
+      const all = await resolveSpan(ends.from, ends.to);
+      const branchesPresent = distinctBranches(all);
+      const features = choice.branch ? all.filter((f) => f.branch === choice.branch) : all;
       if (features.length >= 2) {
-        return { kind: 'linked', via: 'auto', routePrefix: choice.routePrefix, features };
+        return { kind: 'linked', via: 'auto', branch: choice.branch, branchesPresent, features };
       }
-      return { kind: 'unresolved', routePrefix: choice.routePrefix, features };
+      return { kind: 'unresolved', branch: choice.branch, branchesPresent, features };
     }
     case 'endpointsOnly':
       return {
         kind: 'linked',
         via: 'endpointsOnly',
-        routePrefix: null,
+        branch: null,
+        branchesPresent: [],
         features: index.featuresByNames([ends.from, ends.to]),
       };
     case 'explicit':
       return {
         kind: 'linked',
         via: 'explicit',
-        routePrefix: null,
+        branch: null,
+        branchesPresent: [],
         features: index.featuresByNames(choice.featureNames),
       };
   }
@@ -254,7 +260,15 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
   >();
   const ranges = new Map<
     string,
-    { from: string; to: string; pinCount: number; shotTypes: Set<ShotType>; span: SpanPlan; choice: SpanChoice }
+    {
+      from: string;
+      to: string;
+      pinCount: number;
+      shotTypes: Set<ShotType>;
+      span: SpanPlan;
+      choice: SpanChoice;
+      branchesPresent: ReadonlyArray<Branch>;
+    }
   >();
 
   for (const plan of pins) {
@@ -302,6 +316,7 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
             shotTypes: new Set<ShotType>(),
             span: cand.span,
             choice: spanChoiceOf(cand.span),
+            branchesPresent: cand.span.kind === 'manual' ? [] : cand.span.branchesPresent,
           };
         if (!seenRange.has(key)) {
           seenRange.add(key);
@@ -335,6 +350,7 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
       shotTypes: [...e.shotTypes],
       span: e.span,
       choice: e.choice,
+      branchesPresent: e.branchesPresent,
     })),
     unmappedShotTypes: [...unmappedShotTypes.values()],
     badChannels: [...badChannels.values()],
@@ -344,11 +360,11 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
 function spanChoiceOf(span: SpanPlan): SpanChoice {
   switch (span.kind) {
     case 'linked':
-      if (span.via === 'auto') return { kind: 'auto', routePrefix: span.routePrefix };
+      if (span.via === 'auto') return { kind: 'auto', branch: span.branch };
       if (span.via === 'endpointsOnly') return { kind: 'endpointsOnly' };
       return { kind: 'explicit', featureNames: span.features.map((f) => f.name) };
     case 'unresolved':
-      return { kind: 'auto', routePrefix: span.routePrefix };
+      return { kind: 'auto', branch: span.branch };
     case 'manual':
       return { kind: 'manual' };
   }

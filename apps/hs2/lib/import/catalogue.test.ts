@@ -7,8 +7,8 @@ import type { FeatureId, MediaId, Url } from './types';
 const rows: CatalogueRows = {
   creators: [{ id: 'c1', displayName: 'DJSViews' }],
   features: [
-    { id: 'f1', name: 'Wendover Dean Viaduct', chainage: 10 },
-    { id: 'f2', name: 'Curzon Street Station', chainage: 20 },
+    { id: 'f1', name: 'Wendover Dean Viaduct', chainage: 10, routeElementId: '165-L1' },
+    { id: 'f2', name: 'Curzon Street Station', chainage: 20, routeElementId: null },
   ],
   aliases: [
     { alias: 'Water Orton Viaducts', featureName: 'Wendover Dean Viaduct' },

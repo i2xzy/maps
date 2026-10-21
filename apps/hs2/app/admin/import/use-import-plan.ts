@@ -99,8 +99,7 @@ export function useImportPlan(rows: CatalogueRows | null) {
       }
       if (!cancelled) setIsDeriving(true);
       const decisions = foldDecisions([...draft.decisions.values()]);
-      const lookup: SpanLookup = (from, to, routePrefix) =>
-        spanLookupAction(from, to, routePrefix);
+      const lookup: SpanLookup = (from, to) => spanLookupAction(from, to);
       const session: ImportSessionMeta = {
         id: crypto.randomUUID() as ImportId,
         name: draft.fileName,

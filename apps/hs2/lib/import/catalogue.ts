@@ -6,6 +6,7 @@
 // point at a feature the catalogue doesn't hold.
 
 import type {
+  Branch,
   Catalogue,
   CreatorId,
   CreatorRef,
@@ -19,10 +20,26 @@ import { norm } from './titles';
 
 export type CatalogueRows = {
   creators: ReadonlyArray<{ id: string; displayName: string }>;
-  features: ReadonlyArray<{ id: string; name: string; chainage: number | null }>;
+  features: ReadonlyArray<{ id: string; name: string; chainage: number | null; routeElementId: string | null }>;
   aliases: ReadonlyArray<{ alias: string; featureName: string }>;
   existingMedia: ReadonlyArray<{ url: string; id: string; featureIds: ReadonlyArray<string> }>;
 };
+
+// The operator's rule: route_element_id starting with B is the Birmingham spur,
+// N is the north chord, everything else (numeric ids, null) is the main line.
+export function branchOf(routeElementId: string | null): Branch {
+  if (routeElementId?.startsWith('B')) return 'spur';
+  if (routeElementId?.startsWith('N')) return 'north';
+  return 'main';
+}
+
+const BRANCH_ORDER: ReadonlyArray<Branch> = ['main', 'spur', 'north'];
+
+/** The branches present among these features, in fixed order. */
+export function distinctBranches(features: ReadonlyArray<FeatureRef>): Branch[] {
+  const present = new Set(features.map((f) => f.branch));
+  return BRANCH_ORDER.filter((b) => present.has(b));
+}
 
 export function buildCatalogue(rows: CatalogueRows): Catalogue {
   const creatorsByName = new Map<NormName, CreatorRef>();
@@ -32,7 +49,12 @@ export function buildCatalogue(rows: CatalogueRows): Catalogue {
 
   const featuresByName = new Map<NormName, FeatureRef>();
   for (const f of rows.features) {
-    featuresByName.set(norm(f.name), { id: f.id as FeatureId, name: f.name, chainage: f.chainage });
+    featuresByName.set(norm(f.name), {
+      id: f.id as FeatureId,
+      name: f.name,
+      chainage: f.chainage,
+      branch: branchOf(f.routeElementId),
+    });
   }
 
   const aliases = new Map<NormName, FeatureRef[]>();

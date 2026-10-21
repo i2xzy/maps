@@ -17,6 +17,11 @@ export type MediaType = Database['public']['Enums']['media_type'];
 export const shotTypeSchema = z.enum(Constants.public.Enums.shot_type);
 export const mediaTypeSchema = z.enum(Constants.public.Enums.media_type);
 
+// HS2's three branches, classified from `features.route_element_id`. A closed
+// union so a branch filter can never be an arbitrary string. Not a DB enum.
+export type Branch = 'main' | 'spur' | 'north';
+export const branchSchema = z.enum(['main', 'spur', 'north']);
+
 // ---------------------------------------------------------------------------
 // Branded primitives. zod is the single source of each brand, so a schema and
 // its type can never disagree. Values are minted where external data is parsed.
@@ -108,7 +113,7 @@ export type TitleParts = {
 
 export type SpanChoice = z.infer<typeof spanChoiceSchema>;
 export const spanChoiceSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('auto'), routePrefix: z.string().nullable() }),
+  z.object({ kind: z.literal('auto'), branch: branchSchema.nullable() }),
   z.object({ kind: z.literal('endpointsOnly') }),
   z.object({ kind: z.literal('explicit'), featureNames: z.array(z.string()).readonly() }),
   z.object({ kind: z.literal('manual') }),
@@ -139,7 +144,7 @@ export const emptyDecisions: Decisions = {
 // ---------------------------------------------------------------------------
 
 export type CreatorRef = { id: CreatorId; displayName: string };
-export type FeatureRef = { id: FeatureId; name: string; chainage: number | null };
+export type FeatureRef = { id: FeatureId; name: string; chainage: number | null; branch: Branch };
 
 export type Catalogue = {
   creatorsByName: ReadonlyMap<NormName, CreatorRef>;
@@ -150,12 +155,9 @@ export type Catalogue = {
   existingMedia: ReadonlyMap<Url, { id: MediaId; featureIds: ReadonlySet<FeatureId> }>;
 };
 
-/** Injected so resolveLayer stays pure/testable; production hits rpc('chainage_span'). */
-export type SpanLookup = (
-  from: string,
-  to: string,
-  routePrefix: string | null,
-) => Promise<ReadonlyArray<string>>;
+/** Injected so resolveLayer stays pure/testable; production hits rpc('chainage_span').
+ *  Returns the span unfiltered; branch filtering happens in the app, not the DB. */
+export type SpanLookup = (from: string, to: string) => Promise<ReadonlyArray<string>>;
 
 // ---------------------------------------------------------------------------
 // The plan: what Apply will do, fully derived. The only thing the UI renders.
@@ -165,11 +167,19 @@ export type SpanPlan =
   | {
       kind: 'linked';
       via: 'auto' | 'explicit' | 'endpointsOnly';
-      routePrefix: string | null;
+      /** The branch the auto span was constrained to; null for the whole route. */
+      branch: Branch | null;
+      /** Branches present in the unfiltered auto span, in fixed order. Empty for non-auto. */
+      branchesPresent: ReadonlyArray<Branch>;
       features: ReadonlyArray<FeatureRef>;
     }
   /** auto span that resolved fewer than two features: left unlinked on purpose. */
-  | { kind: 'unresolved'; routePrefix: string | null; features: ReadonlyArray<FeatureRef> }
+  | {
+      kind: 'unresolved';
+      branch: Branch | null;
+      branchesPresent: ReadonlyArray<Branch>;
+      features: ReadonlyArray<FeatureRef>;
+    }
   | { kind: 'manual'; reason: 'ground-or-vehicle' | 'admin' };
 
 export type CandidatePlan = { text: string } & (
@@ -239,6 +249,8 @@ export type RangeWork = {
   shotTypes: ReadonlyArray<ShotType>;
   span: SpanPlan;
   choice: SpanChoice;
+  /** Branches in this range's unfiltered auto span; drives the branch dropdown. */
+  branchesPresent: ReadonlyArray<Branch>;
 };
 export type UnmappedShotType = { raw: string; pinCount: number };
 export type BadChannel = { channel: string; why: 'date' | 'url'; pinCount: number };
