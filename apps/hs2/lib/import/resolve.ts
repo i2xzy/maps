@@ -78,10 +78,6 @@ function endpointCandidates(name: string, index: Index): FeatureRef[] {
   return res.features.filter((f) => f.chainage !== null);
 }
 
-// Resolve both endpoints to real features for chainage_span. When an endpoint is an
-// alias covering several features, pick the pair furthest apart by chainage so the
-// span covers the whole named stretch (e.g. "Washwood Heath" -> Bromford Tunnel, the
-// end further from Curzon Street Station). Null if either endpoint resolves to none.
 // The branch both endpoints can sit on: the one branch common to each endpoint's
 // candidate features. Exactly one settles the range (e.g. both on the Birmingham
 // spur); none or several leaves it open, a cross-junction range.
@@ -92,6 +88,10 @@ function sharedEndpointBranch(ends: { from: string; to: string }, index: Index):
   return common.length === 1 ? (common[0] ?? null) : null;
 }
 
+// Resolve both endpoints to real features for chainage_span, restricted to `branch`
+// when set. When an endpoint is an alias covering several features, pick the pair
+// furthest apart by chainage so the span covers the whole named stretch. Null if
+// either endpoint resolves to no feature on that branch.
 function resolveSpanEndpoints(
   ends: { from: string; to: string },
   index: Index,
