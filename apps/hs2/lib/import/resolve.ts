@@ -221,18 +221,6 @@ async function buildSpanPlan(
       const effective = choice.branch ?? endsBranch;
       const branchChoiceNeeded = branchesPresent.length > 1 && endsBranch === null;
       const features = effective ? all.filter((f) => f.branch === effective) : all;
-      // TEMP diagnostic (client only): remove once the branch filter is confirmed.
-      if (typeof window !== 'undefined') {
-        console.log('[import span]', `${ends.from} -> ${ends.to}`, {
-          fromCands: endpointCandidates(ends.from, index).map((f) => `${f.name}=${f.branch}`),
-          toCands: endpointCandidates(ends.to, index).map((f) => `${f.name}=${f.branch}`),
-          resolvedEndpoints: `${ep.from.name}(${ep.from.branch}) -> ${ep.to.name}(${ep.to.branch})`,
-          endsBranch,
-          effective,
-          allCount: all.length,
-          keptCount: features.length,
-        });
-      }
       if (features.length >= 2) {
         return { kind: 'linked', via: 'auto', branch: choice.branch, branchesPresent, branchChoiceNeeded, features };
       }
