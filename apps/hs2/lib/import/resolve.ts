@@ -245,7 +245,12 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
   const badChannels = new Map<string, { channel: string; why: 'date' | 'url'; pinCount: number }>();
   const unmatched = new Map<
     string,
-    { text: string; pinCount: number; closest: Closest; videoIds: string[] }
+    {
+      text: string;
+      pinCount: number;
+      closest: Closest;
+      locators: { videoId: string | null; title: string }[];
+    }
   >();
   const ranges = new Map<
     string,
@@ -281,10 +286,9 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
         if (!seenUnmatched.has(key)) {
           seenUnmatched.add(key);
           const entry =
-            unmatched.get(key) ?? { text: cand.text, pinCount: 0, closest: cand.closest, videoIds: [] };
+            unmatched.get(key) ?? { text: cand.text, pinCount: 0, closest: cand.closest, locators: [] };
           entry.pinCount += 1;
-          const vid = plan.pin.youtubeId;
-          if (vid && !entry.videoIds.includes(vid)) entry.videoIds.push(vid);
+          entry.locators.push({ videoId: plan.pin.youtubeId, title: plan.pin.title });
           unmatched.set(key, entry);
         }
       } else if (cand.kind === 'range') {
@@ -322,7 +326,7 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
         e.closest !== null && e.closest.similarity >= TYPO_THRESHOLD
           ? ('typo' as const)
           : ('alias-or-missing' as const),
-      videoIds: e.videoIds,
+      locators: e.locators,
     })),
     ranges: [...ranges.values()].map((e) => ({
       from: e.from,

@@ -228,8 +228,9 @@ export type UnmatchedCandidate = {
   pinCount: number;
   closest: { feature: FeatureRef; similarity: number } | null;
   verdict: 'typo' | 'alias-or-missing';
-  /** youtube ids of the pins carrying this candidate, to locate them in the map. */
-  videoIds: ReadonlyArray<string>;
+  /** How to find each pin carrying this candidate in the map: its youtube id when
+   *  it has one, otherwise its full title (both are searchable in Google My Maps). */
+  locators: ReadonlyArray<{ videoId: string | null; title: string }>;
 };
 export type RangeWork = {
   from: string;

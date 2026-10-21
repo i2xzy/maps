@@ -110,6 +110,16 @@ describe('resolveLayer: dispositions', () => {
     expect(plan.worklists.badChannels[0]).toMatchObject({ why: 'date', pinCount: 1 });
   });
 
+  it('locates an unmatched candidate by title when the pin has no video id', async () => {
+    const plan = await resolve(
+      layer([
+        pin({ ordinal: 0, url: null, title: '2026-09-22 Curzon Street Statio', channel: 'djsviews', shotType: 'drone' }),
+      ]),
+    );
+    const uc = plan.worklists.unmatchedCandidates.find((c) => c.text === 'Curzon Street Statio');
+    expect(uc?.locators).toEqual([{ videoId: null, title: '2026-09-22 Curzon Street Statio' }]);
+  });
+
   it('blocks a pin whose channel resolves to no creator and suggests the closest', async () => {
     const plan = await resolve(
       layer([pin({ url: asUrl('https://youtu.be/nocreator01'), channel: 'djsview', shotType: 'drone' })]),

@@ -22,7 +22,7 @@ type Props = {
   upsertDecision: (d: Decision) => void;
 };
 
-function CopyId({ id }: { id: string }) {
+function CopyChip({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <Button
@@ -30,12 +30,12 @@ function CopyId({ id }: { id: string }) {
       variant='outline'
       fontFamily='mono'
       onClick={() => {
-        void navigator.clipboard?.writeText(id);
+        void navigator.clipboard?.writeText(value);
         setCopied(true);
         setTimeout(() => setCopied(false), 1200);
       }}
     >
-      {copied ? 'Copied' : id}
+      {copied ? 'Copied' : label}
     </Button>
   );
 }
@@ -85,13 +85,17 @@ function CandidateRow({ entry, features, onAddAlias, upsertDecision }: {
             </Badge>
           </HStack>
 
-          {entry.videoIds.length > 0 && (
+          {entry.locators.length > 0 && (
             <HStack gap={2} flexWrap='wrap' align='center'>
               <Text fontSize='xs' color='fg.muted'>
-                Find in map by video id:
+                Find in map:
               </Text>
-              {entry.videoIds.map((id) => (
-                <CopyId key={id} id={id} />
+              {entry.locators.map((loc, i) => (
+                <CopyChip
+                  key={`${loc.videoId ?? loc.title}-${i}`}
+                  value={loc.videoId ?? loc.title}
+                  label={loc.videoId ?? loc.title}
+                />
               ))}
             </HStack>
           )}
