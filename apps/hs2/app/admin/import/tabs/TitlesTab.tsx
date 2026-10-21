@@ -15,30 +15,14 @@ import {
 
 import type { CatalogueRows, Decision, UnmatchedCandidate } from '@/lib/import';
 
+import { CopyChip } from './CopyChip';
+
 type Props = {
   candidates: ReadonlyArray<UnmatchedCandidate>;
   features: CatalogueRows['features'];
   onAddAlias: (alias: string, featureNames: string[]) => Promise<void>;
   upsertDecision: (d: Decision) => void;
 };
-
-function CopyChip({ value, label }: { value: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <Button
-      size='xs'
-      variant='outline'
-      fontFamily='mono'
-      onClick={() => {
-        void navigator.clipboard?.writeText(value);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1200);
-      }}
-    >
-      {copied ? 'Copied' : label}
-    </Button>
-  );
-}
 
 function CandidateRow({ entry, features, onAddAlias, upsertDecision }: {
   entry: UnmatchedCandidate;

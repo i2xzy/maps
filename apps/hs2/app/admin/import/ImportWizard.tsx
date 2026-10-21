@@ -33,6 +33,7 @@ import {
 } from './actions';
 import { useImportPlan } from './use-import-plan';
 import { SummaryTab } from './tabs/SummaryTab';
+import { IssuesTab, collectIssues } from './tabs/IssuesTab';
 import { CreatorsTab } from './tabs/CreatorsTab';
 import { TitlesTab } from './tabs/TitlesTab';
 import { RangesTab } from './tabs/RangesTab';
@@ -178,6 +179,7 @@ export function ImportWizard() {
     );
   }
 
+  const issueCount = plan ? collectIssues(plan.pins).length : 0;
   const missing = plan?.worklists.missingCreators.length ?? 0;
   const unmatched = plan?.worklists.unmatchedCandidates.length ?? 0;
   const rangeCount = plan?.worklists.ranges.length ?? 0;
@@ -215,6 +217,14 @@ export function ImportWizard() {
         <Tabs.Root defaultValue='summary' variant='enclosed'>
           <Tabs.List flexWrap='wrap'>
             <Tabs.Trigger value='summary'>Summary</Tabs.Trigger>
+            <Tabs.Trigger value='issues'>
+              Issues
+              {issueCount > 0 && (
+                <Badge ml={2} colorPalette='red'>
+                  {issueCount}
+                </Badge>
+              )}
+            </Tabs.Trigger>
             <Tabs.Trigger value='creators'>
               Creators
               {missing > 0 && (
@@ -245,6 +255,9 @@ export function ImportWizard() {
 
           <Tabs.Content value='summary'>
             <SummaryTab plan={plan} isDeriving={isDeriving} />
+          </Tabs.Content>
+          <Tabs.Content value='issues'>
+            <IssuesTab pins={plan.pins} />
           </Tabs.Content>
           <Tabs.Content value='creators'>
             <CreatorsTab
