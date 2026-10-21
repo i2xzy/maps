@@ -129,14 +129,21 @@ export function ImportWizard() {
         }}
       />
 
-      <Stack gap={1}>
-        <Heading size='lg'>Import a layer</Heading>
+      <HStack justify='space-between' align='start'>
+        <Stack gap={1}>
+          <Heading size='lg'>Import a layer</Heading>
+          {draft && (
+            <Text fontSize='sm' color='fg.muted'>
+              {draft.fileName} · {draft.layer.pins.length} pins
+            </Text>
+          )}
+        </Stack>
         {draft && (
-          <Text fontSize='sm' color='fg.muted'>
-            {draft.fileName} · {draft.layer.pins.length} pins
-          </Text>
+          <Button variant='outline' colorPalette='gray' size='sm' onClick={clearDraft}>
+            Start over
+          </Button>
         )}
-      </Stack>
+      </HStack>
 
       <Steps.Root step={phaseIndex(phase)} count={PHASE_ORDER.length} size='sm'>
         <Steps.List>
@@ -191,17 +198,12 @@ export function ImportWizard() {
             Fix these in Google My Maps, re-export, and upload the corrected file. The step clears
             itself once a file parses with no issues.
           </Text>
-          <HStack gap={3}>
-            <Button onClick={openPicker}>
-              <Icon>
-                <LuUpload />
-              </Icon>
-              Upload corrected file
-            </Button>
-            <Button variant='outline' colorPalette='gray' onClick={clearDraft}>
-              Start over
-            </Button>
-          </HStack>
+          <Button onClick={openPicker}>
+            <Icon>
+              <LuUpload />
+            </Icon>
+            Upload corrected file
+          </Button>
           {uploadError && (
             <Alert.Root status='error'>
               <Alert.Indicator />
@@ -217,9 +219,6 @@ export function ImportWizard() {
             Create or map each channel to a creator. The step clears itself once every channel
             resolves.
           </Text>
-          <Button variant='outline' colorPalette='gray' size='sm' onClick={clearDraft}>
-            Start over
-          </Button>
           {isDeriving && <Spinner size='sm' />}
           <CreatorsTab
             missingCreators={plan.worklists.missingCreators}
