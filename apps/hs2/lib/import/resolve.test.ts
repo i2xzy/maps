@@ -546,6 +546,54 @@ describe('resolveLayer: branch filtering', () => {
       throw new Error('expected a linked spur span');
     }
   });
+
+  it('treats an "A to B" candidate as a range even when a stale whole-phrase alias exists', async () => {
+    // A past mistake aliased the entire range phrase to every feature it spanned,
+    // main line included. Matching that alias would bypass branch filtering, so the
+    // phrase must still be handled as a range (endpoints + chainage + branch).
+    const curzonS = feature('p1', 'Curzon Street Station', 175, 'spur');
+    const bromfordS = feature('p2', 'Bromford Tunnel', 168, 'spur');
+    const wwhCut = feature('p3', 'Washwood Heath Retained Cut', 170, 'spur');
+    const faraday = feature('p4', 'Faraday Avenue Embankment', 170, 'main');
+    const lookup = spanLookup({
+      'Bromford Tunnel->Curzon Street Station': [
+        'Bromford Tunnel',
+        'Washwood Heath Retained Cut',
+        'Faraday Avenue Embankment',
+        'Curzon Street Station',
+      ],
+    });
+    const plan = await resolveLayer(
+      layer([
+        pin({
+          url: asUrl('https://youtu.be/stalealias1'),
+          title: '2026-06-30 Washwood Heath to Curzon Street Station',
+          channel: 'djsviews',
+          shotType: 'drone',
+        }),
+      ]),
+      emptyDecisions,
+      catalogueFixture({
+        features: [curzonS, bromfordS, wwhCut, faraday],
+        aliases: [
+          ['Washwood Heath', [bromfordS, wwhCut]],
+          // the stale whole-phrase alias that must NOT win over the range:
+          ['Washwood Heath to Curzon Street Station', [curzonS, bromfordS, wwhCut, faraday]],
+        ],
+        creators: [djs],
+      }),
+      lookup,
+      sessionMeta,
+    );
+    const cand = plan.pins[0]?.candidates[0];
+    expect(cand?.kind).toBe('range');
+    if (cand?.kind === 'range' && cand.span.kind === 'linked') {
+      // Filtered to the spur; the main-line Faraday Avenue is excluded.
+      expect([...cand.span.features.map((f) => f.id)].sort()).toEqual(['p1', 'p2', 'p3']);
+    } else {
+      throw new Error('expected a range, not a whole-phrase alias match');
+    }
+  });
 });
 
 describe('resolveLayer: unmatched worklist and totality', () => {

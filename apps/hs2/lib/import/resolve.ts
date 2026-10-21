@@ -147,13 +147,16 @@ async function prepare(
 
     for (const text of splitTitle(title).candidates) {
       const res = index.resolveCandidate(text);
-      if (res.kind === 'features') {
+      const ends = rangeEndpoints(text);
+      // A direct feature-name match always wins (feature names can contain "to").
+      // But an alias match on an "A to B" phrase is a stale/accidental whole-phrase
+      // alias; prefer the range so the span gets chainage and branch filtering.
+      if (res.kind === 'features' && (res.via === 'name' || ends === null)) {
         const via = fixTargets.has(norm(text)) ? 'fix' : res.via;
         candidates.push({ text, kind: 'features', via, features: res.features });
         links.push(...res.features);
         continue;
       }
-      const ends = rangeEndpoints(text);
       if (ends) {
         const decided = decisions.spans.get(spanKey(ends.from, ends.to));
         const choice = decided ?? defaultSpanChoice(resolvedShotType);
@@ -170,7 +173,13 @@ async function prepare(
         }
         continue;
       }
-      candidates.push({ text, kind: 'unmatched', closest: res.closest });
+      // Reached only when res is unmatched (every 'features' case continued above);
+      // the guard keeps the compiler's narrowing honest.
+      candidates.push({
+        text,
+        kind: 'unmatched',
+        closest: res.kind === 'unmatched' ? res.closest : null,
+      });
     }
 
     const mapped = decisions.channelMap.get(norm(pin.channel));
@@ -221,13 +230,6 @@ async function buildSpanPlan(
       const effective = choice.branch ?? endsBranch;
       const branchChoiceNeeded = branchesPresent.length > 1 && endsBranch === null;
       const features = effective ? all.filter((f) => f.branch === effective) : all;
-      if (typeof window !== 'undefined') {
-        console.log('[span]', `${ends.from} -> ${ends.to}`, {
-          endsBranch,
-          allCount: all.length,
-          keptCount: features.length,
-        });
-      }
       if (features.length >= 2) {
         return { kind: 'linked', via: 'auto', branch: choice.branch, branchesPresent, branchChoiceNeeded, features };
       }
