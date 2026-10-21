@@ -28,6 +28,7 @@ type CreatorInput = {
   url: string;
   platform?: string;
   externalId: string;
+  profileImageUrl?: string;
 };
 
 type Props = {
@@ -60,6 +61,7 @@ function CreatorRow({ entry, pins, creators, onCreateCreator, upsertDecision }: 
   const [displayName, setDisplayName] = useState(entry.channel);
   const [externalId, setExternalId] = useState('');
   const [url, setUrl] = useState('');
+  const [profileImageUrl, setProfileImageUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,7 +80,13 @@ function CreatorRow({ entry, pins, creators, onCreateCreator, upsertDecision }: 
     setBusy(true);
     setError(null);
     try {
-      const created = await onCreateCreator({ displayName, externalId, url, platform: 'youtube' });
+      const created = await onCreateCreator({
+        displayName,
+        externalId,
+        url,
+        platform: 'youtube',
+        profileImageUrl: profileImageUrl.trim() || undefined,
+      });
       upsertDecision({ kind: 'mapChannel', channel: entry.channel, creatorId: created.id });
       setCreating(false);
     } catch {
@@ -150,6 +158,15 @@ function CreatorRow({ entry, pins, creators, onCreateCreator, upsertDecision }: 
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   placeholder='https://youtube.com/@channelhandle'
+                />
+              </Field.Root>
+              <Field.Root>
+                <Field.Label fontSize='xs'>Profile image URL (optional)</Field.Label>
+                <Input
+                  size='sm'
+                  value={profileImageUrl}
+                  onChange={(e) => setProfileImageUrl(e.target.value)}
+                  placeholder='https://…/avatar.jpg'
                 />
               </Field.Root>
               {error && <Text fontSize='sm' color='fg.error'>{error}</Text>}

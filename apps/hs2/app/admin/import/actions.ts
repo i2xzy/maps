@@ -43,6 +43,7 @@ const createCreatorSchema = z.object({
   url: z.url(),
   platform: z.string().default('youtube'),
   externalId: z.string().min(1),
+  profileImageUrl: z.union([z.url(), z.literal('')]).optional(),
 });
 
 export async function createCreator(
@@ -57,6 +58,7 @@ export async function createCreator(
       url: data.url,
       platform: data.platform,
       external_id: data.externalId,
+      profile_image_url: data.profileImageUrl || null,
     })
     .select('id, display_name')
     .single();
