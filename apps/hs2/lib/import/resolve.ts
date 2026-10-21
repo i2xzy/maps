@@ -243,7 +243,10 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
   const missingCreators = new Map<string, { channel: string; pinCount: number }>();
   const unmappedShotTypes = new Map<string, { raw: string; pinCount: number }>();
   const badChannels = new Map<string, { channel: string; why: 'date' | 'url'; pinCount: number }>();
-  const unmatched = new Map<string, { text: string; pinCount: number; closest: Closest }>();
+  const unmatched = new Map<
+    string,
+    { text: string; pinCount: number; closest: Closest; videoIds: string[] }
+  >();
   const ranges = new Map<
     string,
     { from: string; to: string; pinCount: number; shotTypes: Set<ShotType>; span: SpanPlan; choice: SpanChoice }
@@ -277,8 +280,11 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
         const key = norm(cand.text);
         if (!seenUnmatched.has(key)) {
           seenUnmatched.add(key);
-          const entry = unmatched.get(key) ?? { text: cand.text, pinCount: 0, closest: cand.closest };
+          const entry =
+            unmatched.get(key) ?? { text: cand.text, pinCount: 0, closest: cand.closest, videoIds: [] };
           entry.pinCount += 1;
+          const vid = plan.pin.youtubeId;
+          if (vid && !entry.videoIds.includes(vid)) entry.videoIds.push(vid);
           unmatched.set(key, entry);
         }
       } else if (cand.kind === 'range') {
@@ -316,6 +322,7 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
         e.closest !== null && e.closest.similarity >= TYPO_THRESHOLD
           ? ('typo' as const)
           : ('alias-or-missing' as const),
+      videoIds: e.videoIds,
     })),
     ranges: [...ranges.values()].map((e) => ({
       from: e.from,

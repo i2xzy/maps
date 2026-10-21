@@ -22,6 +22,24 @@ type Props = {
   upsertDecision: (d: Decision) => void;
 };
 
+function CopyId({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      size='xs'
+      variant='outline'
+      fontFamily='mono'
+      onClick={() => {
+        void navigator.clipboard?.writeText(id);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      }}
+    >
+      {copied ? 'Copied' : id}
+    </Button>
+  );
+}
+
 function CandidateRow({ entry, features, onAddAlias, upsertDecision }: {
   entry: UnmatchedCandidate;
   features: CatalogueRows['features'];
@@ -66,6 +84,17 @@ function CandidateRow({ entry, features, onAddAlias, upsertDecision }: {
               {entry.verdict === 'typo' ? 'Likely typo' : 'Alias or missing'}
             </Badge>
           </HStack>
+
+          {entry.videoIds.length > 0 && (
+            <HStack gap={2} flexWrap='wrap' align='center'>
+              <Text fontSize='xs' color='fg.muted'>
+                Find in map by video id:
+              </Text>
+              {entry.videoIds.map((id) => (
+                <CopyId key={id} id={id} />
+              ))}
+            </HStack>
+          )}
 
           <HStack gap={3} flexWrap='wrap' align='end'>
             <Field.Root width='auto'>
