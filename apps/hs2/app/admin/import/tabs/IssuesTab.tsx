@@ -42,21 +42,37 @@ function blockNote(plan: Extract<PinPlan, { kind: 'blocked' }>): string | null {
   }
 }
 
-export type PinIssue = { plan: PinPlan; notes: string[]; blocked: boolean };
+type Severity = 'blocked' | 'duplicate' | 'warning';
+export type PinIssue = { plan: PinPlan; notes: string[]; severity: Severity };
+
+const BADGE: Record<Severity, { color: string; label: string }> = {
+  blocked: { color: 'red', label: 'Not imported' },
+  duplicate: { color: 'orange', label: 'Duplicate URL' },
+  warning: { color: 'yellow', label: 'Warning' },
+};
 
 export function collectIssues(pins: ReadonlyArray<PinPlan>): PinIssue[] {
   const out: PinIssue[] = [];
   for (const plan of pins) {
     const notes = plan.warnings.map(describeWarning);
-    let blocked = false;
+    let severity: Severity = 'warning';
     if (plan.kind === 'blocked') {
       const note = blockNote(plan);
       if (note !== null) {
         notes.unshift(note);
-        blocked = true;
+        severity = 'blocked';
       }
+    } else if (plan.kind === 'skipped' && plan.reason.kind === 'duplicate-url') {
+      const firstOrdinal = plan.reason.firstOrdinal;
+      const first = pins.find((p) => p.pin.ordinal === firstOrdinal);
+      const where = first ? `“${first.pin.title}”` : `pin #${firstOrdinal}`;
+      notes.unshift(
+        `Duplicate video URL — the same URL is on ${where}. This pin won't import; only its ` +
+          'feature links merge in. Give one pin its “?t=” timestamp URL in the map so both import.',
+      );
+      severity = 'duplicate';
     }
-    if (notes.length > 0) out.push({ plan, notes, blocked });
+    if (notes.length > 0) out.push({ plan, notes, severity });
   }
   return out;
 }
@@ -81,7 +97,7 @@ export function IssuesTab({ pins }: { pins: ReadonlyArray<PinPlan> }) {
         {issues.length} pin{issues.length === 1 ? '' : 's'} with problems in the source file. Fix them
         in Google My Maps and re-export.
       </Text>
-      {issues.map(({ plan, notes, blocked }) => (
+      {issues.map(({ plan, notes, severity }) => (
         <Card.Root key={plan.pin.ordinal} variant='outline' size='sm'>
           <Card.Body>
             <Stack gap={2}>
@@ -89,9 +105,7 @@ export function IssuesTab({ pins }: { pins: ReadonlyArray<PinPlan> }) {
                 <Text fontWeight='medium' lineClamp={1}>
                   {plan.pin.title || '(untitled)'}
                 </Text>
-                <Badge colorPalette={blocked ? 'red' : 'yellow'}>
-                  {blocked ? 'Not imported' : 'Warning'}
-                </Badge>
+                <Badge colorPalette={BADGE[severity].color}>{BADGE[severity].label}</Badge>
               </HStack>
               <Stack gap={0.5}>
                 {notes.map((n) => (
