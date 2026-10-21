@@ -68,8 +68,9 @@ function RangeRow({ entry, upsertDecision, removeDecision }: {
   const [routePrefix, setRoutePrefix] = useState(
     entry.choice.kind === 'auto' ? (entry.choice.routePrefix ?? '') : '',
   );
+  const resolvedNames = entry.span.kind === 'manual' ? [] : entry.span.features.map((f) => f.name);
   const [explicit, setExplicit] = useState(
-    entry.choice.kind === 'explicit' ? entry.choice.featureNames.join('\n') : '',
+    (entry.choice.kind === 'explicit' ? entry.choice.featureNames : resolvedNames).join('\n'),
   );
 
   const apply = () => {
@@ -118,27 +119,30 @@ function RangeRow({ entry, upsertDecision, removeDecision }: {
 
           <HStack gap={3} flexWrap='wrap' align='end'>
             <Field.Root width='auto'>
-              <Field.Label fontSize='xs'>Resolve by</Field.Label>
-              <NativeSelect.Root size='sm' width='200px'>
+              <Field.Label fontSize='xs'>How to link</Field.Label>
+              <NativeSelect.Root size='sm' width='220px'>
                 <NativeSelect.Field value={mode} onChange={(e) => setMode(e.currentTarget.value as Mode)}>
-                  <option value='auto'>Auto (chainage span)</option>
-                  <option value='endpointsOnly'>Endpoints only</option>
-                  <option value='explicit'>Explicit list</option>
-                  <option value='manual'>Manual (leave unlinked)</option>
+                  <option value='auto'>Auto — every feature between</option>
+                  <option value='endpointsOnly'>Endpoints only — just the two</option>
+                  <option value='explicit'>Explicit list — type the set</option>
+                  <option value='manual'>Manual — leave unlinked</option>
                 </NativeSelect.Field>
                 <NativeSelect.Indicator />
               </NativeSelect.Root>
             </Field.Root>
             {mode === 'auto' && (
               <Field.Root width='auto'>
-                <Field.Label fontSize='xs'>Route prefix (optional)</Field.Label>
+                <Field.Label fontSize='xs'>Limit Auto to a branch</Field.Label>
                 <Input
                   size='sm'
-                  width='140px'
+                  width='170px'
                   value={routePrefix}
                   onChange={(e) => setRoutePrefix(e.target.value)}
-                  placeholder='e.g. B- or N-'
+                  placeholder='blank = whole route'
                 />
+                <Field.HelperText fontSize='xs'>
+                  e.g. B- (Birmingham spur), N- (north). Blank spans the whole route.
+                </Field.HelperText>
               </Field.Root>
             )}
             <Button size='sm' variant='subtle' onClick={apply}>
@@ -159,6 +163,9 @@ function RangeRow({ entry, upsertDecision, removeDecision }: {
                 onChange={(e) => setExplicit(e.target.value)}
                 placeholder={'Aston Church Road Overbridge\nMarston Road Overbridge'}
               />
+              <Field.HelperText fontSize='xs'>
+                Prefilled from the auto result. Add or remove lines; unknown names are ignored.
+              </Field.HelperText>
             </Field.Root>
           )}
         </Stack>
@@ -181,6 +188,12 @@ export function RangesTab({ ranges, upsertDecision, removeDecision }: Props) {
 
   return (
     <Stack gap={3} pt={4}>
+      <Text fontSize='sm' color='fg.muted'>
+        A range title (“A to B”) links every feature between its two endpoints. Auto follows the
+        route&apos;s chainage order, Endpoints only links the two named features, Explicit list lets
+        you edit the exact set (prefilled from Auto), and Manual leaves it unlinked. A range that
+        crosses the junction should use the Explicit list.
+      </Text>
       {ranges.map((entry) => (
         <RangeRow
           key={`${entry.from}\u0000${entry.to}`}
