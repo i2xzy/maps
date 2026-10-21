@@ -505,6 +505,47 @@ describe('resolveLayer: branch filtering', () => {
     expect(unmatched).toContain('Nowhere Junction');
     expect(unmatched).not.toContain('Curzon Street Station');
   });
+
+  it('filters a spur range to the spur even when an alias also covers a main-line feature', async () => {
+    const curzonS = feature('s1', 'Curzon Street Station', 175, 'spur');
+    const bromfordS = feature('s2', 'Bromford Tunnel', 168, 'spur');
+    const wwhCut = feature('s3', 'Washwood Heath Retained Cut', 170, 'spur');
+    const saltleyMain = feature('s4', 'Saltley Main Viaduct', 172, 'main');
+    const wwhDepot = feature('s5', 'Washwood Heath Depot', 169, 'main');
+    const lookup = spanLookup({
+      'Bromford Tunnel->Curzon Street Station': [
+        'Bromford Tunnel',
+        'Washwood Heath Retained Cut',
+        'Saltley Main Viaduct',
+        'Curzon Street Station',
+      ],
+    });
+    const plan = await resolveLayer(
+      layer([
+        pin({
+          url: asUrl('https://youtu.be/spurrange1'),
+          title: '2026-06-30 Washwood Heath to Curzon Street Station',
+          channel: 'djsviews',
+          shotType: 'drone',
+        }),
+      ]),
+      emptyDecisions,
+      catalogueFixture({
+        features: [curzonS, bromfordS, wwhCut, saltleyMain, wwhDepot],
+        aliases: [['Washwood Heath', [bromfordS, wwhCut, wwhDepot]]],
+        creators: [djs],
+      }),
+      lookup,
+      sessionMeta,
+    );
+    const cand = plan.pins[0]?.candidates[0];
+    expect(cand?.kind).toBe('range');
+    if (cand?.kind === 'range' && cand.span.kind === 'linked') {
+      expect([...cand.span.features.map((f) => f.id)].sort()).toEqual(['s1', 's2', 's3']);
+    } else {
+      throw new Error('expected a linked spur span');
+    }
+  });
 });
 
 describe('resolveLayer: unmatched worklist and totality', () => {

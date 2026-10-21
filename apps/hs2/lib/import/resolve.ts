@@ -82,12 +82,24 @@ function endpointCandidates(name: string, index: Index): FeatureRef[] {
 // alias covering several features, pick the pair furthest apart by chainage so the
 // span covers the whole named stretch (e.g. "Washwood Heath" -> Bromford Tunnel, the
 // end further from Curzon Street Station). Null if either endpoint resolves to none.
+// The branch both endpoints can sit on: the one branch common to each endpoint's
+// candidate features. Exactly one settles the range (e.g. both on the Birmingham
+// spur); none or several leaves it open, a cross-junction range.
+function sharedEndpointBranch(ends: { from: string; to: string }, index: Index): Branch | null {
+  const fromBranches = new Set(endpointCandidates(ends.from, index).map((f) => f.branch));
+  const toBranches = new Set(endpointCandidates(ends.to, index).map((f) => f.branch));
+  const common = [...fromBranches].filter((b) => toBranches.has(b));
+  return common.length === 1 ? (common[0] ?? null) : null;
+}
+
 function resolveSpanEndpoints(
   ends: { from: string; to: string },
   index: Index,
+  branch: Branch | null,
 ): { from: FeatureRef; to: FeatureRef } | null {
-  const fromCands = endpointCandidates(ends.from, index);
-  const toCands = endpointCandidates(ends.to, index);
+  const onBranch = (f: FeatureRef) => branch === null || f.branch === branch;
+  const fromCands = endpointCandidates(ends.from, index).filter(onBranch);
+  const toCands = endpointCandidates(ends.to, index).filter(onBranch);
   if (fromCands.length === 0 || toCands.length === 0) return null;
   let best: { from: FeatureRef; to: FeatureRef; dist: number } | null = null;
   for (const a of fromCands) {
@@ -190,7 +202,11 @@ async function buildSpanPlan(
     case 'manual':
       return { kind: 'manual', reason: fromDecision ? 'admin' : 'ground-or-vehicle' };
     case 'auto': {
-      const ep = resolveSpanEndpoints(ends, index);
+      // The branch both endpoints share settles the range: resolve the span on that
+      // branch and filter to it, no dropdown. A cross-junction range (no shared
+      // branch) stays unfiltered and asks the admin when the span is mixed.
+      const endsBranch = sharedEndpointBranch(ends, index);
+      const ep = resolveSpanEndpoints(ends, index, endsBranch);
       if (ep === null) {
         return {
           kind: 'unresolved',
@@ -202,9 +218,6 @@ async function buildSpanPlan(
       }
       const all = await resolveSpan(ep.from.name, ep.to.name);
       const branchesPresent = distinctBranches(all);
-      // Both endpoints on one branch settles it: filter there, no dropdown. Only a
-      // mixed span whose endpoints don't agree needs the admin to choose.
-      const endsBranch = ep.from.branch === ep.to.branch ? ep.from.branch : null;
       const effective = choice.branch ?? endsBranch;
       const branchChoiceNeeded = branchesPresent.length > 1 && endsBranch === null;
       const features = effective ? all.filter((f) => f.branch === effective) : all;
