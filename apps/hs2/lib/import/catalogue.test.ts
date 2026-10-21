@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildCatalogue, type CatalogueRows } from './catalogue';
 import { buildIndex } from './matching';
+import { norm } from './titles';
 import type { FeatureId, MediaId, Url } from './types';
 
 const rows: CatalogueRows = {
@@ -41,6 +42,25 @@ describe('buildCatalogue', () => {
   it('drops an alias whose target feature is unknown', () => {
     const catalogue = buildCatalogue(rows);
     expect(catalogue.aliases.has('ghost alias' as never)).toBe(false);
+  });
+
+  it('classifies each feature onto a branch from its route_element_id', () => {
+    const catalogue = buildCatalogue({
+      creators: [],
+      aliases: [],
+      existingMedia: [],
+      features: [
+        { id: 'g1', name: 'Spur Overbridge', chainage: 1, routeElementId: 'B-12' },
+        { id: 'g2', name: 'North Overbridge', chainage: 2, routeElementId: 'ND-3' },
+        { id: 'g3', name: 'Main Overbridge', chainage: 3, routeElementId: '165-L1' },
+        { id: 'g4', name: 'Null Overbridge', chainage: 4, routeElementId: null },
+      ],
+    });
+    const branchOf = (name: string) => catalogue.featuresByName.get(norm(name))?.branch;
+    expect(branchOf('Spur Overbridge')).toBe('spur');
+    expect(branchOf('North Overbridge')).toBe('north');
+    expect(branchOf('Main Overbridge')).toBe('main');
+    expect(branchOf('Null Overbridge')).toBe('main');
   });
 
   it('keys existing media by exact url with its feature-id set', () => {

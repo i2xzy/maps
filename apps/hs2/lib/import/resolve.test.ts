@@ -348,6 +348,70 @@ describe('resolveLayer: ranges', () => {
   });
 });
 
+describe('resolveLayer: branch filtering', () => {
+  const mainA = feature('b1', 'Delta Main A', 10, 'main');
+  const mainB = feature('b2', 'Delta Main B', 20, 'main');
+  const spurA = feature('b3', 'Delta Spur A', 30, 'spur');
+  const spurB = feature('b4', 'Delta Spur B', 40, 'spur');
+  const title = '2026-01-01 Delta Main A to Delta Spur B';
+  const mixedLookup = spanLookup({
+    'Delta Main A->Delta Spur B': ['Delta Main A', 'Delta Main B', 'Delta Spur A', 'Delta Spur B'],
+  });
+
+  function resolveBranch(features: ReturnType<typeof feature>[], decisions = emptyDecisions) {
+    const cat = catalogueFixture({ features, creators: [djs] });
+    return resolveLayer(
+      layer([pin({ url: asUrl('https://youtu.be/branchpin1'), title, channel: 'djsviews', shotType: 'drone' })]),
+      decisions,
+      cat,
+      mixedLookup,
+      sessionMeta,
+    );
+  }
+
+  it('reports both branches present and links the whole span when unfiltered', async () => {
+    const plan = await resolveBranch([mainA, mainB, spurA, spurB]);
+    const cand = plan.pins[0]?.candidates[0];
+    expect(cand?.kind).toBe('range');
+    if (cand?.kind === 'range' && cand.span.kind === 'linked') {
+      expect(cand.span.branchesPresent).toEqual(['main', 'spur']);
+      expect(cand.span.branch).toBeNull();
+      expect(cand.span.features.map((f) => f.id)).toEqual(['b1', 'b2', 'b3', 'b4']);
+    }
+    expect(plan.worklists.ranges[0]?.branchesPresent).toEqual(['main', 'spur']);
+  });
+
+  it('filters a mixed span to one branch when the choice names it', async () => {
+    const decisions = foldDecisions([
+      {
+        kind: 'span',
+        from: 'Delta Main A',
+        to: 'Delta Spur B',
+        choice: { kind: 'auto', branch: 'spur' },
+      } as Decision,
+    ]);
+    const plan = await resolveBranch([mainA, mainB, spurA, spurB], decisions);
+    const cand = plan.pins[0]?.candidates[0];
+    if (cand?.kind === 'range' && cand.span.kind === 'linked') {
+      expect(cand.span.branch).toBe('spur');
+      expect(cand.span.branchesPresent).toEqual(['main', 'spur']);
+      expect(cand.span.features.map((f) => f.id)).toEqual(['b3', 'b4']);
+    }
+    if (plan.pins[0]?.kind === 'insert') {
+      expect(plan.pins[0].links.map((f) => f.id)).toEqual(['b3', 'b4']);
+    }
+  });
+
+  it('offers no branch choice when the span is wholly on one branch', async () => {
+    const plan = await resolveBranch([mainA, mainB]);
+    const cand = plan.pins[0]?.candidates[0];
+    if (cand?.kind === 'range' && cand.span.kind === 'linked') {
+      expect(cand.span.branchesPresent).toEqual(['main']);
+    }
+    expect(plan.worklists.ranges[0]?.branchesPresent).toHaveLength(1);
+  });
+});
+
 describe('resolveLayer: unmatched worklist and totality', () => {
   it('classifies a near-miss as a typo and an unknown name as alias-or-missing', async () => {
     const plan = await resolve(
