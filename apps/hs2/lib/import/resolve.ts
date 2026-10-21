@@ -70,20 +70,33 @@ function dedupeById(refs: ReadonlyArray<FeatureRef>): FeatureRef[] {
   return out;
 }
 
-// The single branch a name resolves to, or null if it isn't one feature on one branch.
-function soleBranch(refs: ReadonlyArray<FeatureRef>): Branch | null {
-  const branches = new Set(refs.map((f) => f.branch));
-  if (branches.size !== 1) return null;
-  const [only] = branches;
-  return only ?? null;
+// Chainage-bearing features a range endpoint resolves to: a direct feature name,
+// or the features an alias stands for. Non-feature endpoints resolve to none.
+function endpointCandidates(name: string, index: Index): FeatureRef[] {
+  const res = index.resolveCandidate(name);
+  if (res.kind !== 'features') return [];
+  return res.features.filter((f) => f.chainage !== null);
 }
 
-// When both endpoints sit on the same branch, that is the range's branch and no
-// dropdown is needed. Different branches (or a non-feature endpoint) leave it open.
-function sharedEndpointBranch(ends: { from: string; to: string }, index: Index): Branch | null {
-  const a = soleBranch(index.featuresByNames([ends.from]));
-  const b = soleBranch(index.featuresByNames([ends.to]));
-  return a !== null && a === b ? a : null;
+// Resolve both endpoints to real features for chainage_span. When an endpoint is an
+// alias covering several features, pick the pair furthest apart by chainage so the
+// span covers the whole named stretch (e.g. "Washwood Heath" -> Bromford Tunnel, the
+// end further from Curzon Street Station). Null if either endpoint resolves to none.
+function resolveSpanEndpoints(
+  ends: { from: string; to: string },
+  index: Index,
+): { from: FeatureRef; to: FeatureRef } | null {
+  const fromCands = endpointCandidates(ends.from, index);
+  const toCands = endpointCandidates(ends.to, index);
+  if (fromCands.length === 0 || toCands.length === 0) return null;
+  let best: { from: FeatureRef; to: FeatureRef; dist: number } | null = null;
+  for (const a of fromCands) {
+    for (const b of toCands) {
+      const dist = Math.abs((a.chainage ?? 0) - (b.chainage ?? 0));
+      if (best === null || dist > best.dist) best = { from: a, to: b, dist };
+    }
+  }
+  return best === null ? null : { from: best.from, to: best.to };
 }
 
 function makeSpanResolver(index: Index, lookupSpan: SpanLookup) {
@@ -169,11 +182,21 @@ async function buildSpanPlan(
     case 'manual':
       return { kind: 'manual', reason: fromDecision ? 'admin' : 'ground-or-vehicle' };
     case 'auto': {
-      const all = await resolveSpan(ends.from, ends.to);
+      const ep = resolveSpanEndpoints(ends, index);
+      if (ep === null) {
+        return {
+          kind: 'unresolved',
+          branch: choice.branch,
+          branchesPresent: [],
+          branchChoiceNeeded: false,
+          features: [],
+        };
+      }
+      const all = await resolveSpan(ep.from.name, ep.to.name);
       const branchesPresent = distinctBranches(all);
       // Both endpoints on one branch settles it: filter there, no dropdown. Only a
       // mixed span whose endpoints don't agree needs the admin to choose.
-      const endsBranch = sharedEndpointBranch(ends, index);
+      const endsBranch = ep.from.branch === ep.to.branch ? ep.from.branch : null;
       const effective = choice.branch ?? endsBranch;
       const branchChoiceNeeded = branchesPresent.length > 1 && endsBranch === null;
       const features = effective ? all.filter((f) => f.branch === effective) : all;

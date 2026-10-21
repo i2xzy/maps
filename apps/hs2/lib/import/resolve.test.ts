@@ -427,13 +427,62 @@ describe('resolveLayer: branch filtering', () => {
   });
 
   it('offers no branch choice when the span is wholly on one branch', async () => {
-    const plan = await resolveBranch([mainA, mainB]);
+    const mainTitle = '2026-01-01 Delta Main A to Delta Main B';
+    const lookup = spanLookup({ 'Delta Main A->Delta Main B': ['Delta Main A', 'Delta Main B'] });
+    const plan = await resolveLayer(
+      layer([pin({ url: asUrl('https://youtu.be/mainonly1'), title: mainTitle, channel: 'djsviews', shotType: 'drone' })]),
+      emptyDecisions,
+      catalogueFixture({ features: [mainA, mainB], creators: [djs] }),
+      lookup,
+      sessionMeta,
+    );
     const cand = plan.pins[0]?.candidates[0];
     if (cand?.kind === 'range' && cand.span.kind === 'linked') {
       expect(cand.span.branchesPresent).toEqual(['main']);
     }
     expect(plan.worklists.ranges[0]?.branchesPresent).toHaveLength(1);
     expect(plan.worklists.ranges[0]?.branchChoiceNeeded).toBe(false);
+  });
+
+  it('resolves an alias endpoint to the feature furthest from the other endpoint', async () => {
+    const curzon = feature('w1', 'Curzon Street Station', 100, 'spur');
+    const bromford = feature('w2', 'Bromford Tunnel', 10, 'main');
+    const wwhOverbridge = feature('w3', 'Washwood Heath Rail Overbridge', 50, 'main');
+    const saltley = feature('w4', 'Saltley Viaduct', 30, 'main');
+    // Only the correct resolution (Curzon -> Bromford Tunnel, the end furthest away)
+    // is keyed; picking the nearer Washwood Heath feature would miss it entirely.
+    const lookup = spanLookup({
+      'Curzon Street Station->Bromford Tunnel': [
+        'Bromford Tunnel',
+        'Saltley Viaduct',
+        'Curzon Street Station',
+      ],
+    });
+    const plan = await resolveLayer(
+      layer([
+        pin({
+          url: asUrl('https://youtu.be/alias1'),
+          title: '2026-01-01 Curzon Street Station to Washwood Heath',
+          channel: 'djsviews',
+          shotType: 'drone',
+        }),
+      ]),
+      emptyDecisions,
+      catalogueFixture({
+        features: [curzon, bromford, wwhOverbridge, saltley],
+        aliases: [['Washwood Heath', [bromford, wwhOverbridge]]],
+        creators: [djs],
+      }),
+      lookup,
+      sessionMeta,
+    );
+    const cand = plan.pins[0]?.candidates[0];
+    expect(cand?.kind).toBe('range');
+    if (cand?.kind === 'range' && cand.span.kind === 'linked') {
+      expect([...cand.span.features.map((f) => f.id)].sort()).toEqual(['w1', 'w2', 'w4']);
+    } else {
+      throw new Error('expected a linked span from the resolved alias endpoint');
+    }
   });
 });
 
