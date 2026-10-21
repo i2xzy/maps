@@ -67,6 +67,14 @@ export function reviewItems(plan: ImportPlan): ReviewItem[] {
   const out: ReviewItem[] = [];
   for (const p of plan.pins) {
     if (p.kind !== 'insert') continue;
+    // TEMP diagnostic: what the combobox actually receives for each pin.
+    if (typeof window !== 'undefined') {
+      console.log('[review]', p.draft.title, {
+        url: p.draft.url,
+        links: p.links.length,
+        branches: [...new Set(p.links.map((f) => f.branch))],
+      });
+    }
     out.push({
       ordinal: p.pin.ordinal,
       creatorName: p.creator.displayName,

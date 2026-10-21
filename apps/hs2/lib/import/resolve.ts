@@ -221,6 +221,13 @@ async function buildSpanPlan(
       const effective = choice.branch ?? endsBranch;
       const branchChoiceNeeded = branchesPresent.length > 1 && endsBranch === null;
       const features = effective ? all.filter((f) => f.branch === effective) : all;
+      if (typeof window !== 'undefined') {
+        console.log('[span]', `${ends.from} -> ${ends.to}`, {
+          endsBranch,
+          allCount: all.length,
+          keptCount: features.length,
+        });
+      }
       if (features.length >= 2) {
         return { kind: 'linked', via: 'auto', branch: choice.branch, branchesPresent, branchChoiceNeeded, features };
       }
