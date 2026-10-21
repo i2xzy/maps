@@ -4,6 +4,7 @@ import type { ImportDraft } from '@/lib/import';
 
 import { deriveServerPlan } from './plan';
 import { geometryToEwkt } from './geometry';
+import { chunk, URL_BATCH } from './batch';
 
 type MediaInsert = Database['public']['Tables']['media']['Insert'];
 type LinkInsert = Database['public']['Tables']['media_features']['Insert'];
@@ -50,8 +51,8 @@ export async function commitImport(supabase: Client, draft: ImportDraft): Promis
   }
 
   const idByUrl = new Map<string, string>();
-  if (insertUrls.length > 0) {
-    const { data, error } = await supabase.from('media').select('id, url').in('url', insertUrls);
+  for (const batch of chunk(insertUrls, URL_BATCH)) {
+    const { data, error } = await supabase.from('media').select('id, url').in('url', batch);
     if (error) throw error;
     for (const row of data ?? []) idByUrl.set(row.url, row.id);
   }

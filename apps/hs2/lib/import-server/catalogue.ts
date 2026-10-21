@@ -1,6 +1,8 @@
 import type { Client } from '@supabase/server';
 import type { CatalogueRows } from '@/lib/import';
 
+import { chunk, URL_BATCH } from './batch';
+
 // Reads the reference data a layer resolves against, shaped into the plain
 // CatalogueRows DTO buildCatalogue consumes. Existing media is scoped to the
 // layer's own urls so the relink path sees current feature links.
@@ -23,15 +25,16 @@ export async function readCatalogueRows(supabase: Client, urls: string[]): Promi
 }
 
 async function readExistingMedia(supabase: Client, urls: string[]) {
-  if (urls.length === 0) return [];
-  const { data, error } = await supabase
-    .from('media')
-    .select('id, url, media_features(feature_id)')
-    .in('url', urls);
-  if (error) throw error;
-  return (data ?? []).map((m) => ({
-    url: m.url,
-    id: m.id,
-    featureIds: m.media_features.map((mf) => mf.feature_id),
-  }));
+  const rows: { url: string; id: string; featureIds: string[] }[] = [];
+  for (const batch of chunk(urls, URL_BATCH)) {
+    const { data, error } = await supabase
+      .from('media')
+      .select('id, url, media_features(feature_id)')
+      .in('url', batch);
+    if (error) throw error;
+    for (const m of data ?? []) {
+      rows.push({ url: m.url, id: m.id, featureIds: m.media_features.map((mf) => mf.feature_id) });
+    }
+  }
+  return rows;
 }
