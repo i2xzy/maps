@@ -1,8 +1,20 @@
 import { createServerClient } from '@supabase/ssr';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import {
+  createClient as createSupabaseClient,
+  type SupabaseClient,
+  type User,
+} from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
 import { Database } from './types/database';
+
+/**
+ * The project's Supabase client type. App code reaches supabase-js types only
+ * through here; the `@supabase/*` path alias shadows the npm package, so a
+ * direct import from app code would not resolve.
+ */
+export type Client = SupabaseClient<Database>;
+export type { User };
 
 /**
  * Cookie-free Supabase client for PUBLIC, cacheable reads (no auth/session).

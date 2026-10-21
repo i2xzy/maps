@@ -21,7 +21,7 @@ export function creator(id: string, displayName: string): CreatorRef {
   return { id: id as CreatorId, displayName };
 }
 
-export function buildCatalogue(opts: {
+export function catalogueFixture(opts: {
   features?: ReadonlyArray<FeatureRef>;
   aliases?: ReadonlyArray<[string, ReadonlyArray<FeatureRef>]>;
   creators?: ReadonlyArray<CreatorRef>;
