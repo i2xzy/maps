@@ -171,6 +171,8 @@ export type SpanPlan =
       branch: Branch | null;
       /** Branches present in the unfiltered auto span, in fixed order. Empty for non-auto. */
       branchesPresent: ReadonlyArray<Branch>;
+      /** True when the branch is ambiguous (mixed span, endpoints don't agree): ask the admin. */
+      branchChoiceNeeded: boolean;
       features: ReadonlyArray<FeatureRef>;
     }
   /** auto span that resolved fewer than two features: left unlinked on purpose. */
@@ -178,6 +180,7 @@ export type SpanPlan =
       kind: 'unresolved';
       branch: Branch | null;
       branchesPresent: ReadonlyArray<Branch>;
+      branchChoiceNeeded: boolean;
       features: ReadonlyArray<FeatureRef>;
     }
   | { kind: 'manual'; reason: 'ground-or-vehicle' | 'admin' };
@@ -249,8 +252,10 @@ export type RangeWork = {
   shotTypes: ReadonlyArray<ShotType>;
   span: SpanPlan;
   choice: SpanChoice;
-  /** Branches in this range's unfiltered auto span; drives the branch dropdown. */
+  /** Branches in this range's unfiltered auto span; populates the branch dropdown. */
   branchesPresent: ReadonlyArray<Branch>;
+  /** Whether to show the branch dropdown: a mixed span the endpoints don't settle. */
+  branchChoiceNeeded: boolean;
 };
 export type UnmappedShotType = { raw: string; pinCount: number };
 export type BadChannel = { channel: string; why: 'date' | 'url'; pinCount: number };

@@ -70,6 +70,22 @@ function dedupeById(refs: ReadonlyArray<FeatureRef>): FeatureRef[] {
   return out;
 }
 
+// The single branch a name resolves to, or null if it isn't one feature on one branch.
+function soleBranch(refs: ReadonlyArray<FeatureRef>): Branch | null {
+  const branches = new Set(refs.map((f) => f.branch));
+  if (branches.size !== 1) return null;
+  const [only] = branches;
+  return only ?? null;
+}
+
+// When both endpoints sit on the same branch, that is the range's branch and no
+// dropdown is needed. Different branches (or a non-feature endpoint) leave it open.
+function sharedEndpointBranch(ends: { from: string; to: string }, index: Index): Branch | null {
+  const a = soleBranch(index.featuresByNames([ends.from]));
+  const b = soleBranch(index.featuresByNames([ends.to]));
+  return a !== null && a === b ? a : null;
+}
+
 function makeSpanResolver(index: Index, lookupSpan: SpanLookup) {
   const cache = new Map<string, Promise<FeatureRef[]>>();
   return (from: string, to: string): Promise<FeatureRef[]> => {
@@ -155,11 +171,16 @@ async function buildSpanPlan(
     case 'auto': {
       const all = await resolveSpan(ends.from, ends.to);
       const branchesPresent = distinctBranches(all);
-      const features = choice.branch ? all.filter((f) => f.branch === choice.branch) : all;
+      // Both endpoints on one branch settles it: filter there, no dropdown. Only a
+      // mixed span whose endpoints don't agree needs the admin to choose.
+      const endsBranch = sharedEndpointBranch(ends, index);
+      const effective = choice.branch ?? endsBranch;
+      const branchChoiceNeeded = branchesPresent.length > 1 && endsBranch === null;
+      const features = effective ? all.filter((f) => f.branch === effective) : all;
       if (features.length >= 2) {
-        return { kind: 'linked', via: 'auto', branch: choice.branch, branchesPresent, features };
+        return { kind: 'linked', via: 'auto', branch: choice.branch, branchesPresent, branchChoiceNeeded, features };
       }
-      return { kind: 'unresolved', branch: choice.branch, branchesPresent, features };
+      return { kind: 'unresolved', branch: choice.branch, branchesPresent, branchChoiceNeeded, features };
     }
     case 'endpointsOnly':
       return {
@@ -167,6 +188,7 @@ async function buildSpanPlan(
         via: 'endpointsOnly',
         branch: null,
         branchesPresent: [],
+        branchChoiceNeeded: false,
         features: index.featuresByNames([ends.from, ends.to]),
       };
     case 'explicit':
@@ -175,6 +197,7 @@ async function buildSpanPlan(
         via: 'explicit',
         branch: null,
         branchesPresent: [],
+        branchChoiceNeeded: false,
         features: index.featuresByNames(choice.featureNames),
       };
   }
@@ -268,6 +291,7 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
       span: SpanPlan;
       choice: SpanChoice;
       branchesPresent: ReadonlyArray<Branch>;
+      branchChoiceNeeded: boolean;
     }
   >();
 
@@ -317,6 +341,7 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
             span: cand.span,
             choice: spanChoiceOf(cand.span),
             branchesPresent: cand.span.kind === 'manual' ? [] : cand.span.branchesPresent,
+            branchChoiceNeeded: cand.span.kind === 'manual' ? false : cand.span.branchChoiceNeeded,
           };
         if (!seenRange.has(key)) {
           seenRange.add(key);
@@ -351,6 +376,7 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
       span: e.span,
       choice: e.choice,
       branchesPresent: e.branchesPresent,
+      branchChoiceNeeded: e.branchChoiceNeeded,
     })),
     unmappedShotTypes: [...unmappedShotTypes.values()],
     badChannels: [...badChannels.values()],

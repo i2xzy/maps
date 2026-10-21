@@ -136,7 +136,7 @@ function RangeRow({ entry, upsertDecision, removeDecision }: {
                 <NativeSelect.Indicator />
               </NativeSelect.Root>
             </Field.Root>
-            {mode === 'auto' && entry.branchesPresent.length > 1 && (
+            {mode === 'auto' && entry.branchChoiceNeeded && (
               <Field.Root width='auto'>
                 <Field.Label fontSize='xs'>Limit Auto to a branch</Field.Label>
                 <NativeSelect.Root size='sm' width='170px'>

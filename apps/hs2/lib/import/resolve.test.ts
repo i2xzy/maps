@@ -376,9 +376,33 @@ describe('resolveLayer: branch filtering', () => {
     if (cand?.kind === 'range' && cand.span.kind === 'linked') {
       expect(cand.span.branchesPresent).toEqual(['main', 'spur']);
       expect(cand.span.branch).toBeNull();
+      expect(cand.span.branchChoiceNeeded).toBe(true);
       expect(cand.span.features.map((f) => f.id)).toEqual(['b1', 'b2', 'b3', 'b4']);
     }
     expect(plan.worklists.ranges[0]?.branchesPresent).toEqual(['main', 'spur']);
+    expect(plan.worklists.ranges[0]?.branchChoiceNeeded).toBe(true);
+  });
+
+  it('filters to the endpoints’ shared branch and asks nothing, despite span bleed', async () => {
+    const spurTitle = '2026-01-01 Delta Spur A to Delta Spur B';
+    const lookup = spanLookup({
+      'Delta Spur A->Delta Spur B': ['Delta Main A', 'Delta Main B', 'Delta Spur A', 'Delta Spur B'],
+    });
+    const plan = await resolveLayer(
+      layer([pin({ url: asUrl('https://youtu.be/samebr1'), title: spurTitle, channel: 'djsviews', shotType: 'drone' })]),
+      emptyDecisions,
+      catalogueFixture({ features: [mainA, mainB, spurA, spurB], creators: [djs] }),
+      lookup,
+      sessionMeta,
+    );
+    const cand = plan.pins[0]?.candidates[0];
+    expect(cand?.kind).toBe('range');
+    if (cand?.kind === 'range' && cand.span.kind === 'linked') {
+      expect(cand.span.branchesPresent).toEqual(['main', 'spur']);
+      expect(cand.span.branchChoiceNeeded).toBe(false);
+      expect(cand.span.features.map((f) => f.id)).toEqual(['b3', 'b4']);
+    }
+    expect(plan.worklists.ranges[0]?.branchChoiceNeeded).toBe(false);
   });
 
   it('filters a mixed span to one branch when the choice names it', async () => {
@@ -409,6 +433,7 @@ describe('resolveLayer: branch filtering', () => {
       expect(cand.span.branchesPresent).toEqual(['main']);
     }
     expect(plan.worklists.ranges[0]?.branchesPresent).toHaveLength(1);
+    expect(plan.worklists.ranges[0]?.branchChoiceNeeded).toBe(false);
   });
 });
 
