@@ -46,6 +46,16 @@ function defaultSpanChoice(shotType: ShotType | null): SpanChoice {
   return { kind: 'auto', routePrefix: null };
 }
 
+// A channel holding a date or a URL is a source-data mistake, not a real name.
+// Such pins are blocked as errors to fix in the map, never offered as creators.
+function channelProblem(prepared: Prepared): 'date' | 'url' | null {
+  for (const w of prepared.warnings) {
+    if (w.kind === 'channel-is-url') return 'url';
+    if (w.kind === 'misplaced-date' && w.field === 'channel') return 'date';
+  }
+  return null;
+}
+
 function dedupeById(refs: ReadonlyArray<FeatureRef>): FeatureRef[] {
   const seen = new Set<string>();
   const out: FeatureRef[] = [];
@@ -208,6 +218,10 @@ function disposition(prepared: Prepared, decisions: Decisions, catalogue: Catalo
     const newLinks = links.filter((f) => !existing.featureIds.has(f.id));
     return { ...base, kind: 'relink', mediaId: existing.id, links, newLinks };
   }
+  const chanProblem = channelProblem(prepared);
+  if (chanProblem !== null) {
+    return { ...base, kind: 'blocked', reason: { kind: 'bad-channel', channel: pin.channel, why: chanProblem } };
+  }
   if (prepared.creator === null) {
     return { ...base, kind: 'blocked', reason: { kind: 'no-creator', channel: pin.channel } };
   }
@@ -228,6 +242,7 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
   type Closest = { feature: FeatureRef; similarity: number } | null;
   const missingCreators = new Map<string, { channel: string; pinCount: number }>();
   const unmappedShotTypes = new Map<string, { raw: string; pinCount: number }>();
+  const badChannels = new Map<string, { channel: string; why: 'date' | 'url'; pinCount: number }>();
   const unmatched = new Map<string, { text: string; pinCount: number; closest: Closest }>();
   const ranges = new Map<
     string,
@@ -246,6 +261,12 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
       const entry = unmappedShotTypes.get(key) ?? { raw: plan.reason.raw, pinCount: 0 };
       entry.pinCount += 1;
       unmappedShotTypes.set(key, entry);
+    }
+    if (plan.kind === 'blocked' && plan.reason.kind === 'bad-channel') {
+      const key = norm(plan.reason.channel);
+      const entry = badChannels.get(key) ?? { channel: plan.reason.channel, why: plan.reason.why, pinCount: 0 };
+      entry.pinCount += 1;
+      badChannels.set(key, entry);
     }
 
     const seenUnmatched = new Set<string>();
@@ -305,6 +326,7 @@ function buildWorklists(pins: ReadonlyArray<PinPlan>, index: Index) {
       choice: e.choice,
     })),
     unmappedShotTypes: [...unmappedShotTypes.values()],
+    badChannels: [...badChannels.values()],
   };
 }
 
@@ -348,7 +370,10 @@ export async function resolveLayer(
     insert: 0,
     relink: 0,
     skipped: 0,
-    blocked: { 'no-url': 0, 'no-creator': 0, 'no-shot-type': 0 } as Record<BlockReason['kind'], number>,
+    blocked: { 'no-url': 0, 'no-creator': 0, 'no-shot-type': 0, 'bad-channel': 0 } as Record<
+      BlockReason['kind'],
+      number
+    >,
     duplicateUrls: 0,
     linksPlanned: 0,
   };

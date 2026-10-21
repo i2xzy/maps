@@ -81,6 +81,7 @@ export type ParseWarning = { pin: number } & (
   | { kind: 'unparsed-date'; field: 'published' | 'recorded'; raw: string }
   | { kind: 'date-from-title'; titleDate: IsoDate; raw: string }
   | { kind: 'misplaced-date'; field: 'channel' | 'description'; value: string }
+  | { kind: 'channel-is-url'; value: string }
 );
 
 export type ParsedLayer = {
@@ -180,7 +181,10 @@ export type CandidatePlan = { text: string } & (
 export type BlockReason =
   | { kind: 'no-url' }
   | { kind: 'no-creator'; channel: string }
-  | { kind: 'no-shot-type'; raw: string };
+  | { kind: 'no-shot-type'; raw: string }
+  // Source-data error: the channel field holds a date or a URL, not a name.
+  // Fix it in the Google map and re-export, not by inventing a creator.
+  | { kind: 'bad-channel'; channel: string; why: 'date' | 'url' };
 
 export type SkipReason =
   | { kind: 'decided'; note: string }
@@ -234,6 +238,7 @@ export type RangeWork = {
   choice: SpanChoice;
 };
 export type UnmappedShotType = { raw: string; pinCount: number };
+export type BadChannel = { channel: string; why: 'date' | 'url'; pinCount: number };
 
 export type ImportPlan = {
   session: ImportSessionMeta;
@@ -243,6 +248,7 @@ export type ImportPlan = {
     unmatchedCandidates: ReadonlyArray<UnmatchedCandidate>;
     ranges: ReadonlyArray<RangeWork>;
     unmappedShotTypes: ReadonlyArray<UnmappedShotType>;
+    badChannels: ReadonlyArray<BadChannel>;
   };
   summary: {
     insert: number;

@@ -81,6 +81,35 @@ describe('resolveLayer: dispositions', () => {
     expect(plan.summary.linksPlanned).toBe(1);
   });
 
+  it('blocks a URL-in-channel pin as a source error, not a missing creator', async () => {
+    const plan = await resolve(
+      layer(
+        [pin({ ordinal: 0, url: asUrl('https://youtu.be/badchannel1'), channel: 'https://youtu.be/x', shotType: 'drone' })],
+        [{ pin: 0, kind: 'channel-is-url', value: 'https://youtu.be/x' }],
+      ),
+    );
+    const p = plan.pins[0];
+    expect(p?.kind).toBe('blocked');
+    if (p?.kind === 'blocked' && p.reason.kind === 'bad-channel') expect(p.reason.why).toBe('url');
+    expect(plan.summary.blocked['bad-channel']).toBe(1);
+    expect(plan.worklists.missingCreators).toHaveLength(0);
+    expect(plan.worklists.badChannels[0]).toMatchObject({ why: 'url', pinCount: 1 });
+  });
+
+  it('blocks a date-in-channel pin (swapped fields) as a source error', async () => {
+    const plan = await resolve(
+      layer(
+        [pin({ ordinal: 0, url: asUrl('https://youtu.be/badchannel2'), channel: '16 Oct 2026', shotType: 'drone' })],
+        [{ pin: 0, kind: 'misplaced-date', field: 'channel', value: '16 Oct 2026' }],
+      ),
+    );
+    const p = plan.pins[0];
+    expect(p?.kind).toBe('blocked');
+    if (p?.kind === 'blocked' && p.reason.kind === 'bad-channel') expect(p.reason.why).toBe('date');
+    expect(plan.worklists.missingCreators).toHaveLength(0);
+    expect(plan.worklists.badChannels[0]).toMatchObject({ why: 'date', pinCount: 1 });
+  });
+
   it('blocks a pin whose channel resolves to no creator and suggests the closest', async () => {
     const plan = await resolve(
       layer([pin({ url: asUrl('https://youtu.be/nocreator01'), channel: 'djsview', shotType: 'drone' })]),

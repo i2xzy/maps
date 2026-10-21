@@ -153,6 +153,10 @@ export function parseLayer(kml: string): ParsedLayer {
 
     if (parseBritishDate(channel) !== null) {
       warnings.push({ pin: ordinal, kind: 'misplaced-date', field: 'channel', value: channel });
+    } else if (channel && asUrl(channel) !== null) {
+      // A URL in the Channel field is a paste mistake (usually the video link),
+      // not a channel name. Flag it so the planner blocks the pin as a source error.
+      warnings.push({ pin: ordinal, kind: 'channel-is-url', value: channel });
     }
     if (description && parseBritishDate(description) !== null) {
       warnings.push({ pin: ordinal, kind: 'misplaced-date', field: 'description', value: description });

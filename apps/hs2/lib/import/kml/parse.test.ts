@@ -188,6 +188,17 @@ describe('parseLayer: swap detection', () => {
     });
   });
 
+  it('flags a URL sitting in the Channel field', () => {
+    const layer = parseLayer(
+      doc(placemark({ name: 'x', data: { Type: 'drone', Channel: 'https://youtu.be/FKKd6Omx0d8' } })),
+    );
+    expect(layer.warnings).toContainEqual({
+      pin: 0,
+      kind: 'channel-is-url',
+      value: 'https://youtu.be/FKKd6Omx0d8',
+    });
+  });
+
   it('flags a description that is entirely a date', () => {
     const layer = parseLayer(
       doc(placemark({ name: 'x', data: { Type: 'drone', description: 'Jan 2024' } })),
