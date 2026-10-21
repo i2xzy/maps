@@ -484,6 +484,27 @@ describe('resolveLayer: branch filtering', () => {
       throw new Error('expected a linked span from the resolved alias endpoint');
     }
   });
+
+  it('flags a range endpoint that matches no feature or alias in the Titles worklist', async () => {
+    const curzon = feature('f2b', 'Curzon Street Station', 100, 'spur');
+    const plan = await resolveLayer(
+      layer([
+        pin({
+          url: asUrl('https://youtu.be/badend1'),
+          title: '2026-01-01 Curzon Street Station to Nowhere Junction',
+          channel: 'djsviews',
+          shotType: 'drone',
+        }),
+      ]),
+      emptyDecisions,
+      catalogueFixture({ features: [curzon], creators: [djs] }),
+      noSpans,
+      sessionMeta,
+    );
+    const unmatched = plan.worklists.unmatchedCandidates.map((c) => c.text);
+    expect(unmatched).toContain('Nowhere Junction');
+    expect(unmatched).not.toContain('Curzon Street Station');
+  });
 });
 
 describe('resolveLayer: unmatched worklist and totality', () => {

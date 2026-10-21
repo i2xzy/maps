@@ -51,7 +51,17 @@ export function applyCandidateFixes(title: string, fixes: ReadonlyMap<NormName, 
   const body = title.slice(prefix.length);
   const rebuilt = body
     .split(/(\s*[|&]\s*)/)
-    .map((segment, i) => (i % 2 === 1 ? segment : fixes.get(norm(segment)) ?? segment))
+    .map((segment, i) => (i % 2 === 1 ? segment : fixSegment(segment, fixes)))
     .join('');
   return prefix + rebuilt;
+}
+
+// Fix a whole candidate, or, for a range candidate, each endpoint while keeping the
+// "to" connectors, so a typo fix on a range endpoint actually rewrites the title.
+function fixSegment(segment: string, fixes: ReadonlyMap<NormName, string>): string {
+  const direct = fixes.get(norm(segment));
+  if (direct !== undefined) return direct;
+  const parts = segment.split(/(\s+to\s+)/i);
+  if (parts.length < 3) return segment;
+  return parts.map((p, i) => (i % 2 === 1 ? p : fixes.get(norm(p)) ?? p)).join('');
 }

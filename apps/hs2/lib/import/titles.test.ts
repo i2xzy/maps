@@ -81,4 +81,11 @@ describe('applyCandidateFixes', () => {
       '2025-01-02 Curzon Street Station',
     );
   });
+
+  it('rewrites a range endpoint typo while keeping the "to" connector', () => {
+    const fix = new Map<NormName, string>([[norm('Washood Heath'), 'Washwood Heath']]);
+    expect(applyCandidateFixes('2026-01-01 Curzon Street Station to Washood Heath', fix)).toBe(
+      '2026-01-01 Curzon Street Station to Washwood Heath',
+    );
+  });
 });

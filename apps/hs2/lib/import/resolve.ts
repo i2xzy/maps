@@ -148,6 +148,14 @@ async function prepare(
         const span = await buildSpanPlan(ends, choice, decided !== undefined, index, resolveSpan);
         candidates.push({ text, kind: 'range', from: ends.from, to: ends.to, span });
         if (span.kind === 'linked') links.push(...span.features);
+        // An endpoint that is neither a feature nor an alias is a typo or a missing
+        // feature: surface it in the Titles worklist so it can be fixed or aliased.
+        for (const endpoint of [ends.from, ends.to]) {
+          const endRes = index.resolveCandidate(endpoint);
+          if (endRes.kind === 'unmatched') {
+            candidates.push({ text: endpoint, kind: 'unmatched', closest: endRes.closest });
+          }
+        }
         continue;
       }
       candidates.push({ text, kind: 'unmatched', closest: res.closest });
