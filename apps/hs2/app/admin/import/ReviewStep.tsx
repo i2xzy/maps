@@ -5,7 +5,6 @@ import ReactPlayer from 'react-player';
 import {
   Alert,
   AspectRatio,
-  Box,
   Button,
   Card,
   Field,
@@ -172,6 +171,20 @@ function PinReviewCard({
   // (before any refetch) and ignores a stale fetch that outlived its selection.
   const shownGeos = featureGeos.filter((g) => featureIds.includes(g.id));
 
+  // Measure the media column (video + map) so the feature checklist can match
+  // its height and scroll within it, rather than stretching the row taller.
+  const mediaRef = useRef<HTMLDivElement>(null);
+  const [mediaHeight, setMediaHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const el = mediaRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      setMediaHeight(entries[0]?.contentRect.height ?? el.offsetHeight);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const confirm = async () => {
     setBusy(true);
     setError(null);
@@ -191,16 +204,16 @@ function PinReviewCard({
             Row {rowNumber} of {total}
           </Heading>
 
-          {/* Top region, two columns of equal height: the video + map on the
-              left, the feature checklist on the right (so the list is visible
-              beside the media, not below it). Stacks on narrow screens. The
-              details, title and actions sit below, outside the list's scroll. */}
+          {/* Top region, two columns: the video + map on the left (given most of
+              the width), the feature checklist in a fixed, narrower column on the
+              right, matched to the media's height and scrolling within it. Stacks
+              on narrow screens. Details, title and actions sit below. */}
           <Grid
-            templateColumns={{ base: '1fr', lg: 'minmax(0, 1.5fr) minmax(0, 1fr)' }}
+            templateColumns={{ base: '1fr', lg: 'minmax(0, 1fr) 320px' }}
             gap={6}
-            alignItems='stretch'
+            alignItems='start'
           >
-            <Stack gap={4}>
+            <Stack ref={mediaRef} gap={4}>
               {item.media.youtubeId && (
                 // Same react-player v3 setup as the /media/[id] page: the native
                 // controls come from the `controls` prop, and the pin url's ?t=
@@ -217,9 +230,12 @@ function PinReviewCard({
               />
             </Stack>
 
-            <Box h='full' minH='0'>
-              <FeatureChecklist features={features} value={featureIds} onChange={setFeatureIds} />
-            </Box>
+            <FeatureChecklist
+              features={features}
+              value={featureIds}
+              onChange={setFeatureIds}
+              height={mediaHeight ?? undefined}
+            />
           </Grid>
 
           <Stack gap={1}>

@@ -11,6 +11,8 @@ type Props = {
   features: CatalogueRows['features'];
   value: ReadonlyArray<string>;
   onChange: (ids: string[]) => void;
+  /** Pixel height to match the media column; the list scrolls within it. */
+  height?: number;
 };
 
 // Route order: by chainage ascending, unmapped (null) last, name as a tiebreak.
@@ -29,7 +31,7 @@ function byChainage(a: Feature, b: Feature): number {
  * feature on mount so the pin's linked features are in view. A search box
  * filters it to tick more on or off.
  */
-export function FeatureChecklist({ features, value, onChange }: Props) {
+export function FeatureChecklist({ features, value, onChange, height }: Props) {
   const [query, setQuery] = useState('');
   const selected = useMemo(() => new Set(value), [value]);
   const listRef = useRef<HTMLDivElement>(null);
@@ -54,7 +56,7 @@ export function FeatureChecklist({ features, value, onChange }: Props) {
   }, []);
 
   return (
-    <Flex direction='column' h='full' minH='0' gap={3}>
+    <Flex direction='column' h={height ? `${height}px` : 'auto'} minH='0' gap={3}>
       <HStack justify='space-between' align='baseline'>
         <Heading size='sm'>Linked features</Heading>
         <Text fontSize='xs' color='fg.muted'>
@@ -67,12 +69,13 @@ export function FeatureChecklist({ features, value, onChange }: Props) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      <Box
+      <Flex
         ref={listRef}
+        direction='column'
         position='relative'
         flex='1'
         minH='0'
-        maxH={{ base: '24rem', lg: 'unset' }}
+        maxH={height ? undefined : '24rem'}
         overflowY='auto'
         borderWidth='1px'
         borderColor='border'
@@ -90,6 +93,8 @@ export function FeatureChecklist({ features, value, onChange }: Props) {
               size='sm'
               checked={selected.has(f.id)}
               onCheckedChange={() => toggle(f.id)}
+              display='flex'
+              width='full'
               px={3}
               py={2}
               gap={3}
@@ -113,7 +118,7 @@ export function FeatureChecklist({ features, value, onChange }: Props) {
             </Checkbox.Root>
           ))
         )}
-      </Box>
+      </Flex>
     </Flex>
   );
 }
