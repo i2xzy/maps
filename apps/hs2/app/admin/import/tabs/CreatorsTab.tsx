@@ -19,8 +19,6 @@ import type {
   CreatorRef,
   Decision,
   MissingCreator,
-  PinPlan,
-  Url,
 } from '@/lib/import';
 
 type CreatorInput = {
@@ -33,22 +31,10 @@ type CreatorInput = {
 
 type Props = {
   missingCreators: ReadonlyArray<MissingCreator>;
-  pins: ReadonlyArray<PinPlan>;
   creators: CatalogueRows['creators'];
   onCreateCreator: (input: CreatorInput) => Promise<CreatorRef>;
   upsertDecision: (d: Decision) => void;
 };
-
-function urlsForChannel(pins: ReadonlyArray<PinPlan>, channel: string): Url[] {
-  const key = channel.trim().toLowerCase();
-  const urls: Url[] = [];
-  for (const p of pins) {
-    if (p.kind === 'blocked' && p.reason.kind === 'no-creator') {
-      if (p.reason.channel.trim().toLowerCase() === key && p.pin.url) urls.push(p.pin.url);
-    }
-  }
-  return urls;
-}
 
 // Pull the channel handle out of a URL: youtube.com/@handle, /c/Name, /user/Name.
 // Returns '' when there's none (e.g. a /channel/UC… id URL), so the admin types it.
@@ -60,14 +46,16 @@ function deriveHandle(url: string): string {
   return '';
 }
 
-function CreatorRow({ entry, pins, creators, onCreateCreator, upsertDecision }: {
+function CreatorRow({ entry, creators, onCreateCreator, upsertDecision }: {
   entry: MissingCreator;
-  pins: ReadonlyArray<PinPlan>;
   creators: CatalogueRows['creators'];
   onCreateCreator: (input: CreatorInput) => Promise<CreatorRef>;
   upsertDecision: (d: Decision) => void;
 }) {
   const [creating, setCreating] = useState(false);
+  // Preselect the closest existing creator (common case: a renamed creator whose
+  // old name is still in the export). The admin confirms with an explicit button.
+  const [selectedId, setSelectedId] = useState<string>(entry.closest?.id ?? '');
   const [displayName, setDisplayName] = useState(entry.channel);
   const [externalId, setExternalId] = useState('');
   const [url, setUrl] = useState('');
@@ -79,12 +67,6 @@ function CreatorRow({ entry, pins, creators, onCreateCreator, upsertDecision }: 
   const mapExisting = (creatorId: string) => {
     if (!creatorId) return;
     upsertDecision({ kind: 'mapChannel', channel: entry.channel, creatorId: creatorId as CreatorId });
-  };
-
-  const skipPins = () => {
-    for (const u of urlsForChannel(pins, entry.channel)) {
-      upsertDecision({ kind: 'skipPin', url: u, reason: 'No creator for this channel' });
-    }
   };
 
   const submitCreate = async () => {
@@ -126,8 +108,8 @@ function CreatorRow({ entry, pins, creators, onCreateCreator, upsertDecision }: 
               <Field.Label fontSize='xs'>Map to existing creator</Field.Label>
               <NativeSelect.Root size='sm' width='240px'>
                 <NativeSelect.Field
-                  defaultValue=''
-                  onChange={(e) => mapExisting(e.currentTarget.value)}
+                  value={selectedId}
+                  onChange={(e) => setSelectedId(e.currentTarget.value)}
                 >
                   <option value=''>Select a creator…</option>
                   {creators.map((c) => (
@@ -139,11 +121,11 @@ function CreatorRow({ entry, pins, creators, onCreateCreator, upsertDecision }: 
                 <NativeSelect.Indicator />
               </NativeSelect.Root>
             </Field.Root>
+            <Button size='sm' onClick={() => mapExisting(selectedId)} disabled={selectedId === ''}>
+              Map to this creator
+            </Button>
             <Button size='sm' variant='subtle' onClick={() => setCreating((v) => !v)}>
               {creating ? 'Cancel' : 'Create creator'}
-            </Button>
-            <Button size='sm' variant='ghost' colorPalette='gray' onClick={skipPins}>
-              Skip these pins
             </Button>
           </HStack>
 
@@ -208,7 +190,7 @@ function CreatorRow({ entry, pins, creators, onCreateCreator, upsertDecision }: 
   );
 }
 
-export function CreatorsTab({ missingCreators, pins, creators, onCreateCreator, upsertDecision }: Props) {
+export function CreatorsTab({ missingCreators, creators, onCreateCreator, upsertDecision }: Props) {
   if (missingCreators.length === 0) {
     return (
       <EmptyState.Root>
@@ -220,14 +202,16 @@ export function CreatorsTab({ missingCreators, pins, creators, onCreateCreator, 
     );
   }
 
+  // Sorted once here so every row's dropdown is alphabetical by display name.
+  const sorted = [...creators].sort((a, b) => a.displayName.localeCompare(b.displayName));
+
   return (
     <Stack gap={3} pt={4}>
       {missingCreators.map((entry) => (
         <CreatorRow
           key={entry.channel}
           entry={entry}
-          pins={pins}
-          creators={creators}
+          creators={sorted}
           onCreateCreator={onCreateCreator}
           upsertDecision={upsertDecision}
         />

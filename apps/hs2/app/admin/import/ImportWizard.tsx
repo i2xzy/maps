@@ -222,7 +222,6 @@ export function ImportWizard() {
           {isDeriving && <Spinner size='sm' />}
           <CreatorsTab
             missingCreators={plan.worklists.missingCreators}
-            pins={plan.pins}
             creators={rows.creators}
             onCreateCreator={handleCreateCreator}
             upsertDecision={upsertDecision}
