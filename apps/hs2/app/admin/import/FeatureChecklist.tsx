@@ -42,7 +42,14 @@ function byChainage(a: Feature, b: Feature): number {
  */
 export function FeatureChecklist({ features, value, onChange, height }: Props) {
   const [query, setQuery] = useState('');
-  const [branch, setBranch] = useState<BranchFilter>('all');
+  // Start on the branch of the preselected features when they all share one
+  // (a video is almost always a single branch), else show everything. Runs once
+  // per pin since the card remounts; the operator can still switch.
+  const [branch, setBranch] = useState<BranchFilter>(() => {
+    const branchById = new Map(features.map((f) => [f.id, branchOf(f.routeElementId)]));
+    const present = new Set(value.map((id) => branchById.get(id)).filter((b) => b !== undefined));
+    return present.size === 1 ? [...present][0]! : 'all';
+  });
   const selected = useMemo(() => new Set(value), [value]);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -116,10 +123,11 @@ export function FeatureChecklist({ features, value, onChange, height }: Props) {
               checked={selected.has(f.id)}
               onCheckedChange={() => toggle(f.id)}
               display='flex'
+              alignItems='center'
               width='full'
               px={3}
               py={2}
-              gap={3}
+              gap={2.5}
               cursor='pointer'
               _hover={{ bg: 'bg.muted' }}
               borderBottomWidth='1px'
@@ -127,8 +135,8 @@ export function FeatureChecklist({ features, value, onChange, height }: Props) {
             >
               <Checkbox.HiddenInput />
               <Checkbox.Control cursor='inherit' />
-              <Checkbox.Label flex='1' cursor='inherit'>
-                <Box>
+              <Checkbox.Label flex='1' cursor='inherit' fontWeight='normal'>
+                <Box lineHeight='1.3'>
                   <Text fontSize='sm'>{f.name}</Text>
                   {f.routeElementId && (
                     <Text fontSize='xs' color='fg.muted'>
