@@ -9,6 +9,7 @@ import {
   Button,
   Card,
   Field,
+  Grid,
   Heading,
   HStack,
   Input,
@@ -20,7 +21,7 @@ import {
 import type { CatalogueRows } from '@/lib/import';
 
 import type { CommitPinInput, CommitPinResult, FeatureGeometry } from './actions';
-import { FeatureCombobox } from './FeatureCombobox';
+import { FeatureChecklist } from './FeatureChecklist';
 import { ReviewMap } from './ReviewMap';
 import { type ReviewItem } from './phase';
 
@@ -190,41 +191,48 @@ function PinReviewCard({
             Row {rowNumber} of {total}
           </Heading>
 
-          {item.media.youtubeId && (
-            // Same react-player v3 setup as the /media/[id] page: the native
-            // controls come from the `controls` prop, and the pin url's ?t=
-            // timestamp is honoured when passed straight through as `src`.
-            <AspectRatio ratio={16 / 9} w='full' maxW='2xl'>
-              <ReactPlayer src={item.media.url} controls width='100%' height='100%' />
-            </AspectRatio>
-          )}
+          {/* Two columns: the video/map/details/title on the left, the feature
+              checklist on the right, so the list is visible without scrolling
+              past the media. Stacks to one column on narrow screens. */}
+          <Grid templateColumns={{ base: '1fr', lg: 'minmax(0, 1.4fr) minmax(0, 1fr)' }} gap={6} alignItems='start'>
+            <Stack gap={4}>
+              {item.media.youtubeId && (
+                // Same react-player v3 setup as the /media/[id] page: the native
+                // controls come from the `controls` prop, and the pin url's ?t=
+                // timestamp is honoured when passed straight through as `src`.
+                <AspectRatio ratio={16 / 9} w='full'>
+                  <ReactPlayer src={item.media.url} controls width='100%' height='100%' />
+                </AspectRatio>
+              )}
 
-          <Box w='full' maxW='2xl'>
-            <ReviewMap
-              geometry={item.media.geometry}
-              shotType={item.media.shotType}
-              features={shownGeos}
-            />
-          </Box>
+              <ReviewMap
+                geometry={item.media.geometry}
+                shotType={item.media.shotType}
+                features={shownGeos}
+              />
 
-          <Stack gap={1}>
-            <DetailRow label='Creator'>{item.creatorName}</DetailRow>
-            <DetailRow label='Shot type'>{item.media.shotType}</DetailRow>
-            <DetailRow label='Published'>{item.media.publishedAt ?? '—'}</DetailRow>
-            <DetailRow label='Recorded'>{item.media.recordedDate ?? '—'}</DetailRow>
-            <DetailRow label='URL'>
-              <Link href={item.media.url} target='_blank' rel='noreferrer'>
-                {item.media.url}
-              </Link>
-            </DetailRow>
-          </Stack>
+              <Stack gap={1}>
+                <DetailRow label='Creator'>{item.creatorName}</DetailRow>
+                <DetailRow label='Shot type'>{item.media.shotType}</DetailRow>
+                <DetailRow label='Published'>{item.media.publishedAt ?? '—'}</DetailRow>
+                <DetailRow label='Recorded'>{item.media.recordedDate ?? '—'}</DetailRow>
+                <DetailRow label='URL'>
+                  <Link href={item.media.url} target='_blank' rel='noreferrer'>
+                    {item.media.url}
+                  </Link>
+                </DetailRow>
+              </Stack>
 
-          <Field.Root>
-            <Field.Label fontSize='sm'>Title</Field.Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-          </Field.Root>
+              <Field.Root>
+                <Field.Label fontSize='sm'>Title</Field.Label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+              </Field.Root>
+            </Stack>
 
-          <FeatureCombobox features={features} value={featureIds} onChange={setFeatureIds} />
+            <Box position={{ lg: 'sticky' }} top={4}>
+              <FeatureChecklist features={features} value={featureIds} onChange={setFeatureIds} />
+            </Box>
+          </Grid>
 
           {error && (
             <Alert.Root status='error'>
