@@ -1,9 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Box, Checkbox, Heading, HStack, Input, Stack, Text } from '@chakra-ui/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Box, Checkbox, Flex, Heading, HStack, Input, Text } from '@chakra-ui/react';
 
 import type { CatalogueRows } from '@/lib/import';
+
+type Feature = CatalogueRows['features'][number];
 
 type Props = {
   features: CatalogueRows['features'];
@@ -11,35 +13,48 @@ type Props = {
   onChange: (ids: string[]) => void;
 };
 
+// Route order: by chainage ascending, unmapped (null) last, name as a tiebreak.
+function byChainage(a: Feature, b: Feature): number {
+  if (a.chainage === null && b.chainage === null) return a.name.localeCompare(b.name);
+  if (a.chainage === null) return 1;
+  if (b.chainage === null) return -1;
+  if (a.chainage !== b.chainage) return a.chainage - b.chainage;
+  return a.name.localeCompare(b.name);
+}
+
 /**
  * The review step's feature picker as a persistent checklist (right column)
- * rather than a dropdown of chips: selected features sort to the top and stay
- * visible beside the video/map, and a search box filters the full catalogue to
- * tick more on or off.
+ * beside the video/map, rather than a dropdown of chips. The full catalogue is
+ * listed in route (chainage) order; the list scrolls to the first selected
+ * feature on mount so the pin's linked features are in view. A search box
+ * filters it to tick more on or off.
  */
 export function FeatureChecklist({ features, value, onChange }: Props) {
   const [query, setQuery] = useState('');
   const selected = useMemo(() => new Set(value), [value]);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const toggle = (id: string) => {
     onChange(selected.has(id) ? value.filter((v) => v !== id) : [...value, id]);
   };
 
-  // Filter by name, then sort selected-first so the pin's linked features are
-  // always at the top of the list; alphabetical within each group.
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     const match = q ? features.filter((f) => f.name.toLowerCase().includes(q)) : features;
-    return [...match].sort((a, b) => {
-      const sa = selected.has(a.id) ? 0 : 1;
-      const sb = selected.has(b.id) ? 0 : 1;
-      if (sa !== sb) return sa - sb;
-      return a.name.localeCompare(b.name);
-    });
-  }, [features, query, selected]);
+    return [...match].sort(byChainage);
+  }, [features, query]);
+
+  // On mount (the card remounts per pin), scroll so the first selected feature
+  // is at the top of the list — it sits in chainage order, not floated up.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const row = list.querySelector<HTMLElement>('[data-selected="true"]');
+    if (row) list.scrollTop = row.offsetTop;
+  }, []);
 
   return (
-    <Stack gap={3}>
+    <Flex direction='column' h='full' minH='0' gap={3}>
       <HStack justify='space-between' align='baseline'>
         <Heading size='sm'>Linked features</Heading>
         <Text fontSize='xs' color='fg.muted'>
@@ -52,10 +67,13 @@ export function FeatureChecklist({ features, value, onChange }: Props) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      <Stack
-        gap={0}
+      <Box
+        ref={listRef}
+        position='relative'
+        flex='1'
+        minH='0'
+        maxH={{ base: '24rem', lg: 'unset' }}
         overflowY='auto'
-        maxH='calc(100vh - 12rem)'
         borderWidth='1px'
         borderColor='border'
         borderRadius='md'
@@ -68,6 +86,7 @@ export function FeatureChecklist({ features, value, onChange }: Props) {
           shown.map((f) => (
             <Checkbox.Root
               key={f.id}
+              data-selected={selected.has(f.id)}
               size='sm'
               checked={selected.has(f.id)}
               onCheckedChange={() => toggle(f.id)}
@@ -94,7 +113,7 @@ export function FeatureChecklist({ features, value, onChange }: Props) {
             </Checkbox.Root>
           ))
         )}
-      </Stack>
-    </Stack>
+      </Box>
+    </Flex>
   );
 }

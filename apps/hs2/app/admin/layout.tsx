@@ -33,7 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </form>
         </HStack>
       </Flex>
-      <Container maxW='6xl' py={8} flex='1'>
+      <Container maxW='7xl' py={8} flex='1'>
         {children}
       </Container>
     </Flex>

@@ -191,10 +191,15 @@ function PinReviewCard({
             Row {rowNumber} of {total}
           </Heading>
 
-          {/* Two columns: the video/map/details/title on the left, the feature
-              checklist on the right, so the list is visible without scrolling
-              past the media. Stacks to one column on narrow screens. */}
-          <Grid templateColumns={{ base: '1fr', lg: 'minmax(0, 1.4fr) minmax(0, 1fr)' }} gap={6} alignItems='start'>
+          {/* Top region, two columns of equal height: the video + map on the
+              left, the feature checklist on the right (so the list is visible
+              beside the media, not below it). Stacks on narrow screens. The
+              details, title and actions sit below, outside the list's scroll. */}
+          <Grid
+            templateColumns={{ base: '1fr', lg: 'minmax(0, 1.5fr) minmax(0, 1fr)' }}
+            gap={6}
+            alignItems='stretch'
+          >
             <Stack gap={4}>
               {item.media.youtubeId && (
                 // Same react-player v3 setup as the /media/[id] page: the native
@@ -210,29 +215,29 @@ function PinReviewCard({
                 shotType={item.media.shotType}
                 features={shownGeos}
               />
-
-              <Stack gap={1}>
-                <DetailRow label='Creator'>{item.creatorName}</DetailRow>
-                <DetailRow label='Shot type'>{item.media.shotType}</DetailRow>
-                <DetailRow label='Published'>{item.media.publishedAt ?? '—'}</DetailRow>
-                <DetailRow label='Recorded'>{item.media.recordedDate ?? '—'}</DetailRow>
-                <DetailRow label='URL'>
-                  <Link href={item.media.url} target='_blank' rel='noreferrer'>
-                    {item.media.url}
-                  </Link>
-                </DetailRow>
-              </Stack>
-
-              <Field.Root>
-                <Field.Label fontSize='sm'>Title</Field.Label>
-                <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-              </Field.Root>
             </Stack>
 
-            <Box position={{ lg: 'sticky' }} top={4}>
+            <Box h='full' minH='0'>
               <FeatureChecklist features={features} value={featureIds} onChange={setFeatureIds} />
             </Box>
           </Grid>
+
+          <Stack gap={1}>
+            <DetailRow label='Creator'>{item.creatorName}</DetailRow>
+            <DetailRow label='Shot type'>{item.media.shotType}</DetailRow>
+            <DetailRow label='Published'>{item.media.publishedAt ?? '—'}</DetailRow>
+            <DetailRow label='Recorded'>{item.media.recordedDate ?? '—'}</DetailRow>
+            <DetailRow label='URL'>
+              <Link href={item.media.url} target='_blank' rel='noreferrer'>
+                {item.media.url}
+              </Link>
+            </DetailRow>
+          </Stack>
+
+          <Field.Root>
+            <Field.Label fontSize='sm'>Title</Field.Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </Field.Root>
 
           {error && (
             <Alert.Root status='error'>
