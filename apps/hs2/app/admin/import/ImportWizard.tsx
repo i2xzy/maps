@@ -28,6 +28,7 @@ import {
   createCreator as createCreatorAction,
   finishImport,
   loadCatalogue,
+  loadFeatureGeometries,
 } from './actions';
 import { useImportPlan } from './use-import-plan';
 import { IssuesTab } from './tabs/IssuesTab';
@@ -233,6 +234,7 @@ export function ImportWizard() {
           features={rows.features}
           alreadyImported={alreadyImportedCount(plan)}
           commitPin={commitPin}
+          loadFeatureGeometries={loadFeatureGeometries}
           finishImport={finishImport}
           onRestart={clearDraft}
         />

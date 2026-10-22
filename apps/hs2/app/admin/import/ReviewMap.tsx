@@ -12,8 +12,11 @@ import { Box, HStack, Text, Icon } from '@chakra-ui/react';
 import { LuMapPinned } from 'react-icons/lu';
 
 import type { Geometry } from '@/lib/import';
+import { asGeometry } from '@/utils/map-geojson';
 import { geometryBounds } from '@/utils/map-preview';
 
+import type { FeatureGeometry } from './actions';
+import type { DrawFeature } from './ReviewMapInner';
 import { importGeometryToGeoJSON } from './review-geometry';
 
 const ASPECT = 5 / 3;
@@ -42,24 +45,33 @@ const ReviewMapInner = dynamic(() => import('./ReviewMapInner'), {
 type Props = {
   geometry: Geometry | null;
   shotType: string | null;
+  features: FeatureGeometry[];
 };
 
-export function ReviewMap({ geometry, shotType }: Props) {
-  const geojson = geometry ? importGeometryToGeoJSON(geometry) : null;
+export function ReviewMap({ geometry, shotType, features }: Props) {
+  const pin = geometry ? importGeometryToGeoJSON(geometry) : null;
+  const pinHasBounds = pin ? Boolean(geometryBounds(pin)) : false;
 
-  // No usable geometry → labelled placeholder, no map.
-  if (!geojson || !geometryBounds(geojson)) {
+  const drawFeatures: DrawFeature[] = features.flatMap((f) => {
+    const g = asGeometry(f.geojson);
+    return g && geometryBounds(g) ? [{ id: f.id, name: f.name, type: f.type, geometry: g }] : [];
+  });
+
+  // Nothing to draw (no pin location and no mappable features) → placeholder.
+  if (!pinHasBounds && drawFeatures.length === 0) {
     return (
       <FallbackBox>
         <HStack gap={2} color='fg.muted'>
           <Icon>
             <LuMapPinned />
           </Icon>
-          <Text fontSize='sm'>No location pin for this video</Text>
+          <Text fontSize='sm'>No location to show yet</Text>
         </HStack>
       </FallbackBox>
     );
   }
 
-  return <ReviewMapInner geometry={geojson} shotType={shotType} />;
+  return (
+    <ReviewMapInner pin={pinHasBounds ? pin : null} shotType={shotType} features={drawFeatures} />
+  );
 }

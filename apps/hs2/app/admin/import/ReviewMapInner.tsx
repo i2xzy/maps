@@ -1,11 +1,12 @@
 'use client';
 
 /**
- * Non-interactive mini-map for a review pin: shows where the pin sits (a point
- * marker, or its line) on the satellite basemap so the admin can sanity-check
- * the location before committing. A trimmed cousin of the feature detail
- * mini-map (components/feature/mini-map.tsx) — no interactive-map Link, no
- * feature type/colour; a VideoDisc marker and a single accent colour instead.
+ * Non-interactive mini-map for a review pin: shows where the pin sits (a red
+ * point marker, or its line) plus the pin's selected features in their type
+ * colours, so the admin can sanity-check both the location and that the chosen
+ * features actually sit there before committing. A trimmed cousin of the
+ * feature detail mini-map (components/feature/mini-map.tsx) — no interactive-map
+ * Link; a VideoDisc for the pin and FeatureDiscs for the features.
  */
 import { useState } from 'react';
 import Map, {
@@ -20,13 +21,16 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { Box, Text, Icon } from '@chakra-ui/react';
 import { LuMapPinned } from 'react-icons/lu';
 
+import type { FeatureType } from '@supabase/types';
 import { asGeometry, representativePoint, type MapGeometry } from '@/utils/map-geojson';
-import { geometryBounds } from '@/utils/map-preview';
+import { geometryBounds, type Bounds } from '@/utils/map-preview';
+import { TYPE_COLORS, TYPE_FALLBACK } from '@/components/map/map-colors';
+import { FeatureDisc } from '@/components/map/marker-disc';
 import { VideoDisc } from '@/components/map/marker-disc';
 
 const ASPECT = 5 / 3;
-// A single high-contrast accent for the pin marker and its line, legible over
-// the satellite imagery (there is no per-creator colour at this stage).
+// A single high-contrast accent for the pin itself, legible over the satellite
+// imagery and distinct from the features' type colours.
 const PIN_COLOR = '#ef4444';
 
 const SATELLITE_TILES =
@@ -88,27 +92,56 @@ const SATELLITE_STYLE: StyleSpecification = {
   ],
 };
 
-type Props = {
+export type DrawFeature = {
+  id: string;
+  name: string;
+  type: FeatureType;
   geometry: MapGeometry;
-  shotType: string | null;
 };
 
-export default function ReviewMapInner({ geometry, shotType }: Props) {
+type Props = {
+  pin: MapGeometry | null;
+  shotType: string | null;
+  features: DrawFeature[];
+};
+
+function mergeBounds(list: Bounds[]): Bounds | null {
+  if (list.length === 0) return null;
+  return list.reduce((a, b) => ({
+    minLng: Math.min(a.minLng, b.minLng),
+    minLat: Math.min(a.minLat, b.minLat),
+    maxLng: Math.max(a.maxLng, b.maxLng),
+    maxLat: Math.max(a.maxLat, b.maxLat),
+  }));
+}
+
+export default function ReviewMapInner({ pin, shotType, features }: Props) {
   // A WebGL/context failure (unsupported browser) blanks the map; degrade to a
   // plain placeholder rather than throwing. Transient tile errors are ignored.
   const [failed, setFailed] = useState(false);
 
-  const g = asGeometry(geometry);
-  const bounds = geometryBounds(geometry);
-  const point = representativePoint(geometry);
-  // The loader only mounts this when geometry exists, but guard anyway.
-  if (!g || !bounds || !point) return null;
+  // Every drawable geometry's bounds (pin + features), merged to frame them all.
+  const allBounds: Bounds[] = [];
+  const pinGeom = pin ? asGeometry(pin) : null;
+  if (pin) {
+    const b = geometryBounds(pin);
+    if (b) allBounds.push(b);
+  }
+  const drawFeatures = features.flatMap((f) => {
+    const g = asGeometry(f.geometry);
+    const b = geometryBounds(f.geometry);
+    if (!g || !b) return [];
+    allBounds.push(b);
+    return [{ ...f, g }];
+  });
 
-  const isPoint = g.type === 'Point';
+  const bounds = mergeBounds(allBounds);
+  // The loader only mounts this when there's something to draw, but guard anyway.
+  if (!bounds) return null;
 
-  // Fit to the geometry, expanded to a minimum span so a point still shows a few
-  // km of context (enough for the style's zoom-gated town/road labels). Matches
-  // the feature mini-map's framing. ~0.0068° lat ≈ 0.75 km half-height.
+  // Fit to everything, expanded to a minimum span so a lone point still shows a
+  // few km of context (enough for the style's zoom-gated labels). Matches the
+  // feature mini-map's framing. ~0.0068° lat ≈ 0.75 km half-height.
   const MIN_HALF_LAT = 0.0068;
   const MIN_HALF_LNG = 0.018;
   const centreLng = (bounds.minLng + bounds.maxLng) / 2;
@@ -124,6 +157,9 @@ export default function ReviewMapInner({ geometry, shotType }: Props) {
     ],
   ];
   const centre = { longitude: centreLng, latitude: centreLat };
+
+  const pinIsPoint = pinGeom?.type === 'Point';
+  const pinPoint = pin ? representativePoint(pin) : null;
 
   return (
     <Box
@@ -178,8 +214,47 @@ export default function ReviewMapInner({ geometry, shotType }: Props) {
               }
             }}
           >
-            {!isPoint && (
-              <Source id='pin' type='geojson' data={{ type: 'Feature', geometry: g, properties: {} }}>
+            {/* Selected features, in their type colours, under the pin. */}
+            {drawFeatures.map((f) => {
+              const color = TYPE_COLORS[f.type] ?? TYPE_FALLBACK;
+              if (f.g.type === 'Point') {
+                const p = representativePoint(f.geometry);
+                return p ? (
+                  <Marker key={f.id} longitude={p[0]} latitude={p[1]} anchor='center'>
+                    <FeatureDisc type={f.type} name={f.name} size='22px' />
+                  </Marker>
+                ) : null;
+              }
+              return (
+                <Source
+                  key={f.id}
+                  id={`feat-${f.id}`}
+                  type='geojson'
+                  data={{ type: 'Feature', geometry: f.g, properties: {} }}
+                >
+                  <Layer
+                    id={`feat-${f.id}-casing`}
+                    type='line'
+                    layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+                    paint={{ 'line-color': 'rgba(0,0,0,0.5)', 'line-width': 7 }}
+                  />
+                  <Layer
+                    id={`feat-${f.id}-line`}
+                    type='line'
+                    layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+                    paint={{ 'line-color': color, 'line-width': 3.5 }}
+                  />
+                </Source>
+              );
+            })}
+
+            {/* The pin itself, on top in the accent colour. */}
+            {pin && pinGeom && !pinIsPoint && (
+              <Source
+                id='pin'
+                type='geojson'
+                data={{ type: 'Feature', geometry: pinGeom, properties: {} }}
+              >
                 <Layer
                   id='pin-line-casing'
                   type='line'
@@ -194,8 +269,8 @@ export default function ReviewMapInner({ geometry, shotType }: Props) {
                 />
               </Source>
             )}
-            {isPoint && (
-              <Marker longitude={point[0]} latitude={point[1]} anchor='center'>
+            {pin && pinIsPoint && pinPoint && (
+              <Marker longitude={pinPoint[0]} latitude={pinPoint[1]} anchor='center'>
                 <VideoDisc shotType={shotType} color={PIN_COLOR} size='26px' />
               </Marker>
             )}

@@ -19,18 +19,21 @@ import {
 
 import type { CatalogueRows } from '@/lib/import';
 
-import type { CommitPinInput, CommitPinResult } from './actions';
+import type { CommitPinInput, CommitPinResult, FeatureGeometry } from './actions';
 import { FeatureCombobox } from './FeatureCombobox';
 import { ReviewMap } from './ReviewMap';
 import { type ReviewItem } from './phase';
 
 type Edit = { title: string; featureIds: string[] };
 
+type LoadFeatureGeometries = (ids: string[]) => Promise<FeatureGeometry[]>;
+
 type Props = {
   items: ReviewItem[];
   features: CatalogueRows['features'];
   alreadyImported: number;
   commitPin: (input: CommitPinInput) => Promise<CommitPinResult>;
+  loadFeatureGeometries: LoadFeatureGeometries;
   finishImport: () => Promise<void>;
   onRestart: () => void;
 };
@@ -42,6 +45,7 @@ export function ReviewStep({
   features,
   alreadyImported,
   commitPin,
+  loadFeatureGeometries,
   finishImport,
   onRestart,
 }: Props) {
@@ -102,6 +106,7 @@ export function ReviewStep({
       key={item.ordinal}
       item={item}
       features={features}
+      loadFeatureGeometries={loadFeatureGeometries}
       rowNumber={index + 1}
       total={items.length}
       onConfirm={(edit) => handleConfirm(item, edit)}
@@ -124,6 +129,7 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 function PinReviewCard({
   item,
   features,
+  loadFeatureGeometries,
   rowNumber,
   total,
   onConfirm,
@@ -131,6 +137,7 @@ function PinReviewCard({
 }: {
   item: ReviewItem;
   features: CatalogueRows['features'];
+  loadFeatureGeometries: LoadFeatureGeometries;
   rowNumber: number;
   total: number;
   onConfirm: (edit: Edit) => Promise<void>;
@@ -140,8 +147,29 @@ function PinReviewCard({
   const [featureIds, setFeatureIds] = useState<string[]>(() =>
     item.initialFeatures.map((f) => f.id),
   );
+  const [featureGeos, setFeatureGeos] = useState<FeatureGeometry[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch the selected features' geometry for the map whenever the selection
+  // changes. Small sets (a pin's features), so no debounce; a stale-drop flag
+  // keeps an out-of-order response from overwriting a newer one.
+  useEffect(() => {
+    if (featureIds.length === 0) return;
+    let cancelled = false;
+    void loadFeatureGeometries(featureIds)
+      .then((g) => {
+        if (!cancelled) setFeatureGeos(g);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [featureIds, loadFeatureGeometries]);
+
+  // Only draw features still selected: hides a just-removed feature immediately
+  // (before any refetch) and ignores a stale fetch that outlived its selection.
+  const shownGeos = featureGeos.filter((g) => featureIds.includes(g.id));
 
   const confirm = async () => {
     setBusy(true);
@@ -172,7 +200,11 @@ function PinReviewCard({
           )}
 
           <Box w='full' maxW='2xl'>
-            <ReviewMap geometry={item.media.geometry} shotType={item.media.shotType} />
+            <ReviewMap
+              geometry={item.media.geometry}
+              shotType={item.media.shotType}
+              features={shownGeos}
+            />
           </Box>
 
           <Stack gap={1}>

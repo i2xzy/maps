@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
+import type { FeatureType } from '@supabase/types';
+
 import { requireAdmin } from '@/lib/admin';
 import {
   creatorIdSchema,
@@ -31,6 +33,38 @@ const urlsSchema = z.array(z.string());
 export async function loadCatalogue(urls: string[]): Promise<CatalogueRows> {
   const { supabase } = await requireAdmin();
   return readCatalogueRows(supabase, urlsSchema.parse(urls));
+}
+
+const featureIdsSchema = z.array(featureIdSchema);
+
+/** A selected feature's geometry for the review mini-map. */
+export type FeatureGeometry = {
+  id: string;
+  name: string;
+  type: FeatureType;
+  /** Parsed GeoJSON from features_geo, or null when the feature has no geometry. */
+  geojson: unknown;
+};
+
+/**
+ * GeoJSON for a set of feature ids (the pin's selected features), drawn on the
+ * review map. Features without geometry simply don't come back from features_geo.
+ */
+export async function loadFeatureGeometries(ids: string[]): Promise<FeatureGeometry[]> {
+  const parsed = featureIdsSchema.parse(ids);
+  if (parsed.length === 0) return [];
+  const { supabase } = await requireAdmin();
+  const { data, error } = await supabase
+    .from('features_geo')
+    .select('id, name, type, geojson')
+    .in('id', parsed);
+  if (error) throw new Error(error.message);
+  // The view's columns are typed nullable; drop any row missing an id/name/type.
+  return (data ?? []).flatMap((r) =>
+    r.id && r.name && r.type
+      ? [{ id: r.id, name: r.name, type: r.type, geojson: r.geojson }]
+      : [],
+  );
 }
 
 const spanSchema = z.object({
