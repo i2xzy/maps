@@ -1,11 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Checkbox, Flex, Heading, HStack, Input, Text } from '@chakra-ui/react';
+import { Box, Checkbox, Flex, Heading, HStack, Input, SegmentGroup, Text } from '@chakra-ui/react';
 
-import type { CatalogueRows } from '@/lib/import';
+import { branchOf, type Branch, type CatalogueRows } from '@/lib/import';
 
 type Feature = CatalogueRows['features'][number];
+
+type BranchFilter = 'all' | Branch;
+
+const BRANCH_SEGMENTS: ReadonlyArray<{ value: BranchFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'main', label: 'Main' },
+  { value: 'spur', label: 'Spur' },
+  { value: 'north', label: 'North' },
+];
 
 type Props = {
   features: CatalogueRows['features'];
@@ -33,6 +42,7 @@ function byChainage(a: Feature, b: Feature): number {
  */
 export function FeatureChecklist({ features, value, onChange, height }: Props) {
   const [query, setQuery] = useState('');
+  const [branch, setBranch] = useState<BranchFilter>('all');
   const selected = useMemo(() => new Set(value), [value]);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -42,9 +52,13 @@ export function FeatureChecklist({ features, value, onChange, height }: Props) {
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const match = q ? features.filter((f) => f.name.toLowerCase().includes(q)) : features;
+    const match = features.filter(
+      (f) =>
+        (branch === 'all' || branchOf(f.routeElementId) === branch) &&
+        (q === '' || f.name.toLowerCase().includes(q)),
+    );
     return [...match].sort(byChainage);
-  }, [features, query]);
+  }, [features, query, branch]);
 
   // On mount (the card remounts per pin), scroll so the first selected feature
   // is at the top of the list — it sits in chainage order, not floated up.
@@ -63,6 +77,14 @@ export function FeatureChecklist({ features, value, onChange, height }: Props) {
           {value.length} selected
         </Text>
       </HStack>
+      <SegmentGroup.Root
+        size='xs'
+        value={branch}
+        onValueChange={(e) => setBranch(e.value as BranchFilter)}
+      >
+        <SegmentGroup.Indicator />
+        <SegmentGroup.Items items={[...BRANCH_SEGMENTS]} />
+      </SegmentGroup.Root>
       <Input
         size='sm'
         placeholder='Search features…'

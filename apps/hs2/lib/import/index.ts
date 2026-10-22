@@ -4,7 +4,7 @@
 
 export { parseLayer } from './kml/parse';
 export { resolveLayer } from './resolve';
-export { buildCatalogue } from './catalogue';
+export { buildCatalogue, branchOf } from './catalogue';
 export type { CatalogueRows } from './catalogue';
 export { DecisionSchema, decisionRef, foldDecisions } from './decisions';
 export type { Decision, DecisionRef } from './decisions';
