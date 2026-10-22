@@ -5,6 +5,7 @@ import ReactPlayer from 'react-player';
 import {
   Alert,
   AspectRatio,
+  Box,
   Button,
   Card,
   Field,
@@ -20,7 +21,8 @@ import type { CatalogueRows } from '@/lib/import';
 
 import type { CommitPinInput, CommitPinResult } from './actions';
 import { FeatureCombobox } from './FeatureCombobox';
-import { geometryKind, type ReviewItem } from './phase';
+import { ReviewMap } from './ReviewMap';
+import { type ReviewItem } from './phase';
 
 type Edit = { title: string; featureIds: string[] };
 
@@ -169,12 +171,15 @@ function PinReviewCard({
             </AspectRatio>
           )}
 
+          <Box w='full' maxW='2xl'>
+            <ReviewMap geometry={item.media.geometry} shotType={item.media.shotType} />
+          </Box>
+
           <Stack gap={1}>
             <DetailRow label='Creator'>{item.creatorName}</DetailRow>
             <DetailRow label='Shot type'>{item.media.shotType}</DetailRow>
             <DetailRow label='Published'>{item.media.publishedAt ?? '—'}</DetailRow>
             <DetailRow label='Recorded'>{item.media.recordedDate ?? '—'}</DetailRow>
-            <DetailRow label='Geometry'>{geometryKind(item.media.geometry)}</DetailRow>
             <DetailRow label='URL'>
               <Link href={item.media.url} target='_blank' rel='noreferrer'>
                 {item.media.url}

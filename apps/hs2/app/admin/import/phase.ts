@@ -92,7 +92,3 @@ export function reviewItems(plan: ImportPlan): ReviewItem[] {
 export function alreadyImportedCount(plan: ImportPlan): number {
   return plan.pins.filter((p) => p.kind === 'relink').length;
 }
-
-export function geometryKind(geometry: Geometry | null): 'point' | 'line' | 'none' {
-  return geometry === null ? 'none' : geometry.kind;
-}
