@@ -86,11 +86,17 @@ export function FeatureChecklist({ features, value, onChange, height }: Props) {
       </HStack>
       <SegmentGroup.Root
         size='xs'
+        width='full'
         value={branch}
         onValueChange={(e) => setBranch(e.value as BranchFilter)}
       >
         <SegmentGroup.Indicator />
-        <SegmentGroup.Items items={[...BRANCH_SEGMENTS]} />
+        {BRANCH_SEGMENTS.map((s) => (
+          <SegmentGroup.Item key={s.value} value={s.value} flex='1' justifyContent='center'>
+            <SegmentGroup.ItemText>{s.label}</SegmentGroup.ItemText>
+            <SegmentGroup.ItemHiddenInput />
+          </SegmentGroup.Item>
+        ))}
       </SegmentGroup.Root>
       <Input
         size='sm'
