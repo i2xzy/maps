@@ -1,10 +1,8 @@
 'use client';
 
-import { Badge, Card, EmptyState, HStack, Stack, Text } from '@chakra-ui/react';
+import { Badge, Button, Card, Clipboard, EmptyState, HStack, Stack, Text } from '@chakra-ui/react';
 
 import type { ParseWarning, PinPlan } from '@/lib/import';
-
-import { CopyChip } from './CopyChip';
 
 function describeWarning(w: ParseWarning): string {
   switch (w.kind) {
@@ -118,7 +116,15 @@ export function IssuesTab({ pins }: { pins: ReadonlyArray<PinPlan> }) {
                 <Text fontSize='xs' color='fg.muted'>
                   Find in map:
                 </Text>
-                <CopyChip value={plan.pin.youtubeId ?? plan.pin.title} />
+                <Clipboard.Root value={plan.pin.youtubeId ?? plan.pin.title} timeout={1200}>
+                  <Clipboard.Trigger asChild>
+                    <Button size='xs' variant='outline' fontFamily='mono'>
+                      <Clipboard.Indicator copied='Copied'>
+                        {plan.pin.youtubeId ?? plan.pin.title}
+                      </Clipboard.Indicator>
+                    </Button>
+                  </Clipboard.Trigger>
+                </Clipboard.Root>
               </HStack>
             </Stack>
           </Card.Body>
