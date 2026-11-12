@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
-import { Container, Stack, Heading } from '@chakra-ui/react';
+import NextLink from 'next/link';
+import { Button, Container, Stack, HStack, Heading } from '@chakra-ui/react';
 
 import { createClient } from '@supabase/server';
+import { getAdminUser } from '@/lib/admin';
 import { MediaGallery } from '@/components/media/media-gallery';
 import { groupVideosByYoutubeId } from '@/utils/media-grouping';
 
@@ -13,6 +15,7 @@ export const metadata: Metadata = {
 
 export default async function MediaHomePage() {
   const supabase = await createClient();
+  const admin = await getAdminUser();
 
   // Get all media items with creators, sorted by date (newest first)
   const { data: media } = await supabase
@@ -46,7 +49,14 @@ export default async function MediaHomePage() {
     <Container maxW='8xl' py={8}>
       <Stack gap={8}>
         <Stack gap={2}>
-          <Heading size='2xl'>News Feed</Heading>
+          <HStack justify='space-between' align='start'>
+            <Heading size='2xl'>News Feed</Heading>
+            {admin && (
+              <Button asChild size='sm' variant='outline'>
+                <NextLink href='/admin/import'>Import layer</NextLink>
+              </Button>
+            )}
+          </HStack>
           <Heading as='h2' size='lg' color='gray.600' fontWeight='normal'>
             Stay updated with the latest videos about the project from HS2 Ltd
             as well as many other YouTube channels.

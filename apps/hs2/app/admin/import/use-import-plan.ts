@@ -1,0 +1,210 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import {
+  buildCatalogue,
+  decisionRef,
+  DecisionSchema,
+  foldDecisions,
+  resolveLayer,
+  type CatalogueRows,
+  type Decision,
+  type DecisionRef,
+  type ImportId,
+  type ImportPlan,
+  type ImportSessionMeta,
+  type ParsedLayer,
+  type SpanLookup,
+} from '@/lib/import';
+
+import { spanLookup as spanLookupAction } from './actions';
+
+const STORAGE_KEY = 'hs2-import-draft';
+
+type PersistedDraft = { fileName: string; layer: ParsedLayer; decisions: Decision[] };
+
+export type Draft = {
+  fileName: string;
+  layer: ParsedLayer;
+  /** Keyed by decisionRef identity so a decision upserts/removes by subject. */
+  decisions: Map<string, Decision>;
+};
+
+function refKey(ref: DecisionRef): string {
+  return `${ref.kind}\u0000${ref.subject}`;
+}
+
+// Validate a restored draft rather than trusting JSON.parse: a corrupt or
+// older-schema entry would otherwise throw while rebuilding the decision map, or
+// feed malformed data into the resolver. Decisions are checked with the real
+// schema; the layer is shape-guarded (pins array).
+function parsePersisted(raw: string): PersistedDraft | null {
+  let obj: unknown;
+  try {
+    obj = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!obj || typeof obj !== 'object') return null;
+  const o = obj as Record<string, unknown>;
+  if (typeof o.fileName !== 'string') return null;
+  const layer = o.layer as { pins?: unknown } | null;
+  if (!layer || typeof layer !== 'object' || !Array.isArray(layer.pins)) return null;
+  const decisions = DecisionSchema.array().safeParse(o.decisions);
+  if (!decisions.success) return null;
+  return { fileName: o.fileName, layer: o.layer as ParsedLayer, decisions: decisions.data };
+}
+
+function loadPersisted(): PersistedDraft | null {
+  if (typeof window === 'undefined') return null;
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  const parsed = parsePersisted(raw);
+  // Drop an unreadable entry so it can't keep failing restore after restore.
+  if (!parsed) window.localStorage.removeItem(STORAGE_KEY);
+  return parsed;
+}
+
+export function useImportPlan(rows: CatalogueRows | null) {
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [plan, setPlan] = useState<ImportPlan | null>(null);
+  const [isDeriving, setIsDeriving] = useState(false);
+  const [deriveError, setDeriveError] = useState<string | null>(null);
+
+  // Span lookups depend only on (from, to) and the static DB catalogue, so cache
+  // them across re-derivations — otherwise every decision change refetches every
+  // range's span one server round-trip at a time. A rejected lookup is evicted so
+  // it can be retried on the next derive.
+  const spanCacheRef = useRef(new Map<string, Promise<string[]>>());
+
+  // Restore a draft a refresh left behind. The catalogue is re-fetched by the
+  // wizard from the restored layer's urls; only the draft itself is persisted.
+  // Deferred to a microtask so the restore syncs after hydration rather than
+  // forcing a synchronous render cascade.
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      const p = loadPersisted();
+      if (!p) return;
+      setDraft({
+        fileName: p.fileName,
+        layer: p.layer,
+        decisions: new Map(p.decisions.map((d) => [refKey(decisionRef(d)), d])),
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist the draft so a refresh (or reopening the tab) restores it without a
+  // re-upload. Only written when there is a draft; removal is explicit (clearDraft),
+  // so this can't wipe the stored draft before the restore above reads it.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !draft) return;
+    const persisted: PersistedDraft = {
+      fileName: draft.fileName,
+      layer: draft.layer,
+      decisions: [...draft.decisions.values()],
+    };
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    } catch {
+      // storage full or unavailable; persistence is best-effort.
+    }
+  }, [draft]);
+
+  const catalogue = useMemo(() => (rows ? buildCatalogue(rows) : null), [rows]);
+
+  // Re-derive the plan whenever the layer, the decisions, or the catalogue
+  // change. resolveLayer is async (span lookups), so a cancel flag drops a
+  // stale result if inputs change mid-flight. The session meta is display-only
+  // in the plan, so a throwaway one per derive is fine.
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!draft || !catalogue) {
+        if (!cancelled) setPlan(null);
+        return;
+      }
+      if (!cancelled) setIsDeriving(true);
+      const decisions = foldDecisions([...draft.decisions.values()]);
+      const lookup: SpanLookup = (from, to) => {
+        const key = `${from}\u0000${to}`;
+        const cache = spanCacheRef.current;
+        let pending = cache.get(key);
+        if (!pending) {
+          pending = spanLookupAction(from, to);
+          pending.catch(() => cache.delete(key));
+          cache.set(key, pending);
+        }
+        return pending;
+      };
+      const session: ImportSessionMeta = {
+        id: crypto.randomUUID() as ImportId,
+        name: draft.fileName,
+        fileName: draft.fileName,
+        createdAt: new Date().toISOString(),
+        lastApply: null,
+      };
+      try {
+        const p = await resolveLayer(draft.layer, decisions, catalogue, lookup, session);
+        if (!cancelled) {
+          setPlan(p);
+          setDeriveError(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setPlan(null);
+          setDeriveError('Could not build the import plan. Try reloading the page.');
+        }
+      } finally {
+        if (!cancelled) setIsDeriving(false);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [draft, catalogue]);
+
+  const startDraft = useCallback((fileName: string, layer: ParsedLayer) => {
+    setDraft({ fileName, layer, decisions: new Map() });
+  }, []);
+
+  const clearDraft = useCallback(() => {
+    if (typeof window !== 'undefined') window.localStorage.removeItem(STORAGE_KEY);
+    setDraft(null);
+  }, []);
+
+  const upsertDecision = useCallback((d: Decision) => {
+    setDraft((cur) => {
+      if (!cur) return cur;
+      const decisions = new Map(cur.decisions);
+      decisions.set(refKey(decisionRef(d)), d);
+      return { ...cur, decisions };
+    });
+  }, []);
+
+  const removeDecision = useCallback((ref: DecisionRef) => {
+    setDraft((cur) => {
+      if (!cur) return cur;
+      const decisions = new Map(cur.decisions);
+      decisions.delete(refKey(ref));
+      return { ...cur, decisions };
+    });
+  }, []);
+
+  return {
+    draft,
+    plan,
+    isDeriving,
+    deriveError,
+    startDraft,
+    clearDraft,
+    upsertDecision,
+    removeDecision,
+  };
+}
