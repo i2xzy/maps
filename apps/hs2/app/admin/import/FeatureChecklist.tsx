@@ -67,14 +67,16 @@ export function FeatureChecklist({ features, value, onChange, height }: Props) {
     return [...match].sort(byChainage);
   }, [features, query, branch]);
 
-  // On mount (the card remounts per pin), scroll so the first selected feature
-  // is at the top of the list — it sits in chainage order, not floated up.
+  // On mount (the card remounts per pin) and whenever the branch filter changes,
+  // scroll so the first selected feature in the current list is at the top — it
+  // sits in chainage order, not floated up. Falls back to the top when the
+  // filtered branch has nothing selected.
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;
     const row = list.querySelector<HTMLElement>('[data-selected="true"]');
-    if (row) list.scrollTop = row.offsetTop;
-  }, []);
+    list.scrollTop = row ? row.offsetTop : 0;
+  }, [branch]);
 
   return (
     <Flex direction='column' h={height ? `${height}px` : 'auto'} minH='0' gap={3}>
