@@ -213,6 +213,15 @@ function PinReviewCard({
             Row {rowNumber} of {total}
           </Heading>
 
+          {item.relink && (
+            <Alert.Root status='info'>
+              <Alert.Indicator />
+              <Alert.Title>
+                Already imported — only the feature links you add here are saved.
+              </Alert.Title>
+            </Alert.Root>
+          )}
+
           {/* Top region, two columns: the video + map on the left (given most of
               the width), the feature checklist in a fixed, narrower column on the
               right, matched to the media's height and scrolling within it. Stacks
@@ -247,22 +256,38 @@ function PinReviewCard({
             />
           </Grid>
 
-          <Stack gap={1}>
-            <DetailRow label='Creator'>{item.creatorName}</DetailRow>
-            <DetailRow label='Shot type'>{item.media.shotType}</DetailRow>
-            <DetailRow label='Published'>{item.media.publishedAt ?? '—'}</DetailRow>
-            <DetailRow label='Recorded'>{item.media.recordedDate ?? '—'}</DetailRow>
-            <DetailRow label='URL'>
-              <Link href={item.media.url} target='_blank' rel='noreferrer'>
-                {item.media.url}
-              </Link>
-            </DetailRow>
-          </Stack>
+          {/* For a relink the media row already exists and isn't rewritten, so the
+              DB-authoritative fields (creator, shot type, dates) and the title are
+              shown read-only — only the links below change. */}
+          {item.relink ? (
+            <Stack gap={1}>
+              <DetailRow label='Title'>{title}</DetailRow>
+              <DetailRow label='URL'>
+                <Link href={item.media.url} target='_blank' rel='noreferrer'>
+                  {item.media.url}
+                </Link>
+              </DetailRow>
+            </Stack>
+          ) : (
+            <>
+              <Stack gap={1}>
+                <DetailRow label='Creator'>{item.creatorName}</DetailRow>
+                <DetailRow label='Shot type'>{item.media.shotType}</DetailRow>
+                <DetailRow label='Published'>{item.media.publishedAt ?? '—'}</DetailRow>
+                <DetailRow label='Recorded'>{item.media.recordedDate ?? '—'}</DetailRow>
+                <DetailRow label='URL'>
+                  <Link href={item.media.url} target='_blank' rel='noreferrer'>
+                    {item.media.url}
+                  </Link>
+                </DetailRow>
+              </Stack>
 
-          <Field.Root>
-            <Field.Label fontSize='sm'>Title</Field.Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-          </Field.Root>
+              <Field.Root>
+                <Field.Label fontSize='sm'>Title</Field.Label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+              </Field.Root>
+            </>
+          )}
 
           {error && (
             <Alert.Root status='error'>
@@ -273,7 +298,7 @@ function PinReviewCard({
 
           <HStack gap={3} pt={1}>
             <Button loading={busy} onClick={() => void confirm()}>
-              Confirm
+              {item.relink ? 'Add links' : 'Confirm'}
             </Button>
             <Button variant='ghost' colorPalette='gray' disabled={busy} onClick={onSkip}>
               Skip
@@ -307,7 +332,7 @@ function DoneSummary({
           <Stack gap={1}>
             <DetailRow label='Imported'>{counts.imported}</DetailRow>
             {counts.existed > 0 && (
-              <DetailRow label='Already existed (kept as-is)'>{counts.existed}</DetailRow>
+              <DetailRow label='Existing videos updated'>{counts.existed}</DetailRow>
             )}
             <DetailRow label='Links added'>{counts.linksAdded}</DetailRow>
             <DetailRow label='Skipped'>{counts.skipped}</DetailRow>

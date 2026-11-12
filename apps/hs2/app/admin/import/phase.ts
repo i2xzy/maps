@@ -58,41 +58,72 @@ export type ReviewMedia = {
 
 export type ReviewItem = {
   ordinal: number;
+  /** True when the video is already in the DB and this item only adds new links. */
+  relink: boolean;
   creatorName: string;
   media: ReviewMedia;
   initialTitle: string;
   initialFeatures: ReadonlyArray<FeatureRef>;
 };
 
-// New pins to review, in plan (ordinal) order. A relink pin's url is already in
-// the DB, so it is skipped automatically; re-uploading the same file therefore
-// resumes at the first pin not yet committed.
+// Pins to review, in plan (ordinal) order: fresh inserts, plus relinks that
+// resolved feature links the existing video doesn't have yet (so new coverage
+// added to an already-imported video isn't silently dropped). A relink with no
+// new links stays auto-skipped, so re-uploading the same file still resumes at
+// the first pin not yet committed.
 export function reviewItems(plan: ImportPlan): ReviewItem[] {
   const out: ReviewItem[] = [];
   for (const p of plan.pins) {
-    if (p.kind !== 'insert') continue;
-    out.push({
-      ordinal: p.pin.ordinal,
-      creatorName: p.creator.displayName,
-      media: {
-        url: p.draft.url,
-        description: p.draft.description,
-        youtubeId: p.draft.youtubeId,
-        shotType: p.draft.shotType,
-        type: p.draft.type,
-        publishedAt: p.draft.publishedAt,
-        recordedDate: p.draft.recordedDate,
-        creatorId: p.creator.id,
-        geometry: p.draft.geometry,
-      },
-      initialTitle: p.draft.title,
-      initialFeatures: p.links,
-    });
+    if (p.kind === 'insert') {
+      out.push({
+        ordinal: p.pin.ordinal,
+        relink: false,
+        creatorName: p.creator.displayName,
+        media: {
+          url: p.draft.url,
+          description: p.draft.description,
+          youtubeId: p.draft.youtubeId,
+          shotType: p.draft.shotType,
+          type: p.draft.type,
+          publishedAt: p.draft.publishedAt,
+          recordedDate: p.draft.recordedDate,
+          creatorId: p.creator.id,
+          geometry: p.draft.geometry,
+        },
+        initialTitle: p.draft.title,
+        initialFeatures: p.links,
+      });
+    } else if (p.kind === 'relink' && p.newLinks.length > 0 && p.pin.url) {
+      // The media row already exists, so its fields aren't written — only the
+      // selected links are added (commitPin's media upsert no-ops on conflict).
+      // shotType/creatorId are placeholders the commit ignores.
+      out.push({
+        ordinal: p.pin.ordinal,
+        relink: true,
+        creatorName: p.pin.channel,
+        media: {
+          url: p.pin.url,
+          description: p.pin.description,
+          youtubeId: p.pin.youtubeId,
+          shotType: p.pin.shotType ?? 'drone',
+          type: 'video',
+          publishedAt: p.pin.publishedAt,
+          recordedDate: p.pin.recordedDate,
+          creatorId: null,
+          geometry: p.pin.geometry,
+        },
+        initialTitle: p.title,
+        initialFeatures: p.links,
+      });
+    }
   }
   return out;
 }
 
-/** Pins whose url is already in the DB, auto-skipped (shown in the summary). */
+/**
+ * Relinks with nothing new to add — already fully in the DB, auto-skipped and
+ * only counted in the summary. (Relinks with new links go through review.)
+ */
 export function alreadyImportedCount(plan: ImportPlan): number {
-  return plan.pins.filter((p) => p.kind === 'relink').length;
+  return plan.pins.filter((p) => p.kind === 'relink' && p.newLinks.length === 0).length;
 }
