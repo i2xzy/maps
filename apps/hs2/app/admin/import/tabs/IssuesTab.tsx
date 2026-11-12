@@ -116,12 +116,11 @@ export function IssuesTab({ pins }: { pins: ReadonlyArray<PinPlan> }) {
                 <Text fontSize='xs' color='fg.muted'>
                   Find in map:
                 </Text>
-                <Clipboard.Root value={plan.pin.youtubeId ?? plan.pin.title} timeout={1200}>
+                <Clipboard.Root value={plan.pin.youtubeId ?? plan.pin.title}>
                   <Clipboard.Trigger asChild>
-                    <Button size='xs' variant='outline' fontFamily='mono'>
-                      <Clipboard.Indicator copied='Copied'>
-                        {plan.pin.youtubeId ?? plan.pin.title}
-                      </Clipboard.Indicator>
+                    <Button size='xs' variant='outline'>
+                      <Clipboard.Indicator />
+                      <Clipboard.CopyText />
                     </Button>
                   </Clipboard.Trigger>
                 </Clipboard.Root>
