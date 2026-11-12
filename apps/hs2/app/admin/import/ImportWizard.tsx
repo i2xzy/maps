@@ -56,7 +56,8 @@ export function ImportWizard() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { draft, plan, isDeriving, startDraft, clearDraft, upsertDecision } = useImportPlan(rows);
+  const { draft, plan, isDeriving, deriveError, startDraft, clearDraft, upsertDecision } =
+    useImportPlan(rows);
 
   const layer = draft?.layer;
   useEffect(() => {
@@ -189,10 +190,17 @@ export function ImportWizard() {
           </Card.Body>
         </Card.Root>
       ) : !plan || !rows ? (
-        <HStack color='fg.muted'>
-          <Spinner size='sm' />
-          <Text>Deriving the plan…</Text>
-        </HStack>
+        deriveError ? (
+          <Alert.Root status='error'>
+            <Alert.Indicator />
+            <Alert.Title>{deriveError}</Alert.Title>
+          </Alert.Root>
+        ) : (
+          <HStack color='fg.muted'>
+            <Spinner size='sm' />
+            <Text>Deriving the plan…</Text>
+          </HStack>
+        )
       ) : phase === 'issues' ? (
         <Stack gap={4} align='start'>
           <Text fontSize='sm' color='fg.muted'>

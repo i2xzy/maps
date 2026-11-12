@@ -33,7 +33,11 @@ export function phaseIndex(phase: Phase): number {
 }
 
 export function derivePhase(plan: ImportPlan): Exclude<Phase, 'upload'> {
-  if (collectIssues(plan.pins).length > 0) return 'issues';
+  // Only hard problems (a pin that won't import, or a duplicate url) gate the
+  // flow. Warning-only pins — e.g. a date read from the title, or a non-YouTube
+  // url — still import, and no in-app action clears the warning, so blocking on
+  // them would trap the wizard until the operator re-exported the KML.
+  if (collectIssues(plan.pins).some((i) => i.severity !== 'warning')) return 'issues';
   if (plan.worklists.missingCreators.length > 0) return 'creators';
   return 'review';
 }

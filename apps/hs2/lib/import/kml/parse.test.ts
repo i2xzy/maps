@@ -81,6 +81,22 @@ describe('parseLayer: geometry and whitespace', () => {
     });
   });
 
+  it('stores a single-vertex LineString as a point, not a degenerate line', () => {
+    const layer = parseLayer(doc(placemark({ name: 'A to B', line: [[-0.7, 51.7]] })));
+    expect(firstPin(layer).geometry).toEqual({ kind: 'point', lon: -0.7, lat: 51.7 });
+  });
+
+  it('drops out-of-range coordinates', () => {
+    // lat 200 is impossible; the remaining two valid vertices form the line.
+    const layer = parseLayer(
+      doc(placemark({ name: 'A to B', line: [[-0.7, 51.7], [-0.69, 200], [-0.68, 51.72]] })),
+    );
+    expect(firstPin(layer).geometry).toEqual({
+      kind: 'line',
+      coords: [[-0.7, 51.7], [-0.68, 51.72]],
+    });
+  });
+
   it('normalises nbsp and tab in fields', () => {
     const layer = parseLayer(
       doc(placemark({ name: '2025-01-02 Curzon\tStreet', data: { Channel: 'a b' } })),

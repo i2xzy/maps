@@ -25,6 +25,9 @@ export async function signInWithOtp(email: string) {
 
 export async function signOut() {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  // Don't redirect to the sign-in page on failure: signOut can leave the session
+  // stored, so a "signed out" redirect would hide that /admin is still reachable.
+  const { error } = await supabase.auth.signOut();
+  if (error) throw new Error(error.message);
   redirect('/sign-in');
 }

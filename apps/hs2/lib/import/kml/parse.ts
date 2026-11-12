@@ -80,12 +80,23 @@ function coordsToGeometry(coordText: string, kind: 'point' | 'line'): Geometry |
     if (parts.length >= 2) {
       const lon = Number(parts[0]);
       const lat = Number(parts[1]);
-      if (Number.isFinite(lon) && Number.isFinite(lat)) pts.push([lon, lat]);
+      // Drop out-of-range coords: PostGIS rejects them, which would only surface
+      // as an unrecoverable error at commit time rather than here.
+      if (
+        Number.isFinite(lon) &&
+        Number.isFinite(lat) &&
+        Math.abs(lon) <= 180 &&
+        Math.abs(lat) <= 90
+      ) {
+        pts.push([lon, lat]);
+      }
     }
   }
   const first = pts[0];
   if (first === undefined) return null;
-  if (kind === 'point') return { kind: 'point', lon: first[0], lat: first[1] };
+  // A line needs two vertices; one surviving point is stored as a point, not a
+  // degenerate single-vertex LINESTRING (which PostGIS also rejects).
+  if (kind === 'point' || pts.length < 2) return { kind: 'point', lon: first[0], lat: first[1] };
   return { kind: 'line', coords: pts };
 }
 

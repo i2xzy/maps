@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   buildCatalogue,
@@ -48,6 +48,13 @@ export function useImportPlan(rows: CatalogueRows | null) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [isDeriving, setIsDeriving] = useState(false);
+  const [deriveError, setDeriveError] = useState<string | null>(null);
+
+  // Span lookups depend only on (from, to) and the static DB catalogue, so cache
+  // them across re-derivations — otherwise every decision change refetches every
+  // range's span one server round-trip at a time. A rejected lookup is evicted so
+  // it can be retried on the next derive.
+  const spanCacheRef = useRef(new Map<string, Promise<string[]>>());
 
   // Restore a draft a refresh left behind. The catalogue is re-fetched by the
   // wizard from the restored layer's urls; only the draft itself is persisted.
@@ -102,7 +109,17 @@ export function useImportPlan(rows: CatalogueRows | null) {
       }
       if (!cancelled) setIsDeriving(true);
       const decisions = foldDecisions([...draft.decisions.values()]);
-      const lookup: SpanLookup = (from, to) => spanLookupAction(from, to);
+      const lookup: SpanLookup = (from, to) => {
+        const key = `${from}\u0000${to}`;
+        const cache = spanCacheRef.current;
+        let pending = cache.get(key);
+        if (!pending) {
+          pending = spanLookupAction(from, to);
+          pending.catch(() => cache.delete(key));
+          cache.set(key, pending);
+        }
+        return pending;
+      };
       const session: ImportSessionMeta = {
         id: crypto.randomUUID() as ImportId,
         name: draft.fileName,
@@ -112,9 +129,15 @@ export function useImportPlan(rows: CatalogueRows | null) {
       };
       try {
         const p = await resolveLayer(draft.layer, decisions, catalogue, lookup, session);
-        if (!cancelled) setPlan(p);
+        if (!cancelled) {
+          setPlan(p);
+          setDeriveError(null);
+        }
       } catch {
-        if (!cancelled) setPlan(null);
+        if (!cancelled) {
+          setPlan(null);
+          setDeriveError('Could not build the import plan. Try reloading the page.');
+        }
       } finally {
         if (!cancelled) setIsDeriving(false);
       }
@@ -152,5 +175,14 @@ export function useImportPlan(rows: CatalogueRows | null) {
     });
   }, []);
 
-  return { draft, plan, isDeriving, startDraft, clearDraft, upsertDecision, removeDecision };
+  return {
+    draft,
+    plan,
+    isDeriving,
+    deriveError,
+    startDraft,
+    clearDraft,
+    upsertDecision,
+    removeDecision,
+  };
 }

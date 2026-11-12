@@ -4,6 +4,10 @@
 
 import { z } from 'zod';
 import { Constants, type Database } from '@supabase/types/database';
+// kml/dates imports IsoDate from here type-only (erased), so this value import
+// doesn't create a runtime cycle. isRealCalendarDate returns a boolean (no
+// IsoDate), so the schema's inferred type doesn't reference itself.
+import { isRealCalendarDate } from './kml/dates';
 // Type-only, erased at runtime, so the types <-> decisions cycle stays compile-time.
 import type { Decision } from './decisions';
 
@@ -31,7 +35,10 @@ export const importIdSchema = z.string().min(1).brand<'ImportId'>();
 export const mediaIdSchema = z.string().min(1).brand<'MediaId'>();
 export const creatorIdSchema = z.string().min(1).brand<'CreatorId'>();
 export const featureIdSchema = z.string().min(1).brand<'FeatureId'>();
-export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).brand<'IsoDate'>();
+export const isoDateSchema = z
+  .string()
+  .refine(isRealCalendarDate, 'Not a real calendar date')
+  .brand<'IsoDate'>();
 export const urlSchema = z.string().regex(/^https?:\/\//).brand<'Url'>();
 export const youtubeIdSchema = z.string().regex(/^[\w-]{11}$/).brand<'YoutubeId'>();
 /** lower(trim(collapse-whitespace(x))). The one equality the DB and TS share. */

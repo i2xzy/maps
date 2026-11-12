@@ -82,14 +82,23 @@ export function parseBritishDate(raw: string, opts?: { monthEnd?: boolean }): Is
   return null;
 }
 
-/** A structurally-valid `YYYY-MM-DD` that is also a real calendar date, else null. */
-export function asValidIsoDate(s: string): IsoDate | null {
+/**
+ * Whether `s` is a `YYYY-MM-DD` string that is also a real calendar date. Returns
+ * a plain boolean (no `IsoDate`) so `isoDateSchema`'s refinement can call it
+ * without the schema's inferred type referencing itself.
+ */
+export function isRealCalendarDate(s: string): boolean {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  if (!m) return null;
+  if (!m) return false;
   const year = Number(m[1]);
   const month = Number(m[2]);
   const day = Number(m[3]);
-  if (month < 1 || month > 12) return null;
-  if (day < 1 || day > daysInMonth(year, month)) return null;
-  return s as IsoDate;
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > daysInMonth(year, month)) return false;
+  return true;
+}
+
+/** A structurally-valid `YYYY-MM-DD` that is also a real calendar date, else null. */
+export function asValidIsoDate(s: string): IsoDate | null {
+  return isRealCalendarDate(s) ? (s as IsoDate) : null;
 }
