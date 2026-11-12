@@ -18,7 +18,9 @@ export async function signInWithOtp(email: string) {
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed,
-    options: { emailRedirectTo: `${origin}/auth/callback` },
+    // Single-admin tool: only a pre-provisioned user may sign in. Without this,
+    // anyone could self-create an authenticated account by requesting a link.
+    options: { emailRedirectTo: `${origin}/auth/callback`, shouldCreateUser: false },
   });
   if (error) throw new Error(error.message);
 }

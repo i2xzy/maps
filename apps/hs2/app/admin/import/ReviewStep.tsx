@@ -38,7 +38,7 @@ type Props = {
   onRestart: () => void;
 };
 
-type Counts = { imported: number; skipped: number; linksAdded: number };
+type Counts = { imported: number; existed: number; skipped: number; linksAdded: number };
 
 export function ReviewStep({
   items,
@@ -50,7 +50,12 @@ export function ReviewStep({
   onRestart,
 }: Props) {
   const [index, setIndex] = useState(0);
-  const [counts, setCounts] = useState<Counts>({ imported: 0, skipped: 0, linksAdded: 0 });
+  const [counts, setCounts] = useState<Counts>({
+    imported: 0,
+    existed: 0,
+    skipped: 0,
+    linksAdded: 0,
+  });
   const done = index >= items.length;
   const finishedRef = useRef(false);
 
@@ -75,9 +80,13 @@ export function ReviewStep({
       geometry: item.media.geometry,
       featureIds: edit.featureIds,
     });
+    // A false `inserted` means the url already existed at commit time, so the
+    // media upsert was a no-op and the reviewed edits were not applied — count it
+    // honestly as "already existed" rather than imported. Links may still merge.
     setCounts((c) => ({
-      imported: c.imported + 1,
-      skipped: c.skipped,
+      ...c,
+      imported: res.inserted ? c.imported + 1 : c.imported,
+      existed: res.inserted ? c.existed : c.existed + 1,
       linksAdded: c.linksAdded + res.linksAdded,
     }));
     setIndex((i) => i + 1);
@@ -297,6 +306,9 @@ function DoneSummary({
           </Text>
           <Stack gap={1}>
             <DetailRow label='Imported'>{counts.imported}</DetailRow>
+            {counts.existed > 0 && (
+              <DetailRow label='Already existed (kept as-is)'>{counts.existed}</DetailRow>
+            )}
             <DetailRow label='Links added'>{counts.linksAdded}</DetailRow>
             <DetailRow label='Skipped'>{counts.skipped}</DetailRow>
             <DetailRow label='Already in database'>{alreadyImported}</DetailRow>

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildCatalogue,
   decisionRef,
+  DecisionSchema,
   foldDecisions,
   resolveLayer,
   type CatalogueRows,
@@ -34,14 +35,35 @@ function refKey(ref: DecisionRef): string {
   return `${ref.kind}\u0000${ref.subject}`;
 }
 
-function loadPersisted(): PersistedDraft | null {
-  if (typeof window === 'undefined') return null;
+// Validate a restored draft rather than trusting JSON.parse: a corrupt or
+// older-schema entry would otherwise throw while rebuilding the decision map, or
+// feed malformed data into the resolver. Decisions are checked with the real
+// schema; the layer is shape-guarded (pins array).
+function parsePersisted(raw: string): PersistedDraft | null {
+  let obj: unknown;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as PersistedDraft) : null;
+    obj = JSON.parse(raw);
   } catch {
     return null;
   }
+  if (!obj || typeof obj !== 'object') return null;
+  const o = obj as Record<string, unknown>;
+  if (typeof o.fileName !== 'string') return null;
+  const layer = o.layer as { pins?: unknown } | null;
+  if (!layer || typeof layer !== 'object' || !Array.isArray(layer.pins)) return null;
+  const decisions = DecisionSchema.array().safeParse(o.decisions);
+  if (!decisions.success) return null;
+  return { fileName: o.fileName, layer: o.layer as ParsedLayer, decisions: decisions.data };
+}
+
+function loadPersisted(): PersistedDraft | null {
+  if (typeof window === 'undefined') return null;
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  const parsed = parsePersisted(raw);
+  // Drop an unreadable entry so it can't keep failing restore after restore.
+  if (!parsed) window.localStorage.removeItem(STORAGE_KEY);
+  return parsed;
 }
 
 export function useImportPlan(rows: CatalogueRows | null) {
