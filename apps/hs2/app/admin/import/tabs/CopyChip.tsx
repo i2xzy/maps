@@ -1,23 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { Button } from '@chakra-ui/react';
+import { Button, Clipboard } from '@chakra-ui/react';
 
-// A small click-to-copy chip. Copies `value`; shows `label` (default `value`).
+// A small click-to-copy chip built on Chakra's Clipboard, which handles the copy
+// and the transient "Copied" state. Copies `value`; shows `label` (default `value`).
 export function CopyChip({ value, label }: { value: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
   return (
-    <Button
-      size='xs'
-      variant='outline'
-      fontFamily='mono'
-      onClick={() => {
-        void navigator.clipboard?.writeText(value);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1200);
-      }}
-    >
-      {copied ? 'Copied' : (label ?? value)}
-    </Button>
+    <Clipboard.Root value={value} timeout={1200}>
+      <Clipboard.Trigger asChild>
+        <Button size='xs' variant='outline' fontFamily='mono'>
+          <Clipboard.Indicator copied='Copied'>{label ?? value}</Clipboard.Indicator>
+        </Button>
+      </Clipboard.Trigger>
+    </Clipboard.Root>
   );
 }
